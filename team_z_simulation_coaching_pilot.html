@@ -171,8 +171,9 @@
 <script>
 /* ============================================================
    TEAM Z COACHING PILOT — PHASE 1 PROTOTYPE (Corrected build)
-   Fictional data only. No persistence beyond this browser tab.
-   No production infrastructure.
+   Scenario/player content is fictional training data - no real Betty player accounts involved.
+   Chat/scoring calls and shared Team Progress + TL Assignments run through a real backend server
+   (see BACKEND_URL below), with attempt data persisted server-side, not just in this browser tab.
 
    DATA MODEL, per the corrected spec:
   - playerKnowledge / personaPrompt: ONLY what the customer would realistically know/say.
@@ -198,8 +199,12 @@ function kbBannerFor(s){
   if(s.kbStatus==='ambiguous'){
     return `<div class="kb-banner">${escapeHtml(KB_AMBIGUOUS_BANNER)}<br><br>${escapeHtml(s.kbSource||'')}</div>`;
   }
+  if(s.kbStatus==='coaching'){
+    return `<div class="kb-banner" style="color:var(--warn);border-color:#4a3a1a;background:#241d0f;">${escapeHtml(KB_COACHING_GROUNDED_BANNER)}<br><br>${escapeHtml(s.kbSource||'')}</div>`;
+  }
   return `<div class="kb-banner">${escapeHtml(KB_NOT_VALIDATED_BANNER)}</div>`;
 }
+const KB_COACHING_GROUNDED_BANNER = "COACHING-GROUNDED - Based on documented real TL/QA coaching, not a formal Betty KB article. Appropriate for coaching/practice, but not a KB citation.";
 const RG_ENGINE_TEST_BANNER = "ENGINE TEST / FICTIONAL PROCESS - NOT APPROVED FOR REAL AGENT PROCESS TRAINING. This scenario includes fictional RG-adjacent content used only to test whether the engine can detect an embedded signal. No fictional RG procedure here should be treated as real Betty process.";
 
 const GLOBAL_EVAL_RULES = `GLOBAL EVALUATION RULES (apply to every criterion below):
@@ -1586,7 +1591,7 @@ const SCENARIOS = [
     internalTitle:'The Closing Loop - Close the Moment Resolution Is Confirmed, Don\u2019t Linger', title:'Quick Account Question', playerName:'Devon',
     agentBriefing:'A player has a quick, simple question.',
     endConditionsGuide:'End as soon as the player confirms there\u2019s nothing else - don\u2019t let a farewell turn into a back-and-forth.',
-    kbStatus:'fictional', engineTestRG:false,
+    kbStatus:'coaching', engineTestRG:false,
     readiness:'PILOT_READY',
     metadata:{kbSources:[], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'AHT/Operational Judgment', policyVersionRef:null},
     kbSource:'Grounded in a real 1:1 TL coaching call (Cassidy, September): "Have a closing canned response ready; send it the moment the player says they have no further questions - do not wait. Avoid back-and-forth closing loops; once the issue is resolved and the loop question is asked, close the chat." Not a KB document citation - direct, real coaching direction.',
@@ -1656,7 +1661,7 @@ const SCENARIOS = [
     internalTitle:'Loyalty Progress Confusion - Don\u2019t Cite Internal Thresholds', title:'Loyalty Status Question', playerName:'Brianna',
     agentBriefing:'A player thinks they should already be on the next loyalty tier and isn\u2019t seeing it.',
     endConditionsGuide:'End once the player actually understands where they stand - not just once a number has been repeated at them.',
-    kbStatus:'fictional', engineTestRG:false,
+    kbStatus:'coaching', engineTestRG:false,
     readiness:'PILOT_READY',
     metadata:{kbSources:[], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Loyalty/Promotions', policyVersionRef:null},
     kbSource:'Grounded in a real 1:1 TL coaching call (Cassidy, September): the chat itself was handled correctly, but the TL flagged a specific, reusable coaching point - "avoid citing internal numerical thresholds to players, they have no visibility on those figures and it adds confusion. Focus on confirming the player is now working toward the next gem level and celebrate progress on the first." Not a KB document citation - direct, real coaching direction.',
@@ -1693,6 +1698,8 @@ let state = {
   activeScenario:null,
   activePersonaTrait:null,
   assignments:[],
+  currentAttemptContext:null, // self-contained snapshot of the attempt currently being scored - see runEvaluation/archiveAttempt
+  toolkitExpanded:{}, // Coaching Toolkit category name -> bool, which accordion cards are open
   transcript:[],
   turnCounter:0,
   simStatus:'idle',       // idle | active | documenting | ended
@@ -2146,6 +2153,14 @@ function wireEvents(){
   const railCoachingToolkit=document.getElementById('railCoachingToolkit');
   if(railCoachingToolkit) railCoachingToolkit.addEventListener('click', ()=>{ state.view='toolkit'; render(); });
 
+  document.querySelectorAll('[data-toolkit-category]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const cat = el.getAttribute('data-toolkit-category');
+      state.toolkitExpanded[cat] = !state.toolkitExpanded[cat];
+      render();
+    });
+  });
+
   const railReports=document.getElementById('railReports');
   if(railReports) railReports.addEventListener('click', ()=>{ state.view='reports'; render(); });
 
@@ -2336,11 +2351,14 @@ function saveAgentName(name){
   catch(err){ console.error('Saving agent name locally failed (still works for this session):', err); }
 }
 
-// ---------- PERSISTENCE (plain browser localStorage - proven to work when this artifact is
-// distributed via "Share this chat", unlike the db/sample capability APIs used in an earlier
-// build of this file. NOT cross-device or cross-person: each person's data lives only in their
-// own browser. Team Progress is therefore local-only now too - it shows this device's own
-// attempts, not the whole team's, until this is rebuilt on shared infrastructure. ----------
+// ---------- PERSISTENCE ----------
+// Two different scopes here, don't confuse them:
+// - Personal Attempt History (this section, ATTEMPT_HISTORY_KEY) is genuinely per-device: plain
+//   browser localStorage, not synced anywhere. This is each agent's own private practice log.
+// - Team Progress (see loadTeamProgressLog/pushTeamProgressEntry below) is NOT local-only - it's
+//   saved to the real backend server (BACKEND_URL), so it's genuinely shared across every device
+//   using this tool, and TL/management can see full attempt details there for coaching review.
+//   localStorage is only ever a fallback for Team Progress, used if the backend is unreachable.
 const ATTEMPT_HISTORY_KEY = 'zteamz_attemptHistory_v1';
 const TEAM_PROGRESS_KEY = 'zteamz_teamProgressLocal_v1';
 let attemptSaveTimer = null;
@@ -2371,7 +2389,7 @@ function loadPersistedAttemptHistory(){
   }
 }
 
-// ---------- TEAM PROGRESS LOG (local-only under this networking model - see note above) ----------
+// ---------- TEAM PROGRESS LOG (shared via the backend server - see note above) ----------
 async function loadTeamProgressLog(){
   // Try the shared backend first - this is what makes it genuinely team-wide, not just this device.
   try{
@@ -2417,66 +2435,70 @@ function clearMyAttemptData(){
   catch(err){ console.error('Clearing team progress entries failed:', err); }
 }
 
-function archiveCurrentAttemptIfAny(){
-  if(state.currentAttemptArchived) return; // already saved, don't duplicate
-  if(!state.activeScenario) return;
-  if(!state.evaluation || state.evaluation.loading || state.evaluation.error) return;
-  const sid = state.activeScenario.id;
+// Archives exactly ONE attempt, using ONLY values captured on the attemptContext object itself -
+// never reads live state.*. This is what makes an attempt atomic: no matter what state.activeScenario
+// or state.transcript happen to be by the time an async evaluation resolves (the agent may already be
+// three scenarios further along), this function only ever touches the scenario/transcript/etc that were
+// true when THIS SPECIFIC attempt was submitted for scoring. See runEvaluation for where this is called.
+function archiveAttempt(attemptContext){
+  if(attemptContext.archived) return; // already saved, don't duplicate
+  if(!attemptContext.scenario) return;
+  if(!attemptContext.evaluation || attemptContext.evaluation.loading || attemptContext.evaluation.error) return;
+  const sid = attemptContext.scenario.id;
   state.attemptHistory[sid] = state.attemptHistory[sid] || [];
   const attemptNum = state.attemptHistory[sid].length + 1;
   state.attemptHistory[sid].push({
     attemptNum,
     timestamp: Date.now(),
-    transcript: state.transcript,
-    actionLog: state.actionLog,
-    evaluation: state.evaluation,
-    tlOverrides: state.tlOverrides,   // same object reference - live TL edits after this point still flow into the saved copy
-    docNote: state.docNote,
-    docSecondaryTag: state.docSecondaryTag,
-    docTag: state.docTag,
-    ahtElapsedMinutes: state.ahtElapsedMinutes,
-    ahtLateStart: state.ahtLateStart,
-    ahtTargetMinutes: state.activeScenario.ahtTargetMinutes,
-    playerLeftEarly: state.playerLeftEarly,
-    playerLeftReason: state.playerLeftReason,
+    transcript: attemptContext.transcript,
+    actionLog: attemptContext.actionLog,
+    evaluation: attemptContext.evaluation,
+    tlOverrides: attemptContext.tlOverrides,   // same object reference - live TL edits after this point still flow into the saved copy
+    docNote: attemptContext.docNote,
+    docSecondaryTag: attemptContext.docSecondaryTag,
+    docTag: attemptContext.docTag,
+    ahtElapsedMinutes: attemptContext.ahtElapsedMinutes,
+    ahtLateStart: attemptContext.ahtLateStart,
+    ahtTargetMinutes: attemptContext.scenario.ahtTargetMinutes,
+    playerLeftEarly: attemptContext.playerLeftEarly,
+    playerLeftReason: attemptContext.playerLeftReason,
   });
-  state.currentAttemptArchived = true;
+  attemptContext.archived = true;
   saveAttemptHistoryNow();
-  markAssignmentsCompleted(state.agentName, sid);
+  markAssignmentsCompleted(attemptContext.agentName, sid);
 
-  const score = computeQAScore(state.evaluation.questions);
+  const score = computeQAScore(attemptContext.evaluation.questions);
   pushTeamProgressEntry({
-    agentName: state.agentName || 'Unnamed',
+    agentName: attemptContext.agentName || 'Unnamed',
     deviceId: deviceId,
     scenarioId: sid,
-    scenarioTitle: state.activeScenario.title,
-    skill: state.activeScenario.skill,
-    difficulty: state.activeScenario.difficulty,
+    scenarioTitle: attemptContext.scenario.title,
+    skill: attemptContext.scenario.skill,
+    difficulty: attemptContext.scenario.difficulty,
     timestamp: Date.now(),
     pct: score.af ? 0 : score.pct,
     af: score.af,
     afDuty: score.afDuty,
     pass: score.pass,
-    ahtElapsedMinutes: state.ahtElapsedMinutes,
-    ahtTargetMinutes: state.activeScenario.ahtTargetMinutes,
-    playerLeftEarly: state.playerLeftEarly,
-    playerLeftReason: state.playerLeftReason,
+    ahtElapsedMinutes: attemptContext.ahtElapsedMinutes,
+    ahtTargetMinutes: attemptContext.scenario.ahtTargetMinutes,
+    playerLeftEarly: attemptContext.playerLeftEarly,
+    playerLeftReason: attemptContext.playerLeftReason,
     // Full record below - safe to include now that Team Progress is TL-facing only, not agent-visible.
     // Lets a TL click into any teammate's attempt and see exactly what happened, not just the score.
     attemptNum,
-    transcript: state.transcript,
-    actionLog: state.actionLog,
-    evaluation: state.evaluation,
-    tlOverrides: state.tlOverrides,
-    docNote: state.docNote,
-    docTag: state.docTag,
-    docSecondaryTag: state.docSecondaryTag,
-    ahtLateStart: state.ahtLateStart,
+    transcript: attemptContext.transcript,
+    actionLog: attemptContext.actionLog,
+    evaluation: attemptContext.evaluation,
+    tlOverrides: attemptContext.tlOverrides,
+    docNote: attemptContext.docNote,
+    docTag: attemptContext.docTag,
+    docSecondaryTag: attemptContext.docSecondaryTag,
+    ahtLateStart: attemptContext.ahtLateStart,
   });
 }
 
 function startScenario(id){
-  archiveCurrentAttemptIfAny();
   if(state.ahtTimerInterval){ clearInterval(state.ahtTimerInterval); state.ahtTimerInterval=null; }
   if(state.silenceCheckInterval){ clearInterval(state.silenceCheckInterval); state.silenceCheckInterval=null; }
   const s=scenarioById(id);
@@ -2705,11 +2727,27 @@ const BACKEND_URL = "https://team-z-backend-1.onrender.com";
 async function callClaudeRaw(system, messages, maxTokens){
   const body = { messages: messages, max_tokens: maxTokens || 1000 };
   if(system) body.system = system;
-  const response = await fetch(BACKEND_URL + "/api/chat", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify(body)
-  });
+  // Real timeout, since a stalled/cold-starting server should never leave the person staring at
+  // "Scoring transcript..." forever with no error and nothing saved. 65s covers Render's free/starter
+  // cold-start window (usually 30-50s) with margin, then fails LOUDLY instead of hanging silently.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(()=>controller.abort(), 65000);
+  let response;
+  try{
+    response = await fetch(BACKEND_URL + "/api/chat", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  }catch(err){
+    if(err.name === 'AbortError'){
+      throw new Error(`No response from the server after 65 seconds. It may be waking up from sleep (this can take up to a minute the first time) - please try again.`);
+    }
+    throw err;
+  }finally{
+    clearTimeout(timeoutId);
+  }
   const rawText = await response.text();
   let data;
   try{ data = JSON.parse(rawText); }
@@ -2849,7 +2887,7 @@ function formatTranscriptForEval(transcript, s){
 }
 
 function formatCaseDataForEval(s){
-  return s.caseData.map(c=>`- [${c.tab}] ${c.label}: ${c.value}`).join('\n') || '(none defined for this scenario)';
+  return s.caseData.map(c=>`- [${c.tab}] ${c.gated ? 'GATED (required a click to reveal - see Action Log for proof)' : 'NOT GATED (shown to the agent automatically from the start, no click needed)'} - ${c.label}: ${c.value}`).join('\n') || '(none defined for this scenario)';
 }
 
 function formatActionLogForEval(actionLog){
@@ -2870,7 +2908,8 @@ function formatProcessGroundingForEval(s){
     validated:'REAL BETTY KB, VALIDATED. Treat as authoritative.',
     mixed:'MIXED: some content below is real validated KB, some is fictional/prototype-only - see source note.',
     ambiguous:'GENUINE KB GAP: real KB was checked and does not clearly resolve this case. Do not treat either direction as "correct" - evaluate whether the agent correctly recognized the ambiguity instead.',
-    fictional:'FICTIONAL/PROTOTYPE-ONLY. Not real Betty KB - use only for testing engine behaviour, not as a real-world correctness standard.'
+    fictional:'FICTIONAL/PROTOTYPE-ONLY. Not real Betty KB - use only for testing engine behaviour, not as a real-world correctness standard.',
+    coaching:'COACHING-GROUNDED, REAL. Based on documented real TL/QA coaching direction, not a formal written KB article - treat as a genuine, authoritative correctness standard for this scenario (this is real guidance an agent would actually be coached on), just not a KB citation. Do not treat it as fictional/prototype-only.'
   }[s.kbStatus] || 'FICTIONAL/PROTOTYPE-ONLY.';
   let out = `KB STATUS: ${statusLabel}\n${s.kbSource?('Source: '+s.kbSource+'\n'):''}KB Topic: ${pg.kbTopic}\nKB Text: ${pg.kbText}\nRequired Actions: ${pg.requiredActions.join('; ')}\nOptional Actions: ${(pg.optionalActions||[]).join('; ')||'(none)'}\nEscalation Criteria: ${pg.escalationCriteria}\nCritical Errors: ${pg.criticalErrors}\nAmbiguity Notes: ${pg.ambiguityNotes||'(none)'}`;
   if(pg.rgNote){
@@ -2907,16 +2946,46 @@ WORKED EXAMPLE PAIR (memorize the distinction, not just the rule):
 (a) AGENT-CAUSED: Agent investigates correctly, gives the right answer, then the player asks a reasonable follow-up and the agent goes silent for the rest of the transcript until the player leaves. Correct scoring: this is agent-caused - real silence with no response to a live question - score Q1/Q2 down accordingly, same as any other left-hanging case.
 (b) NOT AGENT-CAUSED: Agent investigates correctly, explains a real policy limit clearly and kindly, the player insists it should be waived anyway, the agent holds the correct line once more, and the player leaves saying it's ridiculous. Correct scoring: the agent did everything right - correct answer, clearly communicated, held the line appropriately. Score Q1/Q2 on that handling, not on the fact that the player was unhappy and left. The departure itself is not evidence of failure here.
 ` : '';
+  const ahtModeLabel = state.ahtMode
+    ? `AHT Mode is ON for this attempt. You may evaluate handling time separately, against this scenario's target (${s.ahtTargetMinutes ? s.ahtTargetMinutes+' min' : 'no target set'}), in the efficiency narrative below. This is STILL never a QA scoring input - do not lower Q1 or Q2 "merely because the chat exceeds the target minutes." A slow but correct, well-communicated resolution is still A/A.`
+    : `AHT Mode is OFF for this attempt. Handling-time behaviours (pace, filler, lingering, closing speed) are FYI coaching only in this run - report them in the efficiency narrative, never in the scorecard reasoning.`;
+
   return `You are a QA evaluator scoring a CUSTOMER SUPPORT AGENT'S performance (not the customer's) in a completed training simulation transcript, using Betty's real official Chat Scorecard. This is the actual rubric real chats are graded against - apply it exactly as defined, do not soften or reinterpret it.
 
 ${GLOBAL_EVAL_RULES}
 
+QA SCORING VS. EFFICIENCY COACHING - STRICT SEPARATION (read this before scoring Q1/Q2, this is a common mistake to avoid):
+Two completely separate judgments happen in this evaluation, and they must never leak into each other:
+1. BETTY QA (Q1/Q2/Q3 below) - scored ONLY from the real rubric's own letter definitions, the scenario's KB/process requirements, and actual or predictable impact on the player or the business, per the rubric's own AF duties (Responsible Gambling, Privacy, Conduct, Company Exposure) and letter criteria.
+2. EFFICIENCY COACHING (the coachingSignals and efficiencyNarrative fields, requested further below) - pace, filler, lingering after resolution, not closing immediately, unnecessary extra steps that changed nothing about the outcome. ${ahtModeLabel}
+
+PURE PACE/CLOSING BEHAVIOUR MUST NEVER LOWER Q1 OR Q2 ON ITS OWN. Do not cite slowness, filler phrases, lingering small talk, extra pleasantries, or a delayed close in a Q1 or Q2 citation UNLESS that same behaviour, independent of its time cost, also created a real or predictable negative outcome under the rubric's own actual terms - the player was left genuinely confused, a real process/KB step was skipped or done wrong, a duty was implicated, or the player was materially worse off. If the only thing that happened is "this took longer than ideal" or "the chat kept going a bit after it was resolved" with the player never confused, never misled, and never actually harmed by it, that is a coaching-only observation - it belongs in coachingSignals/efficiencyNarrative and Q1 stays at whatever letter the actual resolution quality earns, typically A when the resolution was correct and complete. This applies even when a letter definition's text technically mentions "a minor deviation" - that clause is for real procedural/KB misses, not for conversational pacing.
+
+WORKED EXAMPLE (this exact pattern, memorize it): Agent correctly and completely answers the player's question. Player confirms "that's all, thanks." Agent sends a closing message but doesn't end the chat, so two more rounds of "you too / bye!" happen before it actually closes. The player was never confused, never given wrong information, never left with an unresolved issue - just a couple of extra pleasant messages. Correct scoring: Q1 = A (the resolution itself was correct and complete, nothing here is a real outcome problem). The closing-loop behaviour belongs entirely in coachingSignals.closesConfidently, rated "needs-work," with a note explaining the extra rounds - NOT in the Q1 citation, and NOT as a reason to drop Q1 to B or lower.
+
+KB/PROCESS COMPLIANCE REMAINS FULLY MANDATORY AND SEPARATE FROM THIS RULE. A missing or incorrectly-followed required step from Process Grounding below (checking the wrong thing, skipping a required investigation, giving an answer the KB doesn't support, missing a required RG/duty action) is a real QA issue and must still affect Q1/Q2 exactly as the rubric and Global Eval Rules already describe - this separation rule only removes PURE pace/closing/filler from QA scoring, it never excuses a genuine process or KB miss.
+
+CONFIRMING A PROCESS DEVIATION ACTUALLY OCCURRED (read before citing any procedural issue in Q1 - this is NOT the same rule as the pace/closing one above, it's a separate, common mistake): do not treat an unnecessary or non-essential action as a "process deviation" unless Process Grounding actually prohibits that action, OR the action conflicts with / substitutes for / bypasses a required step. An agent doing something extra that Process Grounding never forbids, and that did NOT replace or interfere with fully and correctly completing the actual required process, is not a deviation at all - it's a non-issue, or at most a coaching note, not a Q1 citation. This is different from the real Betty B definition's "minor process deviation with little or no consequence" - that definition presumes a real deviation genuinely happened; your job is to confirm one actually did before reaching for it, not to manufacture one out of an extra step that was never prohibited and never got in the way of the correct outcome. If a genuine deviation did occur (something Process Grounding actually prohibits, or the required process was only partially/incorrectly followed), B remains entirely appropriate even with no material consequence, exactly as the real rubric defines it - this rule does not soften that.
+
+WORKED EXAMPLE (this exact pattern, memorize it): Scenario's Process Grounding says the required action is "do not verify identity through chat questions and change the [thing] directly" - the prohibited action is USING chat answers to bypass the required process. Agent asks the player for their name and date of birth in an early turn, then still correctly directs them through the full required process without ever using those answers to skip or shortcut anything. Correct read: asking the questions was unnecessary, but Process Grounding didn't prohibit asking questions - it prohibited using them to bypass the required handling, which never happened here. This is not a Q1 deviation at all. Note it as a coaching observation if useful (e.g. "unnecessary questions asked, though didn't affect the outcome"), but Q1 should be judged purely on whether the required process was itself fully and correctly delivered - which it was, so this citation alone should not appear in a Q1 letter below A.
+
+CONFIRMING A REAL Q2 (PLAYER EXPERIENCE) ISSUE BEFORE CITING ONE (the same confirm-before-penalize discipline as above, applied to two specific patterns that commonly get over-flagged on Q2):
+- "Repetitive" is only a real issue if the agent actually repeated the SAME WORDING, not if they restated a true, unchanging fact using genuinely different phrasing across turns. Holding a correct "no" through repeated pushback by explaining it a different way each time is not repetition - for a scenario whose Process Grounding specifically calls for varying the explanation across pushback (rather than repeating verbatim), doing exactly that is the CORRECT, desired behaviour, not a Q2 deduction. Before citing "repetitive," quote the actual wording from each turn being compared and confirm it's genuinely near-identical, not just the same underlying fact restated differently.
+- "Defensive" is only a real issue at the severity the rubric actually describes: curt, snippy, dismissive, or arguing to win rather than help. A single calm, direct response to a specific accusation the player just made (e.g. reassuring them you're not giving them the runaround, right after they said that's how it feels) is appropriate, professional pushback-handling, not defensiveness - especially when the player's own next message expresses appreciation for the honesty. Before citing a line as "defensive," confirm its tone actually reads as curt/dismissive/combative in context, not as a reasonable, warm response to what the player just said.
+As with Q1, Q2 should still reflect the interaction's real overall pattern and feel per the Global Eval Rules above - this addition doesn't lower the bar for genuine issues, it just requires confirming one actually occurred, at the severity the rubric describes, before it costs the agent a letter.
+
+VERIFYING AGENT CLAIMS AGAINST WHAT WAS ACTUALLY SUPPLIED (this enforces Global Eval Rule 2 above - not a new rule, a requirement that the existing one actually gets applied): before crediting any agent statement as helpful initiative, a nice touch, going above and beyond, or proactive service - and before treating it as neutral or positive in any way - check whether it's a substantive, specific, account-or-case-specific factual claim (a promotion's name or availability, its terms, an amount, a deadline, a status, a policy detail, anything the player could act on). If it is, verify it against exactly what's listed in Available Case Data, the Agent Action Log, Player Knowledge, and Process Grounding for THIS scenario. If that specific claim isn't traceable to any of those sources, it's confident invention under Global Eval Rule 2 - a real Q1 accuracy problem, not neutral, and it must never be described with positive language like "nice proactive touch," "went above and beyond," or similar, regardless of how warmly or plausibly it was delivered. Tone and good intentions do not offset a specific, actionable, unsupported factual claim the player could act on.
+
+WORKED EXAMPLE (this exact pattern, memorize it): Case Data only supplies information about a deposit bonus the player didn't qualify for. The agent correctly declines the bonus, then offers the player a specific alternative promotion by name, with specific deposit and reward terms, none of which appear anywhere in Case Data, Player Knowledge, or Process Grounding for this scenario. Correct read: the original bonus handling was correct, but the alternative promotion and its terms were invented - a real, specific, actionable claim with no supporting evidence anywhere in this scenario. This is a genuine Q1 accuracy issue per Global Eval Rule 2. For an otherwise-correct chat where this is the one unsupported addition, this typically lands at C or B, not A - use judgment on exact severity based on how consequential and specific the invented claim was, but never treat the fabrication itself as neutral, and never as positive initiative. INITIATIVE ONLY EARNS POSITIVE CREDIT WHEN IT'S GROUNDED - an agent proactively checking Case Data for a real alternative and offering it accurately is good initiative; an agent inventing an alternative that sounds helpful is not initiative, it's confident invention, scored per Global Eval Rule 2 like any other unsupported claim.
+
 SCENARIO: ${s.title} (${s.skill}, ${s.difficulty})
 
-AVAILABLE CASE DATA (everything the agent could have investigated during this simulation, regardless of whether they actually clicked to reveal it in their own UI - cross-reference against the Action Log below to judge whether they actually investigated vs. guessed correctly):
+AVAILABLE CASE DATA (each item marked either GATED or NOT GATED - this distinction matters for how you use the Action Log below):
 ${formatCaseDataForEval(s)}
 
-AGENT ACTION LOG (ground truth for what the agent actually clicked, in order - use this instead of guessing from the transcript alone whether investigation happened, and whether it happened before or after the relevant response):
+GATED VS. NOT-GATED CASE DATA (read carefully): "NOT GATED" items are shown to the agent automatically, from the very start of the chat, with no click required - the agent has and sees this information the entire time, by default. Do NOT require an Action Log entry as proof the agent "checked" a NOT GATED item, and do not penalize or doubt the agent's use of NOT GATED information for lacking a matching Action Log entry - there was never a UI action to log for it in the first place. This requirement applies ONLY to "GATED" items, which genuinely do require the agent to click "Investigate" before they're revealed - for those, cross-reference the Action Log below to judge whether they actually investigated before using that information, versus guessing correctly by chance.
+
+AGENT ACTION LOG (ground truth for what the agent actually clicked to reveal a GATED item, in order - use this only for GATED items; irrelevant to NOT GATED ones, which needed no click):
 ${formatActionLogForEval(actionLog)}
 
 POST-CHAT DOCUMENTATION (submitted by the agent after the chat ended - this is the ONLY basis for scoring Q3, do not infer documentation quality from the transcript):
@@ -2953,6 +3022,8 @@ These, plus the qualitative behaviours below, are COACHING SIGNALS ONLY. They mu
 Rate each "good" | "mixed" | "needs-work" | "not-applicable" (use not-applicable only when the transcript genuinely gives no basis to judge, e.g. chat ended before any close was possible), with a one-sentence, transcript-grounded note for each - no generic praise/criticism.
 
 EFFICIENCY NARRATIVE (separate field, coaching only, never affects scoring): write 1-2 sentences in this exact style - "Correctly resolved in 6m 20s. Most of the additional time came from repeating troubleshooting after the root cause was already known." or "You kept the conversation moving well: targeted question, relevant investigation, clear answer and prompt closure." Total chat duration: ${totalDurationLabel}. Ground the sentence in what actually happened - name the SPECIFIC avoidable behavior if there was meaningful lost time (unnecessary investigation, re-asking for info already given, repeated troubleshooting after a dead end, over-explaining, continuing after the answer was already clear), or specifically praise what was efficient if the chat moved well. The goal is coaching agents to cut avoidable time while still resolving correctly - NEVER frame speed itself as good if Q1 scored D/F/AF; a fast wrong answer is not good AHT, say so plainly if that's what happened.
+
+FINAL CHECK BEFORE YOU SCORE Q1/Q2: (1) if your reasoning for either letter mentions pace, speed, filler, lingering, or closing timing, and the player was never actually confused/misled/left-unresolved by it, that's not a valid reason to go below the letter the actual resolution quality earns - move that observation to coachingSignals/efficiencyNarrative instead and re-decide the letter on outcome quality alone. (2) if your reasoning cites a "process deviation" or "minor deviation," re-check: does Process Grounding actually prohibit that specific action, or did it conflict with/bypass/replace a required step? If the action was merely extra or non-essential, was never forbidden, and the required process was still fully and correctly delivered, that's not a real deviation - drop it from the Q1 citation and score on whether the required process was actually completed correctly. (3) if your Q2 reasoning cites "repetitive," quote the actual wording being compared - if it's genuinely different phrasing of the same fact, that's not repetition, drop it. If your Q2 reasoning cites "defensive," re-read the line in context - if it's a calm, direct response to something the player specifically said, not curt or dismissive, that's not defensiveness, drop it. (4) if your citation or overallSummary describes the agent positively for offering something specific (a promo, a discount, an alternative, a policy detail, a workaround) - stop and verify that specific offer is actually traceable to Available Case Data, Player Knowledge, the Action Log, or Process Grounding for this scenario. If it isn't there, this is confident invention per Global Eval Rule 2 - correct the Q1 letter to reflect a real accuracy issue and remove any positive framing of it.
 
 Return ONLY valid JSON (no markdown fences, no preamble), exactly this shape. For q1, "recognitionCheck" is REQUIRED whenever the scenario involves a possible RG trigger - fill it in BEFORE deciding the letter, it is not optional commentary:
 {
@@ -3017,28 +3088,60 @@ function renderDocModal(){
   document.getElementById('btnSubmitDoc').addEventListener('click', async ()=>{
     overlay.remove();
     state.simStatus='ended';
-    state.evaluation={loading:true};
+    // Snapshot EVERYTHING this specific attempt needs, right now, before any async gap. Once this
+    // object exists, the attempt is self-contained - nothing that happens afterward (starting a new
+    // scenario, state.activeScenario changing, etc.) can affect what gets scored or archived for it.
+    const attemptContext = {
+      scenario: state.activeScenario,
+      transcript: state.transcript,
+      actionLog: state.actionLog,
+      docNote: state.docNote,
+      docTag: state.docTag,
+      docSecondaryTag: state.docSecondaryTag,
+      chatStartedAt: state.ahtStartTime,
+      playerLeftEarly: state.playerLeftEarly,
+      playerLeftReason: state.playerLeftReason,
+      ahtElapsedMinutes: state.ahtElapsedMinutes,
+      ahtLateStart: state.ahtLateStart,
+      agentName: state.agentName,
+      evaluation: {loading:true},
+      tlOverrides: {},
+      archived: false,
+    };
+    state.currentAttemptContext = attemptContext;
+    state.evaluation = attemptContext.evaluation; // same object reference - live UI reflects it immediately
     render();
-    await runEvaluation(state.activeScenario, state.transcript);
+    await runEvaluation(attemptContext);
   });
 }
 
-async function runEvaluation(s, transcript){
+// Fully atomic: only ever reads/writes attemptContext (captured at submit time), never live state.*
+// for anything that identifies WHICH attempt this is. This is what makes it safe for the agent to
+// start a brand new scenario before this finishes - whenever the response lands, it can only ever
+// write back into this exact attempt, never into whatever happens to be live at that moment.
+async function runEvaluation(attemptContext){
   try{
-    const prompt = buildEvalPrompt(s, transcript, undefined, undefined, undefined, undefined, state.ahtStartTime);
+    const prompt = buildEvalPrompt(attemptContext.scenario, attemptContext.transcript, attemptContext.actionLog, attemptContext.docNote, attemptContext.docTag, attemptContext.docSecondaryTag, attemptContext.chatStartedAt, attemptContext.playerLeftEarly, attemptContext.playerLeftReason);
     const result = await callClaudeJson(prompt, 'complex');
-    state.evaluation = result;
-    state.tlOverrides = {};
-    result.questions.forEach(q=>{ state.tlOverrides[q.id] = {letter:q.letter, afDuty:q.afDuty||null, notes:''}; });
-    state.resultsCopied = false;
-    state.pendingResultsText = null;
-    archiveCurrentAttemptIfAny(); // save into history right away, don't wait for the next scenario to start
+    attemptContext.evaluation = result;
+    attemptContext.tlOverrides = {};
+    result.questions.forEach(q=>{ attemptContext.tlOverrides[q.id] = {letter:q.letter, afDuty:q.afDuty||null, notes:''}; });
+    archiveAttempt(attemptContext); // save into history right away, regardless of what's live by now
   }catch(err){
     console.error(err);
-    state.evaluation = {error:err.message};
+    attemptContext.evaluation = {error:err.message};
   }
-  render();
-  renderEvalModal();
+  // Only touch the live UI if the agent is STILL looking at this exact attempt (same transcript
+  // object reference - starting a new scenario always creates a brand new transcript array, so this
+  // reliably detects "has the agent moved on" without needing any extra id/token bookkeeping).
+  if(state.transcript === attemptContext.transcript){
+    state.evaluation = attemptContext.evaluation;
+    state.tlOverrides = attemptContext.tlOverrides;
+    state.resultsCopied = false;
+    state.pendingResultsText = null;
+    render();
+    renderEvalModal();
+  }
 }
 
 function currentOverrideScore(){
@@ -3111,7 +3214,7 @@ function renderTeamProgressModal(){
   return `<div class="modal">
     <h2>Team Progress</h2>
     <div style="color:var(--text2);font-size:13px;margin-bottom:6px;">Every attempt, by everyone who has used this link - scenario, score, and handling time where AHT Mode was on.</div>
-    <div style="color:var(--text3);font-size:11.5px;margin-bottom:16px;">Full transcripts and coaching notes stay private to each person; only these summaries are shared here.</div>
+    <div style="color:var(--text3);font-size:11.5px;margin-bottom:16px;">Full transcripts, documentation, and coaching notes are saved here too, for TL/management review - click into any attempt to see the complete record, not just the summary.</div>
     ${sections}
     <div style="margin-top:20px;"><button id="closeEvalModal">Close</button></div>
   </div>`;
@@ -3225,6 +3328,15 @@ function renderEvalModal(){
 
   const closeBtn=document.getElementById('closeEvalModal');
   if(closeBtn) closeBtn.addEventListener('click', ()=> overlay.remove());
+
+  const retryBtn=document.getElementById('btnRetryEvaluation');
+  if(retryBtn) retryBtn.addEventListener('click', async ()=>{
+    const attemptContext = state.currentAttemptContext;
+    if(!attemptContext) return; // shouldn't happen - retry only shows for the live attempt, which always has one
+    attemptContext.evaluation = {loading:true};
+    if(state.transcript === attemptContext.transcript){ state.evaluation = attemptContext.evaluation; renderEvalModal(); }
+    await runEvaluation(attemptContext);
+  });
 
   const backBtn=document.getElementById('btnBackToCurrent');
   if(backBtn) backBtn.addEventListener('click', ()=>{ state.historicalView=null; renderEvalModal(); });
@@ -3379,53 +3491,83 @@ const COACHING_RATING_COLOR = {good:'var(--ok)', mixed:'var(--warn)', 'needs-wor
 const COACHING_RATING_LABEL = {good:'Good', mixed:'Mixed', 'needs-work':'Needs Work', 'not-applicable':'N/A'};
 
 // ---------- COACHING TOOLKIT (generic habits/phrasing - never scenario or KB content) ----------
+// Same six tips as before, word for word - only change is a category tag on each, so the toolkit
+// page below can group them into expandable cards instead of one long scroll.
 const COACHING_TOOLKIT_SECTIONS = [
   {
+    category:'Investigation & Clarifying',
     title:'Investigate before you answer',
     body:'Check the account or case data before responding - don\u2019t guess and backfill. A confident wrong answer costs more than a short pause to actually look.',
     phrases:['Thanks for flagging that - let me check your account for the specifics.','Give me one moment to pull up the details on that.','I want to make sure I\u2019m giving you the right answer - checking now.'],
   },
   {
+    category:'Investigation & Clarifying',
     title:'Use what they already told you',
     body:'Don\u2019t re-ask for information the player already gave you. Acknowledge it and move forward - repeating questions is one of the fastest ways to lose someone\u2019s patience.',
     phrases:['Thanks for confirming - since you mentioned that, let me check into it for you.','Got it, using what you shared - one moment while I look into this.'],
   },
   {
+    category:'Keeping Players Updated',
     title:'Keep them updated',
     body:'If something is taking a moment, say so - don\u2019t just go quiet. A short check-in costs nothing and keeps the player from feeling ignored.',
     phrases:['Still looking into this for you - thanks for your patience.','Almost there, just double-checking one more thing.','No worries, take your time - whenever you\u2019re ready, come right back and we\u2019ll pick up where we left off.'],
   },
   {
+    category:'Efficiency & AHT',
     title:'Avoid unnecessary filler',
     body:'"Let me take a look" with nothing behind it doesn\u2019t move the conversation forward - it just delays the real answer. Every message should either answer something or tell the player what\u2019s actually happening.',
     phrases:['Thanks for letting me know - here\u2019s what I\u2019m seeing.','Thanks for responding - here\u2019s the next step.'],
     avoid:['"Let me take a look" with nothing following it','"One moment" repeated with no update after'],
   },
   {
+    category:'Player Communication',
     title:'Answer the actual question',
     body:'Lead with the direct answer, then explain if needed - don\u2019t bury it in a wall of text or drift into an unrelated explanation. If you\u2019re not sure what they\u2019re asking, ask a clarifying question rather than guessing.',
     phrases:['To directly answer that - here\u2019s what\u2019s happening, and here\u2019s why.','Just to make sure I understand correctly, are you asking about X or Y?'],
   },
   {
+    category:'Resolution & Closing',
     title:'Close confidently once resolved',
     body:'Once the issue is actually resolved, wrap up promptly. Don\u2019t linger waiting for a redundant "you\u2019re welcome" back-and-forth - send your closing message and move on the moment the player confirms there\u2019s nothing else.',
     phrases:['Glad I could help with that today - have a great one!','That takes care of it on my end - is there anything else I can help with today?'],
   },
 ];
 
-function renderCoachingToolkit(){
-  const sectionsHtml = COACHING_TOOLKIT_SECTIONS.map(sec => `
-    <div class="box" style="margin-bottom:14px;">
+// Fixed display order for the six suggested categories - only ones with at least one tip actually
+// render, so this list doubles as "categories available for future tips" without showing empty cards.
+const COACHING_TOOLKIT_CATEGORY_ORDER = ['Investigation & Clarifying', 'Player Communication', 'Keeping Players Updated', 'Efficiency & AHT', 'Resolution & Closing', 'Escalation & Ownership'];
+
+function renderCoachingToolkitTip(sec){
+  return `<div class="box" style="margin-bottom:14px;">
       <div style="font-weight:700;font-size:14.5px;margin-bottom:6px;">${escapeHtml(sec.title)}</div>
       <div style="color:var(--text2);font-size:13px;line-height:1.55;margin-bottom:10px;">${escapeHtml(sec.body)}</div>
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Example phrasing</div>
       ${sec.phrases.map(p=>`<div style="font-size:13px;color:var(--text);background:var(--panel2);border-radius:6px;padding:7px 10px;margin-bottom:5px;">\u201c${escapeHtml(p)}\u201d</div>`).join('')}
       ${sec.avoid ? `<div style="font-size:11px;color:var(--bad);text-transform:uppercase;letter-spacing:.04em;margin:10px 0 4px;">Avoid</div>${sec.avoid.map(p=>`<div style="font-size:13px;color:var(--text3);padding:2px 10px;">\u2014 ${escapeHtml(p)}</div>`).join('')}` : ''}
-    </div>`).join('');
+    </div>`;
+}
+
+function renderCoachingToolkit(){
+  const byCategory = {};
+  COACHING_TOOLKIT_SECTIONS.forEach(sec => { (byCategory[sec.category]=byCategory[sec.category]||[]).push(sec); });
+  const cardsHtml = COACHING_TOOLKIT_CATEGORY_ORDER.filter(cat => byCategory[cat] && byCategory[cat].length).map(cat=>{
+    const expanded = !!state.toolkitExpanded[cat];
+    const tips = byCategory[cat];
+    return `<div class="box" style="margin-bottom:10px;padding:0;overflow:hidden;">
+      <div data-toolkit-category="${escapeHtml(cat)}" style="cursor:pointer;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:700;font-size:14.5px;">${escapeHtml(cat)}</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:11px;color:var(--text3);">${tips.length} tip${tips.length===1?'':'s'}</span>
+          ${icon('chevronDown',14)}
+        </div>
+      </div>
+      ${expanded ? `<div style="padding:0 16px 14px;">${tips.map(renderCoachingToolkitTip).join('')}</div>` : ''}
+    </div>`;
+  }).join('');
   return `<div class="main" style="padding:32px;overflow-y:auto;">
     <h1 style="margin-top:0;">Coaching Toolkit</h1>
-    <div style="color:var(--text2);font-size:13px;max-width:640px;line-height:1.6;margin-bottom:24px;">General chat-handling habits and reusable phrasing - not scenario answers or process/KB content. Use these as a starting point, not a script to read word-for-word.</div>
-    <div style="max-width:640px;">${sectionsHtml}</div>
+    <div style="color:var(--text2);font-size:13px;max-width:640px;line-height:1.6;margin-bottom:24px;">General chat-handling habits and reusable phrasing - not scenario answers or process/KB content. Use these as a starting point, not a script to read word-for-word. Click a category to expand it.</div>
+    <div style="max-width:640px;">${cardsHtml}</div>
   </div>`;
 }
 
@@ -4204,7 +4346,11 @@ function evalModalContent(){
   if(ev.error){
     return `<div class="modal"><h2>Evaluation failed - real error</h2>
       <div class="box" style="font-family:monospace;font-size:12.5px;">${escapeHtml(ev.error)}</div>
-      <button id="closeEvalModal" style="margin-top:16px;">Close</button></div>`;
+      <div style="color:var(--text3);font-size:12.5px;margin-top:10px;">Your chat and documentation are still saved in memory - retry doesn\u2019t require redoing the conversation.</div>
+      <div style="margin-top:16px;display:flex;gap:10px;">
+        <button id="btnRetryEvaluation" class="primary">Retry Scoring</button>
+        <button id="closeEvalModal">Close</button>
+      </div></div>`;
   }
 
   const allAttempts = state.attemptHistory[s.id] || [];
@@ -4422,7 +4568,7 @@ function renderDiagnostics(){
 
     <div class="diag-section">
       <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">Assign a Scenario</h2>
-      <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Local to this browser only - an agent sees their assignment when they enter this same name on this same device/link. Not yet cross-device.</div>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Shared across devices - an agent sees their assignment as soon as they enter this same name, on any device using this link.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:700px;">
         <input id="assignAgentName" placeholder="Agent name" style="flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <select id="assignScenarioSelect" style="flex:2;min-width:220px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
@@ -4470,7 +4616,7 @@ function renderDiagnostics(){
     <div class="diag-section">
       <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">Not automated in this prototype</h2>
       <div style="color:var(--text2);font-size:13px;line-height:1.6;">
-        <strong>Hidden-information discipline</strong> (does the player over-reveal facts) and <strong>player-sentiment independence</strong> (can a well-handled chat still end with an unhappy player) are best verified by actually playing a scenario live and reviewing the transcript against the scorecard citations. Completed <strong>Attempt History now persists across refresh/reopen</strong> via the artifact's built-in personal storage (not a database or account system - saved locally to this browser, tied to this scenario tool). <strong>Authorization/multi-user access</strong> is still intentionally out of scope for Phase 1 (no accounts, no shared/cross-device sync).
+        <strong>Hidden-information discipline</strong> (does the player over-reveal facts) and <strong>player-sentiment independence</strong> (can a well-handled chat still end with an unhappy player) are best verified by actually playing a scenario live and reviewing the transcript against the scorecard citations. Personal <strong>Attempt History</strong> persists per-device via browser storage. <strong>Team Progress and TL Assignments are shared</strong> across every device using this link, via the backend server - a TL assigning a scenario, or an agent completing one, is visible to anyone else using the tool, not just on the same device. <strong>Authorization</strong> is still informal (name-based, no real accounts or passwords) - that remains intentionally out of scope for Phase 1.
       </div>
     </div>
 
@@ -4723,7 +4869,7 @@ function renderNameModal(){
   overlay.className='modal-overlay';
   overlay.innerHTML = `<div class="modal" style="max-width:420px;">
     <h2>What\u2019s your name?</h2>
-    <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Used to label your results in Team Progress - your full transcripts and coaching notes stay private to you either way. Just your name, no account or password.</div>
+    <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Used to label your results in Team Progress. Your attempt details, including transcripts and documentation, are saved there for your TL/management to review as part of coaching. Just your name, no account or password.</div>
     <input id="nameModalInput" type="text" placeholder="e.g. Poojan Solanki" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
     <div style="margin-top:16px;"><button id="btnSaveName" class="primary">Continue</button></div>
   </div>`;
