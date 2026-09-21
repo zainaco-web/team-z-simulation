@@ -180,10 +180,14 @@
   - caseData: what the AGENT can investigate (Investigation panel). Some cards
      visible immediately, some gated behind an "Investigate" action.
   - processGrounding: KB-grounded process content used ONLY by the evaluator,
-     never shown to the player engine. ALL of it is currently fictional/placeholder —
-     no real Betty KB has been supplied — so every scenario is marked
-     kbValidated:false and shows a banner. Do not use for real coaching until
-     replaced with validated KB content.
+     never shown to the player engine. Each scenario carries its own kbStatus -
+     'validated' (real, authoritative Betty KB), 'coaching' (real, documented
+     TL/QA coaching direction, not a formal KB article), 'mixed' (some real,
+     some fictional - see kbSource), 'ambiguous' (real KB checked, genuinely
+     doesn't resolve the case), or 'fictional' (invented/placeholder, prototype-
+     only). kbBannerFor() shows the right banner for each status. Only treat
+     'fictional' content as a real-world correctness standard once it's been
+     replaced with validated (or at least coaching-grounded) content.
    ============================================================ */
 
 const KB_NOT_VALIDATED_BANNER = "PROCESS NOT YET KB-VALIDATED - ENGINE TEST ONLY. Process content below is fictional/placeholder, not real Betty KB. Do not use for real Team Z coaching until replaced with validated KB content.";
