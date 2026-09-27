@@ -1727,8 +1727,6 @@ let state = {
   ahtTimerInterval:null,   // setInterval handle for the live "Chatting time" display
   ahtLateStart:false,      // true if AHT Mode was switched on mid-chat rather than at scenario start
   agentName:null,          // this person's name, entered once, saved to their own personal storage
-  tlReviewDraft:null,     // TL-only working copy of an attempt's score overrides while reviewing in Team Progress
-  tlReviewStatus:'',
   teamProgressLog:[],      // shared summary records (name/scenario/score/time), visible in Team Progress view
   categoryFilter:null,     // topic string when browsing scenarios by category via Home, null otherwise
   view:'sim',
@@ -1745,6 +1743,8 @@ let state = {
   feedbackText:'',
   feedbackJustSubmitted:false,
   feedbackSubmitError:null,
+  allFeedback:[],
+  feedbackLoadError:null,
 };
 
 // Agent-facing pool: excludes ENGINE_TEST_ONLY scenarios (fictional system mechanics agents
@@ -2006,6 +2006,7 @@ function renderMain(){
       <div class="pcq">What is your preferred name?</div><div class="pca">${escapeHtml(s.playerName)}</div>
       <div class="pcq">What brings you here?</div><div class="pca">${escapeHtml(s.title)}</div>
       <div class="pcq">Anything else we should know?</div><div class="pca">${escapeHtml(s.agentBriefing)}</div>
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid #d8d8d8;font-size:11px;color:#8a919c;font-style:italic;">This is a simulated practice chat with an AI-played customer - not a real player or a real account.</div>
     </div>
     <div class="started-divider"><span>Started - Today, ${new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}</span></div>`;
   state.transcript.forEach(m=>{
@@ -2312,6 +2313,9 @@ function wireEvents(){
   const btnOpenTeamProgressDiag=document.getElementById('btnOpenTeamProgressDiag');
   if(btnOpenTeamProgressDiag) btnOpenTeamProgressDiag.addEventListener('click', openTeamProgress);
 
+  const btnLoadFeedbackDiag=document.getElementById('btnLoadFeedbackDiag');
+  if(btnLoadFeedbackDiag) btnLoadFeedbackDiag.addEventListener('click', async ()=>{ await loadAllFeedback(); render(); });
+
   const d1=document.getElementById('runDiag1');
   if(d1) d1.addEventListener('click', runDiagnostic1);
   const d2=document.getElementById('runDiag2');
@@ -2402,7 +2406,7 @@ async function loadTeamProgressLog(){
     const response = await fetch(BACKEND_URL + '/api/store');
     if(response.ok){
       const data = await response.json();
-      if(Array.isArray(data.teamProgress)){ state.teamProgressLog = applyTlReviews(data.teamProgress); return; }
+      if(Array.isArray(data.teamProgress)){ state.teamProgressLog = data.teamProgress; return; }
     }
   }catch(err){
     console.error('Loading shared team progress from backend failed, falling back to this device\u2019s local copy:', err);
@@ -2410,76 +2414,10 @@ async function loadTeamProgressLog(){
   // Fallback - local-only, only used if the backend is unreachable
   try{
     const raw = localStorage.getItem(TEAM_PROGRESS_KEY);
-    if(raw){ const data = JSON.parse(raw); if(Array.isArray(data)) state.teamProgressLog = applyTlReviews(data); }
+    if(raw){ const data = JSON.parse(raw); if(Array.isArray(data)) state.teamProgressLog = data; }
   }catch(err){
     console.error('Loading local team progress log failed:', err);
   }
-}
-
-// ---------- TL REVIEWS (score overrides + coaching notes) ----------
-// Overrides are made ONLY from the TL / Management Area (Team Progress -> open an attempt), never from the
-// agent-facing post-chat report. Each review is stored as a small separate record keyed to the attempt
-// (device + timestamp + scenario) and layered onto that attempt when the log loads - the latest review
-// wins, and the AI's original evaluation is never overwritten.
-const TL_REVIEWS_KEY = 'zteamz_tlReviews_v1';
-function reviewKeyFor(e){ return [e.deviceId||'', e.timestamp||'', e.scenarioId||''].join('|'); }
-function loadLocalTlReviews(){
-  try{ const o = JSON.parse(localStorage.getItem(TL_REVIEWS_KEY)||'{}'); return (o && typeof o==='object') ? o : {}; }
-  catch(err){ return {}; }
-}
-function applyTlReviews(list){
-  const attempts = [], reviews = {};
-  (list||[]).forEach(r=>{
-    if(r && r.type==='tl-review' && r.reviewKey){
-      const prev = reviews[r.reviewKey];
-      if(!prev || (r.tlReviewedAt||0) >= (prev.tlReviewedAt||0)) reviews[r.reviewKey] = r;
-    } else { attempts.push(r); }
-  });
-  const local = loadLocalTlReviews(); // this device's own saved reviews, in case the shared save didn't go through
-  Object.keys(local).forEach(k=>{ const prev = reviews[k]; if(!prev || (local[k].tlReviewedAt||0) > (prev.tlReviewedAt||0)) reviews[k] = local[k]; });
-  attempts.forEach(e=>{ const r = reviews[reviewKeyFor(e)]; if(r && r.tlOverrides){ e.tlOverrides = r.tlOverrides; e.tlReviewedAt = r.tlReviewedAt; } });
-  return attempts;
-}
-// The score a TL sees in Team Progress: the TL-reviewed score once someone has reviewed the attempt,
-// otherwise the original AI score.
-function teamEntryScore(e){
-  if(e.tlReviewedAt && e.tlOverrides){
-    try{
-      const sc = computeQAScore(QA_SCORECARD.questions.map(q=>({id:q.id, letter:e.tlOverrides[q.id].letter, afDuty:e.tlOverrides[q.id].afDuty})));
-      return {pct: sc.af?0:sc.pct, af: sc.af, afDuty: sc.afDuty, pass: sc.pass, reviewed:true};
-    }catch(err){ /* fall through to the AI score */ }
-  }
-  return {pct:e.pct, af:e.af, afDuty:e.afDuty, pass:e.pass, reviewed:false};
-}
-// Working copy the TL edits before saving; starts from the saved review, or the AI letters if none yet.
-function buildReviewDraft(entry){
-  const d = {};
-  QA_SCORECARD.questions.forEach(q=>{
-    const ai = entry.evaluation.questions.find(x=>x.id===q.id) || {};
-    const t = entry.tlOverrides && entry.tlOverrides[q.id];
-    d[q.id] = { letter: (t&&t.letter) || ai.letter, afDuty: t ? (t.afDuty||null) : (ai.afDuty||null), notes: (t&&t.notes)||'' };
-  });
-  return d;
-}
-async function saveTlReview(){
-  const hv = state.historicalView;
-  if(!state.tlUnlocked || !hv || !hv.fromTeamProgress || !state.tlReviewDraft) return {ok:false, shared:false};
-  const entry = hv.attempt;
-  const draft = JSON.parse(JSON.stringify(state.tlReviewDraft));
-  const reviewedAt = Date.now();
-  entry.tlOverrides = draft;
-  entry.tlReviewedAt = reviewedAt;
-  const key = reviewKeyFor(entry);
-  const record = { type:'tl-review', reviewKey:key, agentName:entry.agentName, scenarioId:entry.scenarioId, tlOverrides:draft, tlReviewedAt:reviewedAt };
-  try{ const local = loadLocalTlReviews(); local[key] = record; localStorage.setItem(TL_REVIEWS_KEY, JSON.stringify(local)); }
-  catch(err){ console.error('Saving TL review locally failed:', err); }
-  try{ localStorage.setItem(TEAM_PROGRESS_KEY, JSON.stringify(state.teamProgressLog)); }catch(err){}
-  let shared = false;
-  try{
-    const resp = await fetch(BACKEND_URL + '/api/store/team-progress', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(record) });
-    shared = resp.ok;
-  }catch(err){ console.error('Saving TL review to the shared backend failed (saved on this device only):', err); }
-  return {ok:true, shared};
 }
 
 async function pushTeamProgressEntry(entry){
@@ -2525,7 +2463,7 @@ function archiveAttempt(attemptContext){
     transcript: attemptContext.transcript,
     actionLog: attemptContext.actionLog,
     evaluation: attemptContext.evaluation,
-    tlOverrides: attemptContext.tlOverrides,   // starts equal to the AI letters; only a TL reviewing in Team Progress ever changes a review (never the agent)
+    tlOverrides: attemptContext.tlOverrides,   // same object reference - live TL edits after this point still flow into the saved copy
     docNote: attemptContext.docNote,
     docSecondaryTag: attemptContext.docSecondaryTag,
     docTag: attemptContext.docTag,
@@ -2854,25 +2792,6 @@ async function callClaudeJson(prompt, modelTier){
   }
 }
 
-// Deterministic backstop for the scorecard's AF duty boundary (the prompt asks the model to respect it;
-// this makes sure a slip can't reach the score). Per the scorecard, Q1 AF covers Responsible Gambling,
-// Privacy and Company Exposure only - "stopped serving" is a Q2 (Player Experience) Conduct AF. A Q1
-// "AF - Conduct" is re-scored as D (root cause unaddressed / player left with the problem) with a visible
-// note, and the corrected Q2 AF (if the model gave one) is what carries the Conduct zero. Q2 AF is
-// Conduct by definition, so a missing Q2 duty is filled in.
-function enforceAFDutyBoundary(result){
-  if(!result || !Array.isArray(result.questions)) return result;
-  const q1 = result.questions.find(q=>q.id==='q1');
-  if(q1 && q1.letter==='AF' && /conduct/i.test(q1.afDuty||'')){
-    q1.letter = 'D';
-    q1.afDuty = null;
-    q1.citation = (q1.citation||'') + ' [Auto-corrected: the evaluator returned Q1 = AF (Conduct), but Conduct is not a Q1 AF duty - stopping service is scored under Q2 Player Experience. Re-scored as D on the Q1 outcome definition.]';
-  }
-  const q2 = result.questions.find(q=>q.id==='q2');
-  if(q2 && q2.letter==='AF' && !q2.afDuty) q2.afDuty = 'Conduct';
-  return result;
-}
-
 function transcriptToApiMessages(transcript){
   return (transcript||state.transcript)
     .filter(m=>m.speaker!=='system')
@@ -3097,13 +3016,7 @@ ${formatQAScorecardForEval()}
 
 RG SCORING APPLICABILITY FOR THIS SCENARIO: ${s.rgScoringRelevant ? 'This scenario IS intentionally designed with Responsible Gambling content/obligations. Apply the full RG recognition/execution guidance below as normal.' : 'This scenario is NOT designed with any Responsible Gambling content or obligation. Do NOT infer an RG trigger from generic language about financial stress, needing money, bills, being frustrated about money, or anything else the player says - none of that makes a scenario RG-relevant on its own, only the scenario\u2019s own design does, and this one\u2019s design has none. For this scenario: recognitionCheck MUST be exactly "N/A", Responsible Gambling must never be the afDuty for an AF, and nothing about RG recognition or execution may raise, lower, or otherwise factor into the Q1 or Q2 letter or citation. If the player mentions needing money, bills, or financial stress here, treat it exactly like any other ordinary customer statement relevant to their actual issue - do not treat it as a disclosure requiring intervention. Skip the entire CRITICAL AF GUIDANCE / CHECK 1 / CHECK 2 block below for this scenario; it does not apply.'}
 
-AF DUTY BOUNDARY - WHICH QUESTION OWNS WHICH DUTY (this follows the scorecard's own AF definitions exactly; do not blur it):
-- Q1 (Resolution & Obligations) AF is available ONLY for: Responsible Gambling (a direct statement or clear trigger went completely unactioned), Privacy, or Company Exposure. Conduct is NEVER a valid Q1 AF duty. "Stopped serving," "abandoned the player," "closed the chat early," or "never engaged" are NOT Q1 AF triggers.
-- Q2 (Player Experience) AF is available ONLY for Conduct: the agent turned on the player, OR stopped serving them (closing mid-conversation, refusing to engage, arguing to win rather than resolve). This is where "stopped serving" is scored.
-- If the agent stopped serving or tried to end the chat before investigating or resolving anything: score Q2 = AF (Conduct) for the stopped-serving behaviour, and score Q1 separately on outcome using the Q1 letter definitions. If the root cause was left completely unaddressed, the player was left with the problem, and a repeat contact is predictable, that is Q1 = D (use F only if the Q1 F definition is independently met - e.g. misleading information the player will act on, or a committed action that never happened). These are two distinct impacts (the outcome was not delivered; the agent stopped serving), so scoring Q1 = D and Q2 = AF (Conduct) is correct here and is not a double deduction under Global Eval Rule 7. Note the connection in both citations.
-- Q1 = AF requires an independent Q1-eligible duty breach (RG unactioned, Privacy, Company Exposure). If none of those occurred, Q1 is never AF, no matter how severe the resolution failure.
-
-CRITICAL AF GUIDANCE: AF is reserved strictly for duty breaches, and each question owns different duties - see AF DUTY BOUNDARY above. For Responsible Gambling specifically: AF applies whenever a direct statement or clear trigger went UNACTIONED. "Actioned" requires genuine, substantive engagement with the SPECIFIC disclosure - at least one of: (a) a follow-up question that references what the player actually said (not a generic question), (b) explicitly naming the concern back to the player (acknowledging what they specifically disclosed), or (c) a concrete action tied to it (restricting deposits/gameplay, mentioning self-exclusion). A generic responsible-gambling platitude or reminder that does NOT reference the player's specific disclosure - "play responsibly," "have fun out there," "we want you to enjoy yourself" - is NOT recognition. It is boilerplate that could be said to any player regardless of what they disclosed, and must be scored identically to complete silence: AF. Do not credit a platitude as partial recognition just because it contains RG-adjacent words.
+CRITICAL AF GUIDANCE: AF is reserved strictly for one of four duty breaches: Responsible Gambling, Privacy, Conduct, Company Exposure. For Responsible Gambling specifically: AF applies whenever a direct statement or clear trigger went UNACTIONED. "Actioned" requires genuine, substantive engagement with the SPECIFIC disclosure - at least one of: (a) a follow-up question that references what the player actually said (not a generic question), (b) explicitly naming the concern back to the player (acknowledging what they specifically disclosed), or (c) a concrete action tied to it (restricting deposits/gameplay, mentioning self-exclusion). A generic responsible-gambling platitude or reminder that does NOT reference the player's specific disclosure - "play responsibly," "have fun out there," "we want you to enjoy yourself" - is NOT recognition. It is boilerplate that could be said to any player regardless of what they disclosed, and must be scored identically to complete silence: AF. Do not credit a platitude as partial recognition just because it contains RG-adjacent words.
 
 IMPORTANT - do not conflate "recognized" with "fully executed." These are two SEPARATE checks, and AF depends only on the first one:
 CHECK 1 (recognition): Did the agent's response demonstrably engage with the SPECIFIC disclosure - a follow-up question referencing it, naming it back to the player, or a concrete action? If YES to Check 1, AF for Responsible Gambling is RULED OUT for this transcript, full stop, regardless of what happens next. The worst this can score is D or F on Q1, never AF.
@@ -3124,18 +3037,18 @@ These, plus the qualitative behaviours below, are COACHING SIGNALS ONLY. They mu
 - closesConfidently: once the issue was resolved, did the agent close promptly and confidently, or drag the ending out, or (the other failure mode) end the chat before the issue was actually resolved?
 Rate each "good" | "mixed" | "needs-work" | "not-applicable" (use not-applicable only when the transcript genuinely gives no basis to judge, e.g. chat ended before any close was possible), with a one-sentence, transcript-grounded note for each - no generic praise/criticism.
 
-EFFICIENCY NARRATIVE (separate field, coaching only, never affects scoring): write 1-2 sentences in this exact style - "Correctly resolved in 6m 20s. Most of the additional time came from repeating troubleshooting after the root cause was already known." or "You kept the conversation moving well: targeted question, relevant investigation, clear answer and prompt closure." Total chat duration: ${totalDurationLabel}. Ground the sentence in what actually happened - name the SPECIFIC avoidable behavior if there was meaningful lost time (unnecessary investigation, re-asking for info already given, repeated troubleshooting after a dead end, over-explaining, continuing after the answer was already clear), or specifically praise what was efficient if the chat moved well. The goal is coaching agents to cut avoidable time while still resolving correctly - NEVER frame speed itself as good if Q1 scored D/F/AF; a fast wrong answer is not good AHT, say so plainly if that's what happened, in neutral factual language (e.g. "The chat was short because the issue was never investigated, so the time does not reflect a correct resolution.") - no superlatives or dramatic phrasing such as "worst possible outcome."
+EFFICIENCY NARRATIVE (separate field, coaching only, never affects scoring): write 1-2 sentences in this exact style - "Correctly resolved in 6m 20s. Most of the additional time came from repeating troubleshooting after the root cause was already known." or "You kept the conversation moving well: targeted question, relevant investigation, clear answer and prompt closure." Total chat duration: ${totalDurationLabel}. Ground the sentence in what actually happened - name the SPECIFIC avoidable behavior if there was meaningful lost time (unnecessary investigation, re-asking for info already given, repeated troubleshooting after a dead end, over-explaining, continuing after the answer was already clear), or specifically praise what was efficient if the chat moved well. The goal is coaching agents to cut avoidable time while still resolving correctly - NEVER frame speed itself as good if Q1 scored D/F/AF; a fast wrong answer is not good AHT, say so plainly if that's what happened.
 
-FINAL CHECK BEFORE YOU SCORE Q1/Q2: (1) if your reasoning for either letter mentions pace, speed, filler, lingering, or closing timing, and the player was never actually confused/misled/left-unresolved by it, that's not a valid reason to go below the letter the actual resolution quality earns - move that observation to coachingSignals/efficiencyNarrative instead and re-decide the letter on outcome quality alone. (2) if your reasoning cites a "process deviation" or "minor deviation," re-check: does Process Grounding actually prohibit that specific action, or did it conflict with/bypass/replace a required step? If the action was merely extra or non-essential, was never forbidden, and the required process was still fully and correctly delivered, that's not a real deviation - drop it from the Q1 citation and score on whether the required process was actually completed correctly. (3) if your Q2 reasoning cites "repetitive," quote the actual wording being compared - if it's genuinely different phrasing of the same fact, that's not repetition, drop it. If your Q2 reasoning cites "defensive," re-read the line in context - if it's a calm, direct response to something the player specifically said, not curt or dismissive, that's not defensiveness, drop it. (4) if your citation or overallSummary describes the agent positively for offering something specific (a promo, a discount, an alternative, a policy detail, a workaround) - stop and verify that specific offer is actually traceable to Available Case Data, Player Knowledge, the Action Log, or Process Grounding for this scenario. If it isn't there, this is confident invention per Global Eval Rule 2 - correct the Q1 letter to reflect a real accuracy issue and remove any positive framing of it. (5) if recognitionCheck is anything other than "N/A" or if RG considerations factored into your Q1/Q2 reasoning in any way, re-check RG SCORING APPLICABILITY above - if this scenario's flag says RG is not relevant, recognitionCheck must be corrected to "N/A" and every RG-related consideration removed from your scoring, regardless of what the player said about money, stress, or anything else. (6) if your reasoning or overallSummary describes an escalation, a follow-up promise, or any operational action positively - stop and verify Process Grounding's escalationCriteria/requiredActions actually call for that action at this point in the case. If Process Grounding says this should still be resolved directly (e.g. a normal timeframe hasn't elapsed yet), a premature escalation is a real process issue, not good service - correct the framing and reflect it appropriately in Q1. (7) if your Q1 letter is AF, re-check AF DUTY BOUNDARY above: Q1 AF is valid ONLY for Responsible Gambling, Privacy, or Company Exposure - if your afDuty for Q1 is Conduct, or your reason is "stopped serving / abandoned / closed early," that reasoning belongs in Q2. Re-score Q1 on outcome using the Q1 letter definitions (typically D when the root cause was left unaddressed and the player was left with the problem) and move the stopped-serving reasoning to Q2. (8) re-read overallSummary and efficiencyNarrative for tone: state what happened, the impact on the player, and why each criterion received its letter, in neutral and specific terms - remove dramatic or editorial wording (e.g. "near-total failure," "worst possible," "abandoned") and replace it with the factual description.
+FINAL CHECK BEFORE YOU SCORE Q1/Q2: (1) if your reasoning for either letter mentions pace, speed, filler, lingering, or closing timing, and the player was never actually confused/misled/left-unresolved by it, that's not a valid reason to go below the letter the actual resolution quality earns - move that observation to coachingSignals/efficiencyNarrative instead and re-decide the letter on outcome quality alone. (2) if your reasoning cites a "process deviation" or "minor deviation," re-check: does Process Grounding actually prohibit that specific action, or did it conflict with/bypass/replace a required step? If the action was merely extra or non-essential, was never forbidden, and the required process was still fully and correctly delivered, that's not a real deviation - drop it from the Q1 citation and score on whether the required process was actually completed correctly. (3) if your Q2 reasoning cites "repetitive," quote the actual wording being compared - if it's genuinely different phrasing of the same fact, that's not repetition, drop it. If your Q2 reasoning cites "defensive," re-read the line in context - if it's a calm, direct response to something the player specifically said, not curt or dismissive, that's not defensiveness, drop it. (4) if your citation or overallSummary describes the agent positively for offering something specific (a promo, a discount, an alternative, a policy detail, a workaround) - stop and verify that specific offer is actually traceable to Available Case Data, Player Knowledge, the Action Log, or Process Grounding for this scenario. If it isn't there, this is confident invention per Global Eval Rule 2 - correct the Q1 letter to reflect a real accuracy issue and remove any positive framing of it. (5) if recognitionCheck is anything other than "N/A" or if RG considerations factored into your Q1/Q2 reasoning in any way, re-check RG SCORING APPLICABILITY above - if this scenario's flag says RG is not relevant, recognitionCheck must be corrected to "N/A" and every RG-related consideration removed from your scoring, regardless of what the player said about money, stress, or anything else. (6) if your reasoning or overallSummary describes an escalation, a follow-up promise, or any operational action positively - stop and verify Process Grounding's escalationCriteria/requiredActions actually call for that action at this point in the case. If Process Grounding says this should still be resolved directly (e.g. a normal timeframe hasn't elapsed yet), a premature escalation is a real process issue, not good service - correct the framing and reflect it appropriately in Q1.
 
 Return ONLY valid JSON (no markdown fences, no preamble), exactly this shape. For q1, "recognitionCheck" is REQUIRED whenever the scenario involves a possible RG trigger - fill it in BEFORE deciding the letter, it is not optional commentary:
 {
   "questions": [
-    { "id": "q1", "letter": "A|B|C|D|F|AF", "citation": "brief citation of the specific transcript turn(s) supporting this letter, quoting under 15 words or referencing turn numbers", "afDuty": "one of Responsible Gambling|Privacy|Company Exposure, ONLY if letter is AF, otherwise null - Conduct is NOT a valid Q1 duty (see AF DUTY BOUNDARY)", "recognitionCheck": "If this scenario could involve an RG trigger: state plainly YES or NO on whether the agent's response demonstrably engaged with the SPECIFIC disclosure (quote the exact words that do or don't qualify), per CHECK 1 above. If YES, the letter CANNOT be AF for Responsible Gambling. If not RG-relevant, write 'N/A'." },
-    { "id": "q2", "letter": "A|B|C|D|F|AF", "citation": "...", "afDuty": "Conduct, ONLY if letter is AF, otherwise null" },
+    { "id": "q1", "letter": "A|B|C|D|F|AF", "citation": "brief citation of the specific transcript turn(s) supporting this letter, quoting under 15 words or referencing turn numbers", "afDuty": "one of Responsible Gambling|Privacy|Conduct|Company Exposure, ONLY if letter is AF, otherwise null", "recognitionCheck": "If this scenario could involve an RG trigger: state plainly YES or NO on whether the agent's response demonstrably engaged with the SPECIFIC disclosure (quote the exact words that do or don't qualify), per CHECK 1 above. If YES, the letter CANNOT be AF for Responsible Gambling. If not RG-relevant, write 'N/A'." },
+    { "id": "q2", "letter": "A|B|C|D|F|AF", "citation": "...", "afDuty": "...or null" },
     { "id": "q3", "letter": "A|B", "citation": "..." }
   ],
-  "overallSummary": "2-3 sentence summary grounded in specific transcript turns. Neutral, precise, coaching-oriented - not editorial or dramatic. It must say what happened, what the impact on the player was, and why Q1 and Q2 each received their letter (if either is AF, say which question it applies to and why). Example of the right register: \"The issue was never investigated or resolved. The agent attempted to close the chat before asking for the player's location or checking geolocation data, which left the player without an answer and forced them to re-engage. This is a serious resolution failure (Q1) and, because the agent attempted to end the interaction without serving the player, also meets the Conduct AF threshold under Player Experience (Q2).\"",
+  "overallSummary": "2-3 sentence summary of how the agent handled this, grounded in specifics from the transcript, not generic praise/criticism",
   "efficiencyNarrative": "1-2 sentence AHT/efficiency coaching narrative per the instructions above - never affects the score",
   "coachingSignals": {
     "keepsPlayerEngaged": {"rating":"good|mixed|needs-work|not-applicable", "note":"..."},
@@ -3225,7 +3138,7 @@ function renderDocModal(){
 async function runEvaluation(attemptContext){
   try{
     const prompt = buildEvalPrompt(attemptContext.scenario, attemptContext.transcript, attemptContext.actionLog, attemptContext.docNote, attemptContext.docTag, attemptContext.docSecondaryTag, attemptContext.chatStartedAt, attemptContext.playerLeftEarly, attemptContext.playerLeftReason);
-    const result = enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex'));
+    const result = await callClaudeJson(prompt, 'complex');
     attemptContext.evaluation = result;
     attemptContext.tlOverrides = {};
     result.questions.forEach(q=>{ attemptContext.tlOverrides[q.id] = {letter:q.letter, afDuty:q.afDuty||null, notes:''}; });
@@ -3247,28 +3160,14 @@ async function runEvaluation(attemptContext){
   }
 }
 
-
-function wireTeamProgressModal(overlay){
-  const closeBtn=document.getElementById('closeEvalModal');
-  if(closeBtn) closeBtn.addEventListener('click', ()=>{ state.teamProgressOpen=false; overlay.remove(); });
-  document.querySelectorAll('[data-view-team-attempt]').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      const idx = parseInt(el.getAttribute('data-view-team-attempt'), 10);
-      const entry = state.teamProgressLog[idx];
-      if(!entry) return;
-      state.teamProgressOpen=false;
-      overlay.remove();
-      state.historicalView = { scenarioId: entry.scenarioId, attempt: entry, standalone: true, fromTeamProgress: true };
-      state.tlReviewDraft = buildReviewDraft(entry);
-      state.tlReviewStatus = '';
-      state.historicalTranscriptExpanded = false;
-      renderEvalModal();
-    });
-  });
+function currentOverrideScore(){
+  const questions = QA_SCORECARD.questions.map(q=>({
+    id:q.id, letter: state.tlOverrides[q.id].letter, afDuty: state.tlOverrides[q.id].afDuty
+  }));
+  return computeQAScore(questions);
 }
 
 function openTeamProgress(){
-  if(!state.tlUnlocked) return; // TL / Management only
   let existing=document.getElementById('evalModalOverlay');
   if(existing) existing.remove();
   const overlay=document.createElement('div');
@@ -3276,15 +3175,19 @@ function openTeamProgress(){
   overlay.className='modal-overlay';
   overlay.innerHTML = renderTeamProgressModal();
   document.body.appendChild(overlay);
-  state.teamProgressOpen=true;
-  wireTeamProgressModal(overlay);
-  // Pull the latest shared attempts and reviews in the background so a TL sees teammates' newest work
-  // and other TLs' reviews; re-render in place only if this list is still what's on screen.
-  loadTeamProgressLog().then(()=>{
-    if(!state.teamProgressOpen || !document.body.contains(overlay)) return;
-    overlay.innerHTML = renderTeamProgressModal();
-    wireTeamProgressModal(overlay);
-  }).catch(()=>{});
+  const closeBtn=document.getElementById('closeEvalModal');
+  if(closeBtn) closeBtn.addEventListener('click', ()=> overlay.remove());
+  document.querySelectorAll('[data-view-team-attempt]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const idx = parseInt(el.getAttribute('data-view-team-attempt'), 10);
+      const entry = state.teamProgressLog[idx];
+      if(!entry) return;
+      overlay.remove();
+      state.historicalView = { scenarioId: entry.scenarioId, attempt: entry, standalone: true, fromTeamProgress: true };
+      state.historicalTranscriptExpanded = false;
+      renderEvalModal();
+    });
+  });
 }
 
 function renderTeamProgressModal(){
@@ -3302,7 +3205,7 @@ function renderTeamProgressModal(){
 
   const sections = agentNames.map(name=>{
     const entries = [...byAgent[name]].sort((a,b)=>b.timestamp-a.timestamp);
-    const passCount = entries.filter(e=>{ const sc=teamEntryScore(e); return sc.pass && !sc.af; }).length;
+    const passCount = entries.filter(e=>e.pass && !e.af).length;
     const rows = entries.map(e=>{
       let ahtCell = ' - ';
       if(e.ahtElapsedMinutes!==null && e.ahtElapsedMinutes!==undefined && e.ahtTargetMinutes){
@@ -3310,10 +3213,9 @@ function renderTeamProgressModal(){
       }
       const globalIdx = state.teamProgressLog.indexOf(e);
       const hasFullData = !!e.evaluation;
-      const es = teamEntryScore(e);
       return `<div class="info-row" style="${hasFullData?'cursor:pointer;':''}" ${hasFullData?`data-view-team-attempt="${globalIdx}"`:''}>
-        <span class="ilabel">${escapeHtml(e.scenarioTitle)}<br><span style="font-size:10.5px;">${new Date(e.timestamp).toLocaleString()} \u00b7 ${ahtCell}${hasFullData?' \u00b7 <span style="color:var(--accent);">review attempt</span>':''}${es.reviewed?' \u00b7 <span style="color:var(--ok);">TL-reviewed</span>':''}</span></span>
-        <span class="ival" style="color:${es.af?'var(--bad)':es.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${es.af?`AF (${es.afDuty})`:es.pct+'%'} \u00b7 ${es.af||!es.pass?'FAIL':'PASS'}</span>
+        <span class="ilabel">${escapeHtml(e.scenarioTitle)}<br><span style="font-size:10.5px;">${new Date(e.timestamp).toLocaleString()} \u00b7 ${ahtCell}${hasFullData?' \u00b7 <span style="color:var(--accent);">view transcript</span>':''}</span></span>
+        <span class="ival" style="color:${e.af?'var(--bad)':e.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${e.af?`AF (${e.afDuty})`:e.pct+'%'} \u00b7 ${e.af||!e.pass?'FAIL':'PASS'}</span>
       </div>`;
     }).join('');
     return `<div class="box" style="margin-bottom:10px;">
@@ -3328,7 +3230,7 @@ function renderTeamProgressModal(){
   return `<div class="modal">
     <h2>Team Progress</h2>
     <div style="color:var(--text2);font-size:13px;margin-bottom:6px;">Every attempt, by everyone who has used this link - scenario, score, and handling time where AHT Mode was on.</div>
-    <div style="color:var(--text3);font-size:11.5px;margin-bottom:16px;">Click into any attempt to review the full record - transcript, documentation, AI assessment - and, where the AI got something wrong or a case deserves leniency, set a TL override and coaching note. Scores shown here reflect the TL review once one has been saved.</div>
+    <div style="color:var(--text3);font-size:11.5px;margin-bottom:16px;">Full transcripts, documentation, and coaching notes are saved here too, for TL/management review - click into any attempt to see the complete record, not just the summary.</div>
     ${sections}
     <div style="margin-top:20px;"><button id="closeEvalModal">Close</button></div>
   </div>`;
@@ -3481,70 +3383,43 @@ function renderEvalModal(){
     });
   });
 
-  if(state.historicalView){
-    // Read-only everywhere EXCEPT a TL / Management review opened from Team Progress.
-    if(state.tlUnlocked && state.historicalView.fromTeamProgress && state.tlReviewDraft){
-      document.querySelectorAll('.tlOverrideSelect').forEach(sel=>{
-        sel.addEventListener('change', e=>{
-          const id=e.target.getAttribute('data-id');
-          const d=state.tlReviewDraft[id];
-          d.letter = e.target.value;
-          if(d.letter === 'AF'){ const allowed = TL_AF_DUTIES_BY_QUESTION[id]||[]; if(!allowed.includes(d.afDuty)) d.afDuty = allowed[0]||null; }
-          else d.afDuty = null;
-          state.tlReviewStatus = 'Unsaved changes';
-          renderEvalModal();
-        });
-      });
-      document.querySelectorAll('.tlAfDutySelect').forEach(sel=>{
-        sel.addEventListener('change', e=>{
-          const id=e.target.getAttribute('data-id');
-          state.tlReviewDraft[id].afDuty = e.target.value;
-          state.tlReviewStatus = 'Unsaved changes';
-          const st=document.getElementById('tlReviewStatus'); if(st) st.textContent = state.tlReviewStatus;
-        });
-      });
-      document.querySelectorAll('.tlNotes').forEach(ta=>{
-        ta.addEventListener('input', e=>{
-          const id=e.target.getAttribute('data-id');
-          state.tlReviewDraft[id].notes = e.target.value;
-          state.tlReviewStatus = 'Unsaved changes';
-          const st=document.getElementById('tlReviewStatus'); if(st) st.textContent = state.tlReviewStatus;
-        });
-      });
-      const saveBtn=document.getElementById('btnSaveTlReview');
-      if(saveBtn) saveBtn.addEventListener('click', async ()=>{
-        const st=document.getElementById('tlReviewStatus');
-        saveBtn.disabled = true; if(st) st.textContent = 'Saving...';
-        const res = await saveTlReview();
-        saveBtn.disabled = false;
-        state.tlReviewStatus = !res.ok ? 'Could not save.' : res.shared
-          ? '\u2713 Saved - visible to the whole team\u2019s TLs.'
-          : '\u26a0 Saved on this device only - the shared server did not accept it, so other TLs will not see it yet.';
-        const st2=document.getElementById('tlReviewStatus'); if(st2) st2.textContent = state.tlReviewStatus;
-      });
-    }
-    return;
-  }
+  if(state.historicalView) return; // read-only, no override wiring
+
+  document.querySelectorAll('.tlOverrideSelect').forEach(sel=>{
+    sel.addEventListener('change', e=>{
+      const id=e.target.getAttribute('data-id');
+      state.tlOverrides[id].letter = e.target.value;
+      if(e.target.value !== 'AF') state.tlOverrides[id].afDuty = null;
+      saveAttemptHistoryNow();
+      renderEvalModal();
+    });
+  });
+  document.querySelectorAll('.tlAfDutySelect').forEach(sel=>{
+    sel.addEventListener('change', e=>{
+      const id=e.target.getAttribute('data-id');
+      state.tlOverrides[id].afDuty = e.target.value;
+      saveAttemptHistoryNow();
+    });
+  });
+  document.querySelectorAll('.tlNotes').forEach(ta=>{
+    ta.addEventListener('input', e=>{
+      const id=e.target.getAttribute('data-id');
+      state.tlOverrides[id].notes = e.target.value;
+      saveAttemptHistoryDebounced();
+    });
+  });
   const copyBtn=document.getElementById('btnCopyResults');
   if(copyBtn) copyBtn.addEventListener('click', copyResultsToClipboard);
   const selectAllBtn=document.getElementById('btnSelectAllResults');
   if(selectAllBtn) selectAllBtn.addEventListener('click', selectAllResultsText);
 }
 
-// mode 'agent' (default): AI assessment only - nothing editable, no TL fields.
-// mode 'tl': TL / Management review from Team Progress - AI letter shown alongside editable override + coaching note.
-// AF duties follow the scorecard's own boundary: Q1 AF = Responsible Gambling / Privacy / Company Exposure;
-// Q2 AF = Conduct (stopped serving / turned on the player). Q3 has no AF.
-const TL_AF_DUTIES_BY_QUESTION = { q1:['Responsible Gambling','Privacy','Company Exposure'], q2:['Conduct'] };
-function scorecardRowsHtml(ev, tlOverrides, mode){
-  const tlMode = mode==='tl';
+function scorecardRowsHtml(ev, tlOverrides, readOnly){
   return QA_SCORECARD.questions.map(qDef=>{
     const aiQ = ev.questions.find(x=>x.id===qDef.id);
-    const override = (tlMode && tlOverrides && tlOverrides[qDef.id]) ? tlOverrides[qDef.id] : {letter:aiQ.letter, afDuty:aiQ.afDuty, notes:''};
-    const letterOptions = Object.keys(qDef.letters).filter(l => l!=='AF' || TL_AF_DUTIES_BY_QUESTION[qDef.id]);
+    const override = tlOverrides ? tlOverrides[qDef.id] : {letter:aiQ.letter, afDuty:aiQ.afDuty, notes:''};
+    const letterOptions = Object.keys(qDef.letters);
     const showAfDuty = override.letter === 'AF';
-    const allowedDuties = TL_AF_DUTIES_BY_QUESTION[qDef.id] || [];
-    const dutyOptions = (override.afDuty && !allowedDuties.includes(override.afDuty)) ? [override.afDuty, ...allowedDuties] : allowedDuties;
     const showRecognitionCheck = qDef.id==='q1' && aiQ.recognitionCheck && aiQ.recognitionCheck.trim().toUpperCase()!=='N/A';
     return `<div class="rubric-row">
       <div class="head">
@@ -3553,16 +3428,18 @@ function scorecardRowsHtml(ev, tlOverrides, mode){
       </div>
       <div class="cite">${escapeHtml(aiQ.citation)}</div>
       ${showRecognitionCheck ? `<div class="cite" style="color:var(--warn);"><strong>RG recognition check:</strong> ${escapeHtml(aiQ.recognitionCheck)}</div>` : ''}
-      ${tlMode ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      ${readOnly
+        ? `<div style="font-size:12px;color:var(--text3);">TL-validated: <strong style="color:var(--text);">${escapeHtml(override.letter)}${override.afDuty?' - '+escapeHtml(override.afDuty):''}</strong>${override.notes?` - "${escapeHtml(override.notes)}"`:''}</div>`
+        : `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span style="font-size:12px;color:var(--text3);">TL override:</span>
         <select class="tlOverrideSelect" data-id="${qDef.id}">
           ${letterOptions.map(l=>`<option value="${escapeHtml(l)}" ${override.letter===l?'selected':''}>${escapeHtml(l)}</option>`).join('')}
         </select>
         ${showAfDuty ? `<select class="tlAfDutySelect" data-id="${qDef.id}">
-          ${dutyOptions.map(d=>`<option value="${escapeHtml(d)}" ${override.afDuty===d?'selected':''}>${escapeHtml(d)}${allowedDuties.includes(d)?'':' (not a valid '+qDef.id.toUpperCase()+' duty)'}</option>`).join('')}
+          ${QA_SCORECARD.afDuties.map(d=>`<option value="${escapeHtml(d)}" ${override.afDuty===d?'selected':''}>${escapeHtml(d)}</option>`).join('')}
         </select>` : ''}
       </div>
-      <textarea class="notes tlNotes" data-id="${qDef.id}" placeholder="TL coaching note (optional)">${escapeHtml(override.notes)}</textarea>` : ''}
+      <textarea class="notes tlNotes" data-id="${qDef.id}" placeholder="Coaching note (optional)">${escapeHtml(override.notes)}</textarea>`}
     </div>`;
   }).join('');
 }
@@ -3873,28 +3750,56 @@ function pendingAssignmentsFor(agentName){
   return state.assignments.filter(a => !a.completed && namesMatch(a.agentName, agentName));
 }
 
-function submitFeedback(){
+async function submitFeedback(){
   const text = (state.feedbackText||'').trim();
   if(!text) return;
+  const entry = { agentName: state.agentName||'Unnamed', deviceId, text, timestamp: Date.now() };
   try{
     const raw = localStorage.getItem(FEEDBACK_KEY);
     const list = raw ? JSON.parse(raw) : [];
-    list.push({ agentName: state.agentName||'Unnamed', deviceId, text, timestamp: Date.now() });
+    list.push(entry);
     localStorage.setItem(FEEDBACK_KEY, JSON.stringify(list));
+  }catch(err){
+    console.error('Saving feedback locally failed:', err);
+  }
+  try{
+    await fetch(BACKEND_URL + '/api/store/feedback', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry)
+    });
     state.feedbackText = '';
     state.feedbackJustSubmitted = true;
     state.feedbackSubmitError = null;
   }catch(err){
-    console.error('Feedback submit failed:', err);
-    state.feedbackSubmitError = err.message;
+    console.error('Saving feedback to the shared backend failed (saved locally only for now):', err);
+    // Still clear the box and confirm - it's saved locally either way, and a TL can be told to check
+    // back later if the shared copy never arrives, rather than losing the submission entirely.
+    state.feedbackText = '';
+    state.feedbackJustSubmitted = true;
+    state.feedbackSubmitError = null;
   }
   render();
+}
+
+// TL-facing: pull every submitted feedback entry from the shared backend, newest first.
+async function loadAllFeedback(){
+  state.feedbackLoadError = null;
+  try{
+    const response = await fetch(BACKEND_URL + '/api/store');
+    if(response.ok){
+      const data = await response.json();
+      state.allFeedback = Array.isArray(data.feedback) ? [...data.feedback].reverse() : [];
+      return;
+    }
+    state.feedbackLoadError = 'Could not reach the shared backend just now.';
+  }catch(err){
+    state.feedbackLoadError = err.message;
+  }
 }
 
 function renderFeedbackPage(){
   return `<div class="main" style="padding:32px;overflow-y:auto;">
     <h1 style="margin-top:0;">Feedback & Suggestions</h1>
-    <div style="color:var(--text2);font-size:13px;max-width:600px;margin-bottom:20px;line-height:1.6;">Ideas, confusing behaviour, things that felt unrealistic - anything. Saved on this device so it doesn't get lost if you switch away.</div>
+    <div style="color:var(--text2);font-size:13px;max-width:600px;margin-bottom:20px;line-height:1.6;">Ideas, confusing behaviour, things that felt unrealistic - anything. This goes to your TL, not just saved on this device.</div>
     ${state.feedbackJustSubmitted ? `<div class="box" style="border-color:#1d3a2c;color:var(--ok);max-width:600px;margin-bottom:16px;">\u2713 Saved - thank you!</div>` : ''}
     ${state.feedbackSubmitError ? `<div class="box" style="border-color:var(--bad);color:var(--bad);max-width:600px;margin-bottom:16px;">Couldn\u2019t save just now: ${escapeHtml(state.feedbackSubmitError)}</div>` : ''}
     <textarea id="feedbackTextarea" placeholder="What's on your mind?" style="width:100%;max-width:600px;min-height:140px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:12px;font-family:inherit;font-size:13.5px;resize:vertical;">${escapeHtml(state.feedbackText||'')}</textarea>
@@ -4110,7 +4015,7 @@ async function submitChallengeSlotDoc(slotIndex){
   render();
   try{
     const prompt = buildEvalPrompt(slot.scenario, slot.transcript, slot.actionLog, slot.docNote, slot.docTag, slot.docSecondaryTag, slot.chatStartedAt, slot.playerLeftEarly, slot.playerLeftReason);
-    const result = enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex'));
+    const result = await callClaudeJson(prompt, 'complex');
     slot.evaluation = result;
     QA_SCORECARD.questions.forEach(q=>{ const aiQ=result.questions.find(x=>x.id===q.id); slot.tlOverrides[q.id] = {letter:aiQ.letter, afDuty:aiQ.afDuty||null, notes:''}; });
     archiveChallengeSlotAttempt(slot);
@@ -4429,16 +4334,15 @@ function renderCoachingSignalsBox(coachingSignals){
   </div>`;
 }
 
-// showTL true only inside the TL / Management review. Agent-facing views show the AI score alone.
-function scoreHeaderHtml(ev, tlOverrides, ahtElapsedMinutes, ahtTargetMinutes, ahtLateStart, showTL){
+function scoreHeaderHtml(ev, tlOverrides, ahtElapsedMinutes, ahtTargetMinutes, ahtLateStart){
   const aiScore = computeQAScore(ev.questions);
-  const tlLetters = QA_SCORECARD.questions.map(q=>({id:q.id, letter:(showTL&&tlOverrides&&tlOverrides[q.id]?tlOverrides[q.id].letter:ev.questions.find(x=>x.id===q.id).letter), afDuty:(showTL&&tlOverrides&&tlOverrides[q.id]?tlOverrides[q.id].afDuty:ev.questions.find(x=>x.id===q.id).afDuty)}));
+  const tlLetters = QA_SCORECARD.questions.map(q=>({id:q.id, letter:tlOverrides[q.id].letter, afDuty:tlOverrides[q.id].afDuty}));
   const tlScore = computeQAScore(tlLetters);
   const resolvedCorrectly = tlScore.pass && !tlScore.af;
   return `<div class="box" style="text-align:center;padding:18px;">
       <div class="score-badge" style="color:${aiScore.pass?'var(--ok)':'var(--bad)'};">${aiScore.af?'0%':aiScore.pct+'%'} ${aiScore.pass?'\u{1F44D}':'\u{1F44E}'}</div>
       <div class="score-label">${aiScore.af?`AF - ${escapeHtml(aiScore.afDuty)} - FAIL`:(aiScore.pass?'PASS':'FAIL')} \u00b7 AI score (${aiScore.totalPts}/20 pts) \u00b7 pass line 85%</div>
-      ${(showTL && (tlScore.pct!==aiScore.pct || tlScore.af!==aiScore.af)) ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+      ${(tlScore.pct!==aiScore.pct || tlScore.af!==aiScore.af) ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
         <div class="score-badge" style="font-size:24px;color:${tlScore.pass?'var(--ok)':'var(--bad)'};">${tlScore.af?'0%':tlScore.pct+'%'} ${tlScore.pass?'\u{1F44D}':'\u{1F44E}'}</div>
         <div class="score-label">${tlScore.af?`AF - ${escapeHtml(tlScore.afDuty)} - FAIL`:(tlScore.pass?'PASS':'FAIL')} \u00b7 TL-validated score</div>
       </div>` : ''}
@@ -4453,19 +4357,15 @@ function evalModalContent(){
     const att = state.historicalView.attempt;
     const ev = att.evaluation;
     const standalone = !!state.historicalView.standalone;
-    const tlMode = !!(state.historicalView.fromTeamProgress && state.tlUnlocked && state.tlReviewDraft);
-    const reviewDraft = tlMode ? state.tlReviewDraft : null;
     return `<div class="modal">
-      <h2>Attempt ${att.attemptNum} - ${tlMode ? 'TL Review' : 'Read-Only'}</h2>
+      <h2>Attempt ${att.attemptNum} - Read-Only</h2>
       <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">${escapeHtml((s.internalTitle||s.title))} - ${new Date(att.timestamp).toLocaleString()}${att.agentName ? ' - '+escapeHtml(att.agentName) : ''}</div>
       ${kbBannerFor(s)}
-      ${scoreHeaderHtml(ev, reviewDraft, att.ahtElapsedMinutes, att.ahtTargetMinutes, att.ahtLateStart, tlMode)}
+      ${scoreHeaderHtml(ev, att.tlOverrides, att.ahtElapsedMinutes, att.ahtTargetMinutes, att.ahtLateStart)}
       ${renderEfficiencyNarrativeBox(ev)}
       ${renderCoachingSignalsBox(ev.coachingSignals)}
       <div class="box">${escapeHtml(ev.overallSummary)}</div>
-      ${tlMode ? `<div class="box" style="border-color:var(--accent);"><strong>TL / Management review.</strong> The AI\u2019s assessment stays on record as-is. Use the override and note on each question below where the AI got something wrong or the case deserves leniency, then save.${att.tlReviewedAt ? `<div style="color:var(--text3);font-size:12px;margin-top:4px;">Last reviewed ${new Date(att.tlReviewedAt).toLocaleString()}</div>` : ''}</div>` : ''}
-      ${scorecardRowsHtml(ev, reviewDraft, tlMode ? 'tl' : 'agent')}
-      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}
+      ${scorecardRowsHtml(ev, att.tlOverrides, true)}
       <div class="box" style="margin-top:16px;">
         <div class="box title" style="margin-bottom:6px;">Documentation submitted</div>
         Note: ${escapeHtml(att.docNote||'(none)')}<br>Primary tag: ${escapeHtml(att.docTag||'(none)')}${att.docSecondaryTag && att.docSecondaryTag!=='None' ? `<br>Secondary RG flag: ${escapeHtml(att.docSecondaryTag)}` : ''}
@@ -4543,12 +4443,12 @@ function evalModalContent(){
     <h2>Assessment Report - Attempt ${attemptNum}</h2>
     <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">${escapeHtml(s.title)} - scored against Betty's real QA Chat Scorecard</div>
     ${kbBannerFor(s)}
-    ${scoreHeaderHtml(ev, null, state.ahtElapsedMinutes, s.ahtTargetMinutes, state.ahtLateStart, false)}
+    ${scoreHeaderHtml(ev, state.tlOverrides, state.ahtElapsedMinutes, s.ahtTargetMinutes, state.ahtLateStart)}
     ${renderEfficiencyNarrativeBox(ev)}
     ${renderCoachingSignalsBox(ev.coachingSignals)}
     <div class="box">${escapeHtml(ev.overallSummary)}</div>
     ${comparisonHtml}
-    ${scorecardRowsHtml(ev, null, 'agent')}
+    ${scorecardRowsHtml(ev, state.tlOverrides, false)}
     ${!state.resultsCopied ? `<div class="box" id="unsavedWarningBox" style="border-color:var(--warn);color:var(--warn);font-weight:600;text-align:center;">\u26a0 This attempt is saved in your Attempt History, but hasn't been copied to your coaching notes/hub yet - copy it before closing if you need it outside this tool.</div>` : ''}
     <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
       <button id="closeEvalModal">Close</button>
@@ -4570,20 +4470,23 @@ function buildResultsText(){
   const s=state.activeScenario;
   const ev=state.evaluation;
   const aiScore = computeQAScore(ev.questions);
+  const tlScore = currentOverrideScore();
   const attemptNum = (state.attemptHistory[s.id]||[]).length || 1;
   let out = `TEAM Z COACHING PILOT - SIMULATION RESULT (Betty Real QA Chat Scorecard)\n`;
   out += `Scenario: ${s.title} (${s.skill}, ${s.difficulty})\n`;
   out += `Attempt: ${attemptNum}\n`;
   out += `AI Score: ${aiScore.af?`AF (${aiScore.afDuty}) \u2192 0%`:aiScore.pct+'%'} - ${aiScore.pass?'PASS \u{1F44D}':'FAIL \u{1F44E}'}\n`;
+  out += `TL-Validated Score: ${tlScore.af?`AF (${tlScore.afDuty}) \u2192 0%`:tlScore.pct+'%'} - ${tlScore.pass?'PASS \u{1F44D}':'FAIL \u{1F44E}'}\n`;
   if(state.ahtElapsedMinutes!==null && s.ahtTargetMinutes){
     out += `Handling Time: ${formatElapsed(state.ahtElapsedMinutes*60000)} (target: ${s.ahtTargetMinutes} min)\n`;
   }
   out += `\n`;
   out += `SUMMARY: ${ev.overallSummary}\n\n`;
-  out += `SCORECARD:\n`;
+  out += `SCORECARD (AI \u2192 TL-validated):\n`;
   QA_SCORECARD.questions.forEach(qDef=>{
     const aiQ = ev.questions.find(x=>x.id===qDef.id);
-    out += `- ${qDef.label} (${qDef.weightPct}%): ${aiQ.letter}${aiQ.afDuty?' ('+aiQ.afDuty+')':''}\n  Citation: ${aiQ.citation}\n`;
+    const tl = state.tlOverrides[qDef.id];
+    out += `- ${qDef.label} (${qDef.weightPct}%): AI="${aiQ.letter}${aiQ.afDuty?' ('+aiQ.afDuty+')':''}" \u2192 TL="${tl.letter}${tl.afDuty?' ('+tl.afDuty+')':''}"${tl.notes?` | Note: ${tl.notes}`:''}\n  Citation: ${aiQ.citation}\n`;
   });
   out += `\nDOCUMENTATION SUBMITTED:\nNote: ${state.docNote||'(none)'}\nPrimary tag: ${state.docTag||'(none)'}${state.docSecondaryTag && state.docSecondaryTag!=='None' ? `\nSecondary RG flag: ${state.docSecondaryTag}` : ''}\n`;
   out += `\nTRANSCRIPT:\n${formatTranscriptForEval(state.transcript, s)}\n`;
@@ -4638,6 +4541,18 @@ function selectAllResultsText(){
 }
 
 // ---------- DIAGNOSTICS (Phase 1 required test coverage) ----------
+function renderFeedbackDiagList(){
+  if(state.feedbackLoadError) return `<div class="empty" style="padding:10px 0;color:var(--bad);">Couldn't load feedback: ${escapeHtml(state.feedbackLoadError)}</div>`;
+  if(!state.allFeedback || state.allFeedback.length===0) return `<div class="empty" style="padding:10px 0;">Click "Load Feedback" to check for submissions.</div>`;
+  return state.allFeedback.map(f=>`<div class="box" style="margin-bottom:8px;max-width:700px;">
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:6px;">
+      <strong style="color:var(--text);">${escapeHtml(f.agentName||'Unnamed')}</strong>
+      <span>${new Date(f.timestamp).toLocaleString()}</span>
+    </div>
+    <div style="font-size:13px;color:var(--text2);white-space:pre-wrap;">${escapeHtml(f.text)}</div>
+  </div>`).join('');
+}
+
 function renderAssignmentsList(){
   if(state.assignments.length===0) return `<div class="empty" style="padding:16px 0;">No scenarios assigned yet.</div>`;
   const byAgent = {};
@@ -4728,6 +4643,13 @@ function renderDiagnostics(){
     </div>
 
     <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">TL Reference: Feedback & Suggestions</h2>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Everything submitted from the Feedback page, from everyone using this link - newest first.</div>
+      <button id="btnLoadFeedbackDiag">Load Feedback</button>
+      <div id="feedbackDiagResults" style="margin-top:14px;">${renderFeedbackDiagList()}</div>
+    </div>
+
+    <div class="diag-section">
       <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">TL Reference: Full Scenario List</h2>
       <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Agents only ever see topics and get randomly assigned within one - this list, by name, is for your own testing and review only. Click any to start it directly.</div>
       ${refRows}
@@ -4788,7 +4710,7 @@ const DIAG1_WEAK_TRANSCRIPT = [
 
 async function evaluateFixedTranscript(scenario, transcript, actionLog=[], docNote='', docTag=null, docSecondaryTag=null){
   const prompt = buildEvalPrompt(scenario, transcript, actionLog, docNote, docTag, docSecondaryTag, null, false, null);
-  return enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex'));
+  return await callClaudeJson(prompt, 'complex');
 }
 
 async function runDiagnostic1(){
