@@ -2511,6 +2511,7 @@ function archiveAttempt(attemptContext){
 function startScenario(id){
   if(state.ahtTimerInterval){ clearInterval(state.ahtTimerInterval); state.ahtTimerInterval=null; }
   if(state.silenceCheckInterval){ clearInterval(state.silenceCheckInterval); state.silenceCheckInterval=null; }
+  clearTimeout(state.agentBatchTimer); // a pending batched reply from the previous chat should never fire into this one
   const s=scenarioById(id);
   state.activeScenario=s;
   state.activePersonaTrait = pickPersonaTrait(s);
@@ -2848,6 +2849,13 @@ function formatTimingSignalsForEval(sig){
   return `Time to first response: ${fmt(sig.firstResponseMs)}. Gaps between a player message and the agent's next reply: ${sig.gapCount} total, ${sig.longGapCount} of them over 90s (longest: ${fmt(sig.longestGapMs)}). Filler phrases ("one moment", "bear with me", "let me take a look", etc.) detected ${sig.fillerHits} time(s)${sig.fillerExamples.length?': "'+sig.fillerExamples.join('" / "')+'"':''}.`;
 }
 
+// How long to wait after an agent's message before the player actually replies. Real agents often
+// split one thought into several sends ("one sec"... "found it"... "here's what's going on") the way
+// they would in a live chat - without this, the AI would reply to each fragment individually, which
+// reads nothing like a real conversation. Each new message within this window resets the wait, so a
+// burst of quick sends still only produces ONE player reply, to all of them at once.
+const AGENT_BATCH_WINDOW_MS = 4000;
+
 async function sendAgentMessage(){
   const input=document.getElementById('composerInput');
   const text=input.value.trim();
@@ -2855,20 +2863,34 @@ async function sendAgentMessage(){
   state.turnCounter++;
   state.transcript.push({speaker:'agent', text, turn:state.turnCounter, ts:Date.now()});
   state.silenceNudgeCount = 0; // agent just spoke - clears any pending silence window immediately
-  state.silenceActionInFlight = true; // guard: don't let the silence watcher fire mid-reply
+  state.silenceActionInFlight = true; // stays true through the whole batching-and-reply window, so the
+  // silence watcher can't mistake "waiting to see if more messages are coming" for real silence
   input.value='';
   render();
+
+  // Capture the transcript array THIS message belongs to. If the agent starts a different scenario
+  // before the wait is up, state.transcript will point at a brand new array - comparing against this
+  // captured reference is how triggerPlayerReply knows not to touch it.
+  const myTranscript = state.transcript;
+  clearTimeout(state.agentBatchTimer);
+  state.agentBatchTimer = setTimeout(()=>{ triggerPlayerReply(myTranscript); }, AGENT_BATCH_WINDOW_MS);
+}
+
+async function triggerPlayerReply(expectedTranscript){
+  if(state.transcript !== expectedTranscript) return; // a different scenario is active now - stale, ignore
+  if(state.simStatus !== 'active') return; // this same chat already ended while we were waiting
 
   const chatlog=document.getElementById('chatlog');
   const typing=document.createElement('div');
   typing.className='typing';
   typing.textContent=`${state.activeScenario.playerName} is typing...`;
-  chatlog.appendChild(typing);
+  if(chatlog) chatlog.appendChild(typing);
   scrollChatToBottom();
 
   try{
     const sys = buildPlayerSystemPrompt(state.activeScenario, state.activePersonaTrait);
     const {text:rawReply} = await callClaude(sys, transcriptToApiMessages(), 'default');
+    if(state.transcript !== expectedTranscript || state.simStatus !== 'active') return; // re-check after the await
     const endedByPlayer = /\[END_CHAT\]\s*$/.test(rawReply);
     const reply = rawReply.replace(/\[END_CHAT\]\s*$/, '').trim();
     state.turnCounter++;
@@ -2883,6 +2905,7 @@ async function sendAgentMessage(){
       return;
     }
   }catch(err){
+    if(state.transcript !== expectedTranscript) return;
     console.error(err);
     state.transcript.push({speaker:'system', text:`\u26a0 DEBUG - real error: ${err.message}`, ts:Date.now()});
     state.silenceActionInFlight = false;
@@ -3913,12 +3936,28 @@ async function sendChallengeMessage(slotIndex){
   slot.turnCounter++;
   slot.transcript.push({speaker:'agent', text, turn:slot.turnCounter, ts:Date.now()});
   slot.silenceNudgeCount = 0;
-  slot.silenceActionInFlight = true;
+  slot.silenceActionInFlight = true; // stays true through the batching window, same as single-chat mode
   if(inputEl) inputEl.value='';
   render();
+
+  // Same batching as single-chat mode (see AGENT_BATCH_WINDOW_MS), but per-slot - each concurrent chat
+  // gets its own independent timer, so typing quickly in one chat never affects another's timing.
+  clearTimeout(slot.batchTimer);
+  slot.batchTimer = setTimeout(()=>{ triggerChallengePlayerReply(slotIndex, slot); }, AGENT_BATCH_WINDOW_MS);
+}
+
+async function triggerChallengePlayerReply(slotIndex, expectedSlot){
+  // Bail out if this exact slot object isn't live and active anymore - a new Challenge session, or this
+  // slot finishing/leaving, both replace or retire it, and a stale timer must never write into whatever
+  // replaced it.
+  const stillValid = ()=> state.challenge && state.challenge.slots[slotIndex] === expectedSlot && expectedSlot.status==='active';
+  if(!stillValid()) return;
+  const slot = expectedSlot;
+
   try{
     const sys = buildPlayerSystemPrompt(slot.scenario, slot.personaTrait);
     const {text:rawReply} = await callClaude(sys, transcriptToApiMessages(slot.transcript), 'default');
+    if(!stillValid()) return; // re-check after the await
     const endedByPlayer = /\[END_CHAT\]\s*$/.test(rawReply);
     const reply = rawReply.replace(/\[END_CHAT\]\s*$/, '').trim();
     slot.turnCounter++;
@@ -3932,6 +3971,7 @@ async function sendChallengeMessage(slotIndex){
       return;
     }
   }catch(err){
+    if(!stillValid()) return;
     console.error(err);
     slot.transcript.push({speaker:'system', text:`\u26a0 DEBUG - real error: ${err.message}`, ts:Date.now()});
     slot.silenceActionInFlight = false;
