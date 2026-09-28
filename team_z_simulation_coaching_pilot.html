@@ -3127,6 +3127,8 @@ function renderDocModal(){
     state.currentAttemptContext = attemptContext;
     state.evaluation = attemptContext.evaluation; // same object reference - live UI reflects it immediately
     render();
+    renderEvalModal(); // show "Scoring transcript..." right away - previously nothing appeared here at all,
+    // so the screen just looked idle during the wait and agents reasonably assumed it was done and moved on
     await runEvaluation(attemptContext);
   });
 }
