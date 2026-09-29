@@ -4249,9 +4249,18 @@ const ZAINAB_TEAM_ROSTER = [
   {fullName:'Poojan Solanki', chatName:'Mateo', additionalName:'Poojan'},
 ];
 async function seedZainabRosterIfMissing(){
-  const already = state.tlRosters.some(r=>namesMatch(r.tlName, 'Zainab Yahaya'));
-  if(already) return;
-  for(const a of ZAINAB_TEAM_ROSTER){
+  // Checking for a "Zainab Yahaya" TL ROSTER row isn't reliable evidence the agent PROFILES
+  // actually exist - tlRosters and agentDirectory persist independently (each has its own
+  // localStorage key and, historically, agentDirectory never had a working backend route at all),
+  // so they can drift out of sync: a roster row can survive while the directory it points at is
+  // empty, which is exactly what leaves the Assign Scenarios dropdown showing no agents. Check the
+  // actual directory instead, and only (re-)register whichever of the ten are actually missing -
+  // registerAgent is idempotent by canonicalName, so this is always safe to run, even partially.
+  const missing = ZAINAB_TEAM_ROSTER.filter(a =>
+    !state.agentDirectory.some(existing => (existing.canonicalName||'').trim().toLowerCase() === a.fullName.trim().toLowerCase())
+  );
+  if(missing.length===0) return;
+  for(const a of missing){
     await registerAgent({fullName:a.fullName, chatName:a.chatName, additionalName:a.additionalName, tlName:'Zainab Yahaya'});
   }
 }
