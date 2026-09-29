@@ -157,7 +157,7 @@
   .diag-fail{color:var(--bad);font-weight:700;}
 
   /* TL Management dashboard - collapsible top-level sections, same card language as .box elsewhere */
-  .dash-card{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;}
+  .dash-card{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:18px;overflow:hidden;}
   .dash-card-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 18px;cursor:pointer;-webkit-user-select:none;user-select:none;}
   .dash-card-header:hover{background:rgba(255,255,255,.02);}
   .dash-card-title{display:flex;align-items:center;gap:10px;min-width:0;}
@@ -165,8 +165,8 @@
   .dash-card-arrow.open{transform:rotate(90deg);}
   .dash-card-header h2{margin:0;text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);overflow-wrap:break-word;}
   .dash-card-summary{color:var(--text3);font-size:12.5px;white-space:nowrap;flex-shrink:0;}
-  .dash-card-body{padding:0 18px 18px;border-top:1px solid var(--border);padding-top:16px;}
-  .dash-subsection{border:1px solid var(--border);border-radius:8px;margin-top:14px;overflow:hidden;}
+  .dash-card-body{padding:0 18px 20px;border-top:1px solid var(--border);padding-top:18px;}
+  .dash-subsection{border:1px solid var(--border);border-radius:8px;margin-top:18px;overflow:hidden;}
   .dash-subsection-header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;-webkit-user-select:none;user-select:none;background:var(--panel);}
   .dash-subsection-header:hover{background:rgba(255,255,255,.02);}
   .dash-subsection-header h3{margin:0;font-size:13px;color:var(--text2);font-weight:600;overflow-wrap:break-word;}
@@ -5514,22 +5514,14 @@ function renderManageAssignmentsSubsection(){
     <option value="">Select an agent…</option>
     ${agentOptions.map(a=>`<option value="${escapeHtml(a.canonicalName)}" ${state.manageAssignmentsAgent===a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}
   </select>`;
-  if(!state.manageAssignmentsAgent){
-    return `<div>${picker}<div class="empty" style="padding:14px 0;">Pick an agent above to view - and if needed cancel - their assignments.</div></div>`;
-  }
-  const mine = assignmentsForAgent(state.manageAssignmentsAgent);
-  if(mine.length===0){
-    return `<div>${picker}<div class="empty" style="padding:14px 0;">No assignments for ${escapeHtml(state.manageAssignmentsAgent)} yet.</div></div>`;
-  }
-  const pending = mine.filter(a=>!a.completed);
-  const completed = mine.filter(a=>a.completed);
-  function row(a){
+  function row(a, showAgentName){
     const scenario = scenarioById(a.scenarioId);
     const linkedEntry = findTeamProgressEntryForAssignment(a);
     return `<div class="box" style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
         <div style="min-width:0;">
           <strong>${escapeHtml(scenario ? scenario.title : a.scenarioId)}</strong>
+          ${showAgentName ? `<div style="font-size:12px;color:var(--text2);margin-top:3px;">${escapeHtml(a.agentName||'(unknown agent)')}</div>` : ''}
           <div style="font-size:11px;color:var(--text3);margin-top:3px;">Assigned ${new Date(a.assignedAt).toLocaleDateString()}${a.assignedByTL?' by '+escapeHtml(a.assignedByTL):''}</div>
         </div>
         <span style="color:${assignmentStatusColor(a)};font-weight:700;font-size:12.5px;white-space:nowrap;">${assignmentStatus(a)}</span>
@@ -5541,12 +5533,32 @@ function renderManageAssignmentsSubsection(){
       <div data-cancel-confirm-slot="${a.id}"></div>
     </div>`;
   }
+  // Default view (no agent chosen yet): show every pending assignment across the whole team, so
+  // there's always something useful to look at immediately instead of an empty "pick someone" prompt -
+  // this is what makes stray/old assignments (like leftover test entries) discoverable without having
+  // to guess-and-check each agent one at a time. Picking an agent below narrows to just their history,
+  // pending and completed.
+  if(!state.manageAssignmentsAgent){
+    const allPending = state.assignments.filter(a=>!a.completed).sort((a,b)=>b.assignedAt-a.assignedAt);
+    return `<div>
+      ${picker}
+      <h4 style="margin:16px 0 6px;font-size:12.5px;color:var(--text2);">All pending, every agent (${allPending.length})</h4>
+      ${allPending.length ? allPending.map(a=>row(a,true)).join('') : `<div class="empty" style="padding:8px 0;">Nothing pending right now.</div>`}
+      <div style="font-size:11.5px;color:var(--text3);margin-top:10px;">Pick an agent above to see their pending and completed history together instead.</div>
+    </div>`;
+  }
+  const mine = assignmentsForAgent(state.manageAssignmentsAgent);
+  if(mine.length===0){
+    return `<div>${picker}<div class="empty" style="padding:14px 0;">No assignments for ${escapeHtml(state.manageAssignmentsAgent)} yet.</div></div>`;
+  }
+  const pending = mine.filter(a=>!a.completed);
+  const completed = mine.filter(a=>a.completed);
   return `<div>
     ${picker}
     <h4 style="margin:16px 0 6px;font-size:12.5px;color:var(--text2);">Pending (${pending.length})</h4>
-    ${pending.length ? pending.map(row).join('') : `<div class="empty" style="padding:8px 0;">None pending.</div>`}
+    ${pending.length ? pending.map(a=>row(a,false)).join('') : `<div class="empty" style="padding:8px 0;">None pending.</div>`}
     <h4 style="margin:16px 0 6px;font-size:12.5px;color:var(--text2);">Completed (${completed.length})</h4>
-    ${completed.length ? completed.map(row).join('') : `<div class="empty" style="padding:8px 0;">None completed yet.</div>`}
+    ${completed.length ? completed.map(a=>row(a,false)).join('') : `<div class="empty" style="padding:8px 0;">None completed yet.</div>`}
   </div>`;
 }
 
