@@ -156,6 +156,29 @@
   .diag-pass{color:var(--ok);font-weight:700;}
   .diag-fail{color:var(--bad);font-weight:700;}
 
+  /* TL Management dashboard - collapsible top-level sections, same card language as .box elsewhere */
+  .dash-card{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;}
+  .dash-card-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 18px;cursor:pointer;-webkit-user-select:none;user-select:none;}
+  .dash-card-header:hover{background:rgba(255,255,255,.02);}
+  .dash-card-title{display:flex;align-items:center;gap:10px;min-width:0;}
+  .dash-card-arrow{display:inline-block;color:var(--text3);font-size:12px;transition:transform .15s ease;flex-shrink:0;}
+  .dash-card-arrow.open{transform:rotate(90deg);}
+  .dash-card-header h2{margin:0;text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);overflow-wrap:break-word;}
+  .dash-card-summary{color:var(--text3);font-size:12.5px;white-space:nowrap;flex-shrink:0;}
+  .dash-card-body{padding:0 18px 18px;border-top:1px solid var(--border);padding-top:16px;}
+  .dash-subsection{border:1px solid var(--border);border-radius:8px;margin-top:14px;overflow:hidden;}
+  .dash-subsection-header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;-webkit-user-select:none;user-select:none;background:var(--panel);}
+  .dash-subsection-header:hover{background:rgba(255,255,255,.02);}
+  .dash-subsection-header h3{margin:0;font-size:13px;color:var(--text2);font-weight:600;overflow-wrap:break-word;}
+  .dash-subsection-body{padding:14px;}
+  /* .main's width is whatever's left after the fixed-width rail/scenario-list/side-panel columns,
+     so this keys off viewport width as a proxy for "the TL Management column is getting tight" -
+     covers common smaller-laptop resolutions (1024x768 and similar), not just phone widths. */
+  @media (max-width:900px){
+    .dash-card-summary{display:none;}
+    .dash-card-header h2{font-size:14px;}
+  }
+
   .category-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;max-width:900px;}
   .category-tile{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:18px;cursor:pointer;transition:transform .1s;}
   .category-tile:hover{transform:translateY(-2px);border-color:var(--accent);}
@@ -1710,6 +1733,20 @@ let state = {
   feedbackLoadError:null,
   currentAttemptContext:null, // self-contained snapshot of the attempt currently being scored - see runEvaluation/archiveAttempt
   activeAssignmentId:null, // set only when the live scenario was launched via a My Assignments "Start Scenario" button
+  // TL Management dashboard: which top-level sections/subsections are expanded. Collapsed (false/undefined)
+  // by default; toggling one never touches the others. Session-only (not persisted) - reopens collapsed
+  // next visit, which is the point of a dashboard.
+  diagSectionsOpen:{},
+  diagSubsectionsOpen:{},
+  manageAssignmentsAgent:'', // which agent's assignments are shown in the Manage Assignments subsection
+  agentDirectorySearch:'',   // search text for the All Registered Agents subsection
+  editingAgentCanonical:null, // canonical name currently loaded into the registration form for editing
+  scenarioLibrarySearch:'',
+  scenarioLibraryTopicFilter:'',
+  scenarioLibraryDifficultyFilter:'',
+  scenarioLibraryReadinessFilter:'',
+  feedbackStatusFilter:'active', // 'active' (new/under_review/resolved) | 'archived'
+  teamProgressDashFilter:'everyone', // 'everyone' | a TL name | a single agent canonical name (see Team Progress section)
   toolkitExpanded:{}, // Coaching Toolkit category name -> bool, which accordion cards are open
   transcript:[],
   turnCounter:0,
@@ -1840,8 +1877,26 @@ function icon(name, size=18){
 // ---------- RENDER ----------
 function render(){
   const app=document.getElementById('app');
+  // Full-rebuild architecture: every render() replaces the entire app.innerHTML rather than diffing,
+  // which would otherwise steal focus out from under a search/filter input on every keystroke (the
+  // new dashboard's search boxes re-render on 'input' to filter live). Capturing/restoring focus and
+  // cursor position here fixes that once, for every current and future input, instead of needing
+  // special-case handling at each call site.
+  const active = document.activeElement;
+  const activeId = active && active.id;
+  const selStart = (active && typeof active.selectionStart === 'number') ? active.selectionStart : null;
+  const selEnd = (active && typeof active.selectionEnd === 'number') ? active.selectionEnd : null;
   app.innerHTML = renderTopbarGlobal() + `<div class="body-grid">${renderIconRail()}${renderScenarioList()}${renderMain()}${renderSide()}</div>`;
   wireEvents();
+  if(activeId){
+    const restored = document.getElementById(activeId);
+    if(restored && typeof restored.focus === 'function'){
+      restored.focus();
+      if(selStart!==null && typeof restored.setSelectionRange === 'function'){
+        try{ restored.setSelectionRange(selStart, selEnd); }catch(err){}
+      }
+    }
+  }
   scrollChatToBottom();
 }
 
@@ -2316,7 +2371,24 @@ function wireEvents(){
   });
 
   const btnOpenTeamProgressDiag=document.getElementById('btnOpenTeamProgressDiag');
-  if(btnOpenTeamProgressDiag) btnOpenTeamProgressDiag.addEventListener('click', ()=>openTeamProgress());
+  if(btnOpenTeamProgressDiag) btnOpenTeamProgressDiag.addEventListener('click', ()=>{
+    const v = state.teamProgressDashFilter;
+    if(!v || v==='everyone'){ openTeamProgress(); return; }
+    if(v.startsWith('tl:')){
+      const tlName = v.slice(3);
+      const roster = state.tlRosters.find(r=>r.tlName===tlName);
+      openTeamProgress(roster || {tlName, agents:[]});
+      return;
+    }
+    if(v.startsWith('agent:')){
+      const name = v.slice(6);
+      openTeamProgress({tlName:name, agents:[name]});
+      return;
+    }
+    openTeamProgress();
+  });
+  const teamProgressDashFilterSelect=document.getElementById('teamProgressDashFilterSelect');
+  if(teamProgressDashFilterSelect) teamProgressDashFilterSelect.addEventListener('change', e=>{ state.teamProgressDashFilter = e.target.value; });
 
   document.querySelectorAll('[data-open-tl-progress]').forEach(el=>{
     el.addEventListener('click', ()=>{
@@ -2362,19 +2434,143 @@ function wireEvents(){
     });
   });
 
-  const btnLoadFeedbackDiag=document.getElementById('btnLoadFeedbackDiag');
-  if(btnLoadFeedbackDiag) btnLoadFeedbackDiag.addEventListener('click', async ()=>{
-    btnLoadFeedbackDiag.textContent = 'Loading...';
-    await loadAllFeedback();
-    render();
-  });
-
   const d1=document.getElementById('runDiag1');
   if(d1) d1.addEventListener('click', runDiagnostic1);
   const d2=document.getElementById('runDiag2');
   if(d2) d2.addEventListener('click', runDiagnostic2);
   const d3=document.getElementById('runDiag3');
   if(d3) d3.addEventListener('click', runDiagnostic3);
+
+  // ---------- TL Management dashboard: section/subsection collapse-expand ----------
+  // Independent per id, per Zainab's "opening one must not expand others" requirement - each toggle
+  // only ever flips its own entry in the relevant map.
+  document.querySelectorAll('[data-toggle-dash-section]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.getAttribute('data-toggle-dash-section');
+      const opening = !state.diagSectionsOpen[id];
+      state.diagSectionsOpen[id] = opening;
+      render();
+      // Feedback isn't loaded at app startup (unlike rosters/directory) - pull it fresh in the
+      // background the first time this section is opened, same silent-refresh-then-rerender
+      // pattern used by Team Progress's modal.
+      if(opening && id==='feedback'){
+        loadAllFeedback().then(render).catch(()=>{});
+      }
+    });
+  });
+  document.querySelectorAll('[data-toggle-dash-subsection]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.getAttribute('data-toggle-dash-subsection');
+      const currentlyOpen = el.getAttribute('data-currently-open')==='true';
+      state.diagSubsectionsOpen[id] = !currentlyOpen;
+      render();
+    });
+  });
+
+  // ---------- Manage Assignments subsection ----------
+  const manageAssignmentsAgentSelect=document.getElementById('manageAssignmentsAgentSelect');
+  if(manageAssignmentsAgentSelect) manageAssignmentsAgentSelect.addEventListener('change', e=>{
+    state.manageAssignmentsAgent = e.target.value;
+    render();
+  });
+  document.querySelectorAll('[data-view-assignment-attempt]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.getAttribute('data-view-assignment-attempt');
+      const a = state.assignments.find(x=>x.id===id);
+      const entry = a && findTeamProgressEntryForAssignment(a);
+      if(!entry) return; // button only ever renders when a linked entry genuinely exists
+      state.historicalView = { scenarioId: entry.scenarioId, attempt: entry, standalone: true, fromTeamProgress: true };
+      state.tlReviewDraft = buildReviewDraft(entry);
+      state.tlReviewStatus = '';
+      state.historicalTranscriptExpanded = false;
+      renderEvalModal();
+    });
+  });
+  document.querySelectorAll('[data-cancel-assignment]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.getAttribute('data-cancel-assignment');
+      const slot = document.querySelector(`[data-cancel-confirm-slot="${id}"]`);
+      if(!slot) return;
+      if(slot.innerHTML){ slot.innerHTML=''; return; } // toggle closed if already open
+      const a = state.assignments.find(x=>x.id===id);
+      if(!a) return;
+      const scenario = scenarioById(a.scenarioId);
+      const verb = a.completed ? 'Remove this completed assignment record' : 'Cancel this assignment';
+      const note = a.completed
+        ? 'This only removes the assignment record - it will NOT delete the agent\u2019s saved attempt, evaluation, or coaching review.'
+        : 'The agent will no longer see this in their outstanding assignments.';
+      slot.innerHTML = `<div class="box" style="border-color:var(--warn);margin-top:8px;">
+        <div style="font-size:12.5px;color:var(--warn);margin-bottom:8px;">${verb} for "${escapeHtml(scenario?scenario.title:a.scenarioId)}"? ${escapeHtml(note)}</div>
+        <button class="small" data-confirm-cancel-assignment="${id}">Yes, remove it</button>
+        <button class="small" data-dismiss-cancel-assignment="${id}">Never mind</button>
+      </div>`;
+      const confirmBtn = slot.querySelector(`[data-confirm-cancel-assignment="${id}"]`);
+      if(confirmBtn) confirmBtn.addEventListener('click', async ()=>{ await cancelAssignment(id); render(); });
+      const dismissBtn = slot.querySelector(`[data-dismiss-cancel-assignment="${id}"]`);
+      if(dismissBtn) dismissBtn.addEventListener('click', ()=>{ slot.innerHTML=''; });
+    });
+  });
+
+  // ---------- Team Leads & Agent Roster: searchable directory ----------
+  const agentDirectorySearchInput=document.getElementById('agentDirectorySearchInput');
+  if(agentDirectorySearchInput) agentDirectorySearchInput.addEventListener('input', e=>{
+    state.agentDirectorySearch = e.target.value;
+    render();
+  });
+
+  // ---------- Feedback & Suggestions: status lifecycle ----------
+  document.querySelectorAll('[data-feedback-filter]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      state.feedbackStatusFilter = el.getAttribute('data-feedback-filter');
+      render();
+    });
+  });
+  document.querySelectorAll('[data-feedback-action]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.getAttribute('data-feedback-id');
+      const status = el.getAttribute('data-feedback-action');
+      patchFeedbackRemote(id, {status});
+    });
+  });
+  document.querySelectorAll('[data-feedback-delete]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.getAttribute('data-feedback-delete');
+      const slot = document.querySelector(`[data-feedback-delete-confirm-slot="${id}"]`);
+      if(!slot) return;
+      if(slot.innerHTML){ slot.innerHTML=''; return; }
+      slot.innerHTML = `<div class="box" style="border-color:var(--warn);margin-top:8px;">
+        <div style="font-size:12.5px;color:var(--warn);margin-bottom:8px;">Permanently delete this feedback entry? This can't be undone.</div>
+        <button class="small" data-confirm-delete-feedback="${id}">Yes, delete it</button>
+        <button class="small" data-dismiss-delete-feedback="${id}">Never mind</button>
+      </div>`;
+      const confirmBtn = slot.querySelector(`[data-confirm-delete-feedback="${id}"]`);
+      if(confirmBtn) confirmBtn.addEventListener('click', ()=>{ deleteFeedbackRemote(id); });
+      const dismissBtn = slot.querySelector(`[data-dismiss-delete-feedback="${id}"]`);
+      if(dismissBtn) dismissBtn.addEventListener('click', ()=>{ slot.innerHTML=''; });
+    });
+  });
+
+  // ---------- Scenario Library: search + filters ----------
+  const scenarioLibrarySearchInput=document.getElementById('scenarioLibrarySearchInput');
+  if(scenarioLibrarySearchInput) scenarioLibrarySearchInput.addEventListener('input', e=>{
+    state.scenarioLibrarySearch = e.target.value;
+    render();
+  });
+  const scenarioLibraryTopicSelect=document.getElementById('scenarioLibraryTopicSelect');
+  if(scenarioLibraryTopicSelect) scenarioLibraryTopicSelect.addEventListener('change', e=>{
+    state.scenarioLibraryTopicFilter = e.target.value;
+    render();
+  });
+  const scenarioLibraryDifficultySelect=document.getElementById('scenarioLibraryDifficultySelect');
+  if(scenarioLibraryDifficultySelect) scenarioLibraryDifficultySelect.addEventListener('change', e=>{
+    state.scenarioLibraryDifficultyFilter = e.target.value;
+    render();
+  });
+  const scenarioLibraryReadinessSelect=document.getElementById('scenarioLibraryReadinessSelect');
+  if(scenarioLibraryReadinessSelect) scenarioLibraryReadinessSelect.addEventListener('change', e=>{
+    state.scenarioLibraryReadinessFilter = e.target.value;
+    render();
+  });
 }
 
 // ---------- DEVICE IDENTITY (no platform user-identity capability is available on this account, so
@@ -2594,7 +2790,8 @@ function archiveAttempt(attemptContext){
   });
   attemptContext.archived = true;
   saveAttemptHistoryNow();
-  markAssignmentsCompleted(attemptContext.agentName, sid, attemptContext.assignmentId);
+  const completionTimestamp = Date.now();
+  markAssignmentsCompleted(attemptContext.agentName, sid, attemptContext.assignmentId, completionTimestamp);
 
   const score = computeQAScore(attemptContext.evaluation.questions);
   pushTeamProgressEntry({
@@ -2604,7 +2801,7 @@ function archiveAttempt(attemptContext){
     scenarioTitle: attemptContext.scenario.title,
     skill: attemptContext.scenario.skill,
     difficulty: attemptContext.scenario.difficulty,
-    timestamp: Date.now(),
+    timestamp: completionTimestamp,
     pct: score.af ? 0 : score.pct,
     af: score.af,
     afDuty: score.afDuty,
@@ -2637,7 +2834,7 @@ function startScenario(id, assignmentId){
   state.activeAssignmentId = assignmentId || null;
   if(assignmentId){
     const a = state.assignments.find(x=>x.id===assignmentId);
-    if(a && !a.startedAt && !a.completed){ a.startedAt = Date.now(); saveAssignments(); }
+    if(a && !a.startedAt && !a.completed){ patchAssignmentRemote(a.id, { startedAt: Date.now() }); }
   }
   state.activeScenario=s;
   state.activePersonaTrait = pickPersonaTrait(s);
@@ -4080,6 +4277,9 @@ async function loadAssignments(){
     if(raw){ const parsed = JSON.parse(raw); if(Array.isArray(parsed)) state.assignments = parsed; }
   }catch(err){ console.error('Loading assignments failed:', err); }
 }
+// Legacy full-array resync - kept only as a manual "force full resync" escape hatch. Normal
+// create/update/cancel flows below use the per-record endpoints instead, which don't have the
+// lost-update risk of two TLs saving the whole array around the same time.
 async function saveAssignments(){
   try{ localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(state.assignments)); }
   catch(err){ console.error('Saving assignments locally failed:', err); }
@@ -4089,6 +4289,47 @@ async function saveAssignments(){
     });
   }catch(err){
     console.error('Saving assignments to the shared backend failed (saved locally only for now):', err);
+  }
+}
+// Per-record helpers - these are what create/update/cancel should actually call. Each mutates
+// state.assignments locally, re-caches the whole (now-consistent) array to localStorage for the
+// offline fallback, and sends only the ONE changed record to the backend, so two TLs acting at
+// the same time can no longer clobber each other's writes.
+function cacheAssignmentsLocally(){
+  try{ localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(state.assignments)); }
+  catch(err){ console.error('Caching assignments locally failed:', err); }
+}
+async function createAssignmentRemote(entry){
+  try{
+    await fetch(BACKEND_URL + '/api/store/assignments/new', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry)
+    });
+  }catch(err){
+    console.error('Creating assignment on the shared backend failed (saved locally only for now):', err);
+  }
+}
+async function patchAssignmentRemote(id, patch){
+  const a = state.assignments.find(a=>a.id===id);
+  if(a) Object.assign(a, patch);
+  cacheAssignmentsLocally();
+  try{
+    await fetch(BACKEND_URL + '/api/store/assignments/' + encodeURIComponent(id), {
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(patch)
+    });
+  }catch(err){
+    console.error('Updating assignment on the shared backend failed (saved locally only for now):', err);
+  }
+}
+// Removes an assignment row. Never touches teamProgress/attempts - if the assignment was already
+// completed, the agent's actual attempt/evaluation/coaching review stays exactly where it is;
+// this only removes the assignment record that pointed to it.
+async function cancelAssignment(id){
+  state.assignments = state.assignments.filter(a=>a.id!==id);
+  cacheAssignmentsLocally();
+  try{
+    await fetch(BACKEND_URL + '/api/store/assignments/' + encodeURIComponent(id), { method:'DELETE' });
+  }catch(err){
+    console.error('Cancelling assignment on the shared backend failed (removed locally only for now):', err);
   }
 }
 function namesMatch(a, b){
@@ -4102,25 +4343,30 @@ function findPendingAssignment(agentName, scenarioId){
   return state.assignments.find(a => !a.completed && a.scenarioId===scenarioId && namesMatch(a.agentName, agentName));
 }
 async function createAssignment(agentName, scenarioId, assignedByTL){
-  state.assignments.push({
+  const entry = {
     id: 'a'+Date.now()+Math.random().toString(36).slice(2,7),
     agentName: agentName.trim(), scenarioId, assignedAt: Date.now(),
     assignedByTL: (assignedByTL||'').trim() || null,
     startedAt: null, completed:false, completedAt:null,
-  });
-  await saveAssignments();
+  };
+  state.assignments.push(entry);
+  cacheAssignmentsLocally();
+  await createAssignmentRemote(entry);
 }
 // Called right after any attempt is archived (single-chat or Challenge Mode slot). If this attempt was
 // launched from a specific assignment row (assignmentId set by startScenario), that EXACT record is
 // completed - this is what keeps multiple assignments of the same scenario distinct rather than
 // completing "whichever is oldest." Otherwise (general Practice/Challenge Mode, not launched from an
 // assignment) falls back to the oldest pending same-scenario match, same as before this change.
-function markAssignmentsCompleted(agentName, scenarioId, assignmentId){
+function markAssignmentsCompleted(agentName, scenarioId, assignmentId, completionTimestamp){
   if(!agentName) return;
   let match = null;
   if(assignmentId) match = state.assignments.find(a => a.id===assignmentId && !a.completed);
   if(!match) match = findPendingAssignment(agentName, scenarioId);
-  if(match){ match.completed = true; match.completedAt = Date.now(); saveAssignments(); }
+  if(match){
+    const ts = completionTimestamp || Date.now();
+    patchAssignmentRemote(match.id, { completed:true, completedAt: ts, attemptTimestamp: ts, attemptDeviceId: deviceId });
+  }
 }
 function pendingAssignmentsFor(agentName){
   if(!agentName) return [];
@@ -4237,11 +4483,22 @@ function renderTLRostersList(){
   return `<div style="margin-top:16px;">${rows}</div>`;
 }
 
-function renderAgentDirectoryList(){
+function renderAgentDirectoryList(searchQuery){
   if(!state.agentDirectory || state.agentDirectory.length===0){
     return `<div class="empty" style="padding:10px 0;">No agents registered yet.${state.agentDirectoryLoadError ? ` <span style="color:var(--text3);">(Couldn't reach the shared backend just now - retrying automatically next time the app loads.)</span>` : ''}</div>`;
   }
-  const rows = [...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName)).map(a=>{
+  const q = (searchQuery||'').trim().toLowerCase();
+  let list = [...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName));
+  if(q){
+    list = list.filter(a=>{
+      const haystack = [a.canonicalName, a.fullName, a.chatName, ...(a.aliases||[])].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(q);
+    });
+  }
+  if(list.length===0){
+    return `<div class="empty" style="padding:10px 0;">No agents match "${escapeHtml(searchQuery)}".</div>`;
+  }
+  const rows = list.map(a=>{
     const names = [a.chatName, ...(a.aliases||[]).filter(al=>al!==a.chatName)].filter(Boolean);
     return `<div class="box" style="margin-bottom:6px;max-width:700px;cursor:pointer;" data-edit-agent="${escapeHtml(a.canonicalName)}">
       <strong>${escapeHtml(a.canonicalName)}</strong>
@@ -4281,22 +4538,67 @@ async function loadAllFeedback(){
     state.feedbackLoadError = err.message;
   }
 }
-function renderFeedbackDiagList(){
-  if(state.feedbackLoadError) return `<div class="empty" style="padding:10px 0;color:var(--bad);">Couldn't load feedback: ${escapeHtml(state.feedbackLoadError)}</div>`;
-  if(!state.allFeedback || state.allFeedback.length===0) return `<div class="empty" style="padding:10px 0;">Click "Load Feedback" to check for submissions.</div>`;
-  return state.allFeedback.map(f=>`<div class="box" style="margin-bottom:8px;max-width:700px;">
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:6px;">
-      <strong style="color:var(--text);">${escapeHtml(f.agentName||'Unnamed')}</strong>
-      <span>${new Date(f.timestamp).toLocaleString()}</span>
-    </div>
-    <div style="font-size:13px;color:var(--text2);white-space:pre-wrap;">${escapeHtml(f.text)}</div>
-  </div>`).join('');
+// Unresolved = anything not yet resolved or archived - what the dashboard summary counts, and what
+// a TL should still be looking at. Resolved items are deliberately NOT counted here (they're done),
+// but per Zainab's spec they still show in the Active list until archived or deleted - only the
+// count treats them as "handled."
+function unresolvedFeedbackCount(){
+  return (state.allFeedback||[]).filter(f=>{ const s=feedbackStatus(f); return s!=='resolved' && s!=='archived'; }).length;
+}
+function renderFeedbackManagementSectionBody(){
+  if(state.feedbackLoadError){
+    return `<div class="empty" style="padding:10px 0;color:var(--bad);">Couldn't load feedback: ${escapeHtml(state.feedbackLoadError)} <span style="color:var(--text3);">(showing whatever was already loaded, if anything)</span></div>` + renderFeedbackEntries();
+  }
+  return renderFeedbackEntries();
+}
+function renderFeedbackEntries(){
+  const filterTabs = `<div style="display:flex;gap:8px;margin-bottom:14px;">
+    <button class="small${state.feedbackStatusFilter==='active'?' primary':''}" data-feedback-filter="active">Active</button>
+    <button class="small${state.feedbackStatusFilter==='archived'?' primary':''}" data-feedback-filter="archived">Archived</button>
+  </div>`;
+  const list = state.allFeedback || [];
+  const filtered = state.feedbackStatusFilter==='archived'
+    ? list.filter(f=>feedbackStatus(f)==='archived')
+    : list.filter(f=>feedbackStatus(f)!=='archived');
+  if(list.length===0){
+    return `<div style="color:var(--text2);font-size:13px;margin-bottom:10px;">Feedback and suggestions agents have submitted from the Feedback / Suggestions page.</div>${filterTabs}<div class="empty" style="padding:10px 0;">No feedback submitted yet.</div>`;
+  }
+  if(filtered.length===0){
+    return `<div style="color:var(--text2);font-size:13px;margin-bottom:10px;">Feedback and suggestions agents have submitted from the Feedback / Suggestions page.</div>${filterTabs}<div class="empty" style="padding:10px 0;">${state.feedbackStatusFilter==='archived' ? 'No archived feedback.' : 'Nothing active right now - check Archived, or nice work clearing the queue.'}</div>`;
+  }
+  const statusColor = {new:'var(--warn)', under_review:'var(--accent2)', resolved:'var(--ok)', archived:'var(--text3)'};
+  const statusLabel = {new:'New', under_review:'Under review', resolved:'Resolved', archived:'Archived'};
+  const rows = [...filtered].sort((a,b)=>b.timestamp-a.timestamp).map(f=>{
+    const st = feedbackStatus(f);
+    const canManage = !!f.id;
+    return `<div class="box" style="margin-bottom:8px;max-width:700px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:6px;gap:10px;">
+        <strong style="color:var(--text);">${escapeHtml(f.agentName||'Unnamed')}</strong>
+        <span style="white-space:nowrap;">${new Date(f.timestamp).toLocaleString()}</span>
+      </div>
+      <div style="font-size:13px;color:var(--text2);white-space:pre-wrap;margin-bottom:8px;">${escapeHtml(f.text)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:11px;font-weight:700;color:${statusColor[st]||'var(--text3)'};">${statusLabel[st]||st}</span>
+        ${canManage ? `<div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${st!=='under_review' ? `<button class="small" data-feedback-action="under_review" data-feedback-id="${f.id}">Mark Under Review</button>` : ''}
+          ${st!=='resolved' ? `<button class="small" data-feedback-action="resolved" data-feedback-id="${f.id}">Mark Resolved</button>` : ''}
+          ${st!=='archived' ? `<button class="small" data-feedback-action="archived" data-feedback-id="${f.id}">Archive</button>` : `<button class="small" data-feedback-action="new" data-feedback-id="${f.id}">Restore to Active</button>`}
+          <button class="small" data-feedback-delete="${f.id}" style="color:var(--bad);">Delete</button>
+        </div>` : `<span style="font-size:11px;color:var(--text3);">Submitted before status management - can't be managed here.</span>`}
+      </div>
+      ${canManage ? `<div data-feedback-delete-confirm-slot="${f.id}"></div>` : ''}
+    </div>`;
+  }).join('');
+  return `<div style="color:var(--text2);font-size:13px;margin-bottom:10px;">Feedback and suggestions agents have submitted from the Feedback / Suggestions page.</div>${filterTabs}${rows}`;
 }
 
 async function submitFeedback(){
   const text = (state.feedbackText||'').trim();
   if(!text) return;
-  const entry = { agentName: state.agentName||'Unnamed', deviceId, text, timestamp: Date.now() };
+  const entry = {
+    id: 'f'+Date.now()+Math.random().toString(36).slice(2,7),
+    agentName: state.agentName||'Unnamed', deviceId, text, timestamp: Date.now(), status:'new',
+  };
   try{
     const raw = localStorage.getItem(FEEDBACK_KEY);
     const list = raw ? JSON.parse(raw) : [];
@@ -4306,7 +4608,8 @@ async function submitFeedback(){
     console.error('Saving feedback locally failed:', err);
   }
   // Shared to the backend too (single-record append, same pattern as Team Progress) - this is what
-  // makes the ported TL-facing "Feedback & Suggestions" admin view able to see it at all.
+  // makes the TL-facing "Feedback & Suggestions" section able to see it, review it, and manage its
+  // status across every device, not just the one it was submitted from.
   try{
     await fetch(BACKEND_URL + '/api/store/feedback', {
       method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry)
@@ -4317,6 +4620,35 @@ async function submitFeedback(){
   state.feedbackText = '';
   state.feedbackJustSubmitted = true;
   state.feedbackSubmitError = null;
+  render();
+}
+// One fact: what state a feedback entry is in. Entries submitted before this field existed have no
+// status at all yet - treated as 'new' so they show up in the active list rather than disappearing.
+function feedbackStatus(f){ return f.status || 'new'; }
+// Per-record status change (Mark Under Review / Mark Resolved / Archive) - merges into the local
+// copy immediately so the UI updates without waiting on the network, then syncs the one changed
+// field to the shared backend so every other TL's view picks it up too.
+async function patchFeedbackRemote(id, patch){
+  const f = (state.allFeedback||[]).find(f=>f.id===id);
+  if(f) Object.assign(f, patch);
+  try{
+    await fetch(BACKEND_URL + '/api/store/feedback/' + encodeURIComponent(id), {
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(patch)
+    });
+  }catch(err){
+    console.error('Updating feedback status on the shared backend failed (updated locally only for now):', err);
+  }
+  render();
+}
+// Permanent delete, only ever used after an inline confirmation in the UI (see renderDashSection
+// usage) - this removes the feedback record itself, never anything from teamProgress/assignments.
+async function deleteFeedbackRemote(id){
+  state.allFeedback = (state.allFeedback||[]).filter(f=>f.id!==id);
+  try{
+    await fetch(BACKEND_URL + '/api/store/feedback/' + encodeURIComponent(id), { method:'DELETE' });
+  }catch(err){
+    console.error('Deleting feedback on the shared backend failed (removed locally only for now):', err);
+  }
   render();
 }
 
@@ -4555,7 +4887,8 @@ async function submitChallengeSlotDoc(slotIndex){
 function archiveChallengeSlotAttempt(slot){
   if(slot.attemptArchived) return;
   const sid = slot.scenario.id;
-  markAssignmentsCompleted(state.agentName, sid);
+  const completionTimestamp = Date.now();
+  markAssignmentsCompleted(state.agentName, sid, null, completionTimestamp);
   state.attemptHistory[sid] = state.attemptHistory[sid] || [];
   const attemptNum = state.attemptHistory[sid].length + 1;
   const record = {
@@ -4582,7 +4915,7 @@ function archiveChallengeSlotAttempt(slot){
   pushTeamProgressEntry({
     agentName: state.agentName || 'Unnamed', deviceId: deviceId, scenarioId: sid,
     scenarioTitle: slot.scenario.title, skill: slot.scenario.skill, difficulty: slot.scenario.difficulty,
-    timestamp: Date.now(), pct: score.af?0:score.pct, af: score.af, afDuty: score.afDuty, pass: score.pass,
+    timestamp: completionTimestamp, pct: score.af?0:score.pct, af: score.af, afDuty: score.afDuty, pass: score.pass,
     ahtElapsedMinutes: record.ahtElapsedMinutes, ahtTargetMinutes: slot.scenario.ahtTargetMinutes,
     playerLeftEarly: slot.playerLeftEarly, playerLeftReason: slot.playerLeftReason,
     challengeTier: state.challenge.tier,
@@ -5118,23 +5451,94 @@ function renderMyAssignmentsPage(){
   </div>`;
 }
 
-function renderAssignmentsList(){
-  if(state.assignments.length===0) return `<div class="empty" style="padding:16px 0;">No scenarios assigned yet.</div>`;
-  const byAgent = {};
-  state.assignments.forEach(a=>{ const key = canonicalNameFor(a.agentName); (byAgent[key]=byAgent[key]||[]).push(a); });
-  const rows = Object.keys(byAgent).sort().map(name=>{
-    const items = byAgent[name].sort((a,b)=>b.assignedAt-a.assignedAt);
-    const itemRows = items.map(a=>{
-      const scenario = scenarioById(a.scenarioId);
-      const status = assignmentStatus(a);
-      return `<div class="info-row">
-        <span class="ilabel">${escapeHtml(scenario ? scenario.title : a.scenarioId)}<br><span style="font-size:10.5px;">${new Date(a.assignedAt).toLocaleDateString()}${a.assignedByTL?' \u00b7 assigned by '+escapeHtml(a.assignedByTL):''}</span></span>
-        <span class="ival" style="color:${assignmentStatusColor(a)};font-weight:700;">${status==='Completed'?'\u2713 ':''}${status}</span>
-      </div>`;
-    }).join('');
-    return `<div class="box" style="margin-bottom:8px;max-width:700px;"><strong data-open-tl-progress="${escapeHtml(name)}" style="cursor:pointer;color:var(--accent2);">${escapeHtml(name)}</strong>${itemRows}</div>`;
-  }).join('');
-  return `<div style="margin-top:16px;">${rows}</div>`;
+// ---------- TL Management dashboard: collapsible section/subsection shell ----------
+// Six top-level sections, collapsed by default, tracked independently in state.diagSectionsOpen -
+// opening one never touches any other's entry in that map. bodyFn is a thunk (a zero-arg function
+// that RETURNS html) rather than a pre-built string, so a collapsed section's (sometimes nontrivial)
+// content never gets computed at all - it's only called when open is true.
+function renderDashSection(id, title, summary, bodyFn){
+  const open = !!state.diagSectionsOpen[id];
+  return `<div class="dash-card">
+    <div class="dash-card-header" data-toggle-dash-section="${id}">
+      <div class="dash-card-title">
+        <span class="dash-card-arrow${open?' open':''}">▶</span>
+        <h2>${escapeHtml(title)}</h2>
+      </div>
+      <span class="dash-card-summary">${escapeHtml(summary)}</span>
+    </div>
+    ${open ? `<div class="dash-card-body">${bodyFn()}</div>` : ''}
+  </div>`;
+}
+// Same idea, nested one level inside an already-open section - e.g. "All Registered Agents" stays
+// collapsed by default even once "Team Leads & Agent Roster" itself is open, so opening the section
+// never dumps every agent onto the screen. data-currently-open is what the click handler reads to
+// flip the right way regardless of what defaultOpen was.
+function renderDashSubsection(id, title, bodyFn, defaultOpen){
+  const open = state.diagSubsectionsOpen.hasOwnProperty(id) ? !!state.diagSubsectionsOpen[id] : !!defaultOpen;
+  return `<div class="dash-subsection">
+    <div class="dash-subsection-header" data-toggle-dash-subsection="${id}" data-currently-open="${open}">
+      <h3>${escapeHtml(title)}</h3>
+      <span class="dash-card-arrow${open?' open':''}">▶</span>
+    </div>
+    ${open ? `<div class="dash-subsection-body">${bodyFn()}</div>` : ''}
+  </div>`;
+}
+
+// Finds the exact teamProgress entry a completed assignment led to, using the completionTimestamp
+// stamped onto both records at completion time (see markAssignmentsCompleted / archiveAttempt) -
+// exact, not "whichever attempt looks newest," so this stays correct even with several attempts of
+// the same scenario by the same agent close together. Assignments completed before this feature
+// existed won't have attemptTimestamp, so this correctly returns null for those (see canView below).
+function findTeamProgressEntryForAssignment(a){
+  if(!a || !a.completed || !a.attemptTimestamp) return null;
+  return state.teamProgressLog.find(e => e.timestamp === a.attemptTimestamp && namesMatch(e.agentName, a.agentName) && e.scenarioId === a.scenarioId) || null;
+}
+
+// The "Manage Assignments" subsection of Assign Scenarios: pick an agent, see everything assigned to
+// them (pending and completed shown separately, per Zainab's spec), cancel/remove a row, or jump
+// straight to the completed attempt a row led to. Cancelling NEVER touches teamProgress - see
+// cancelAssignment - so removing a completed assignment's record can't delete the agent's real
+// attempt, evaluation, or coaching review.
+function renderManageAssignmentsSubsection(){
+  const agentOptions = [...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName));
+  const picker = `<select id="manageAssignmentsAgentSelect" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;min-width:220px;">
+    <option value="">Select an agent…</option>
+    ${agentOptions.map(a=>`<option value="${escapeHtml(a.canonicalName)}" ${state.manageAssignmentsAgent===a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}
+  </select>`;
+  if(!state.manageAssignmentsAgent){
+    return `<div>${picker}<div class="empty" style="padding:14px 0;">Pick an agent above to view - and if needed cancel - their assignments.</div></div>`;
+  }
+  const mine = assignmentsForAgent(state.manageAssignmentsAgent);
+  if(mine.length===0){
+    return `<div>${picker}<div class="empty" style="padding:14px 0;">No assignments for ${escapeHtml(state.manageAssignmentsAgent)} yet.</div></div>`;
+  }
+  const pending = mine.filter(a=>!a.completed);
+  const completed = mine.filter(a=>a.completed);
+  function row(a){
+    const scenario = scenarioById(a.scenarioId);
+    const linkedEntry = findTeamProgressEntryForAssignment(a);
+    return `<div class="box" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div style="min-width:0;">
+          <strong>${escapeHtml(scenario ? scenario.title : a.scenarioId)}</strong>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px;">Assigned ${new Date(a.assignedAt).toLocaleDateString()}${a.assignedByTL?' by '+escapeHtml(a.assignedByTL):''}</div>
+        </div>
+        <span style="color:${assignmentStatusColor(a)};font-weight:700;font-size:12.5px;white-space:nowrap;">${assignmentStatus(a)}</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">
+        ${linkedEntry ? `<button class="small" data-view-assignment-attempt="${a.id}">View completed attempt</button>` : (a.completed ? `<span style="font-size:11px;color:var(--text3);">Attempt not linked (completed before this feature was added) - check Team Progress directly</span>` : '')}
+        <button class="small" data-cancel-assignment="${a.id}" style="color:var(--bad);">${a.completed?'Remove record':'Cancel / remove'}</button>
+      </div>
+      <div data-cancel-confirm-slot="${a.id}"></div>
+    </div>`;
+  }
+  return `<div>
+    ${picker}
+    <h4 style="margin:16px 0 6px;font-size:12.5px;color:var(--text2);">Pending (${pending.length})</h4>
+    ${pending.length ? pending.map(row).join('') : `<div class="empty" style="padding:8px 0;">None pending.</div>`}
+    <h4 style="margin:16px 0 6px;font-size:12.5px;color:var(--text2);">Completed (${completed.length})</h4>
+    ${completed.length ? completed.map(row).join('') : `<div class="empty" style="padding:8px 0;">None completed yet.</div>`}
+  </div>`;
 }
 
 async function assignScenarioFromTLForm(){
@@ -5166,9 +5570,97 @@ async function assignScenarioFromTLForm(){
   state.view='diagnostics'; render();
 }
 
-function renderDiagnostics(){
+function renderAssignScenariosSectionBody(){
+  return `
+    <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Shared across devices, instantly - the agent sees this assignment in their own My Assignments as soon as they open the app on any device. Pick from any registered agent, including agents on other TLs' teams - management has shared visibility across the whole roster.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:760px;">
+      <select id="assignAgentName" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <option value="">Select agent…</option>
+        ${[...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName)).map(a=>`<option value="${escapeHtml(a.canonicalName)}">${escapeHtml(a.canonicalName)}</option>`).join('')}
+      </select>
+      <select id="assignScenarioSelect" style="flex:2;min-width:220px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        ${PILOT_SCENARIOS.map(s=>`<option value="${s.id}">${escapeHtml(s.title)} (${escapeHtml(s.difficulty)})</option>`).join('')}
+      </select>
+      <input id="assignedByTLName" placeholder="Your name (assigning TL)" value="${escapeHtml(getLastAssigningTL())}" style="flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+      <button id="btnAssignScenario" class="primary">Assign</button>
+    </div>
+    ${state.agentDirectory.length===0 ? `<div style="color:var(--text3);font-size:11.5px;margin-top:8px;">No agents registered yet - register one below first.</div>` : ''}
+    <div id="assignWarning" style="display:none;margin-top:10px;"></div>
+    ${renderDashSubsection('manage-assignments', 'Manage Assignments', renderManageAssignmentsSubsection, true)}
+  `;
+}
+
+function renderTeamLeadsRosterSectionBody(){
+  return `
+    <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Register each agent once under their full name, with their chat name and any other name they go by - every attempt or assignment under any of those names then resolves to this one profile automatically, without ever rewriting past records. Assigning a team below is a convenience filter only: every TL always sees everyone's complete, unfiltered Team Progress - there are no separate TL accounts or access levels.</div>
+    ${renderDashSubsection('register-agent', 'Register / Edit an Agent', ()=>`
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input id="regAgentFullName" placeholder="Full name" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <input id="regAgentChatName" placeholder="Chat name" style="flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <input id="regAgentAltName" placeholder="Other recognized name (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <input id="regAgentTLName" placeholder="Reports to (TL name)" value="Zainab Yahaya" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <button id="btnRegisterAgent" class="primary">Register agent</button>
+      </div>
+      <div id="registerAgentStatus" style="display:none;margin-top:10px;"></div>
+    `, true)}
+    ${renderDashSubsection('tl-rosters', 'Team Leads', ()=>`
+      <div style="color:var(--text3);font-size:11.5px;margin-bottom:8px;">Click a TL's name to view just their team's progress (still fully editable/visible to any TL).</div>
+      ${renderTLRostersList()}
+    `, false)}
+    ${renderDashSubsection('agent-directory', 'All Registered Agents', ()=>`
+      <input id="agentDirectorySearchInput" placeholder="Search agents…" value="${escapeHtml(state.agentDirectorySearch||'')}" style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;margin-bottom:10px;">
+      <div style="color:var(--text3);font-size:11.5px;margin-bottom:4px;">Click an agent to load their profile into the form above for editing.</div>
+      ${renderAgentDirectoryList(state.agentDirectorySearch)}
+    `, false)}
+  `;
+}
+
+function renderTeamProgressSectionBody(){
+  const options = [`<option value="everyone" ${state.teamProgressDashFilter==='everyone'?'selected':''}>Everyone</option>`];
+  if(state.tlRosters.length){
+    options.push(`<optgroup label="Team Leads">${state.tlRosters.map(r=>`<option value="tl:${escapeHtml(r.tlName)}" ${state.teamProgressDashFilter==='tl:'+r.tlName?'selected':''}>${escapeHtml(r.tlName)}</option>`).join('')}</optgroup>`);
+  }
+  if(state.agentDirectory.length){
+    options.push(`<optgroup label="Individual Agents">${[...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName)).map(a=>`<option value="agent:${escapeHtml(a.canonicalName)}" ${state.teamProgressDashFilter==='agent:'+a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}</optgroup>`);
+  }
+  return `
+    <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Named, team-wide attempt summaries - everyone's scores in one place, with the original AI assessment, editable TL score overrides, and coaching notes. This is TL/management-facing only; agents do not have a way to reach this view. Interface changes here never touch saved historical results.</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select id="teamProgressDashFilterSelect" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;min-width:200px;">
+        ${options.join('')}
+      </select>
+      <button id="btnOpenTeamProgressDiag" class="primary">Open Team Progress</button>
+    </div>
+  `;
+}
+
+function renderScenarioLibrarySectionBody(){
   const readinessColor = {PILOT_READY:'var(--ok)', PRACTICE_ONLY:'var(--warn)', ENGINE_TEST_ONLY:'var(--bad)'};
-  const refRows = SCENARIOS.map(s=>{
+  const topics = [...new Set(SCENARIOS.map(s=>s.topic))].sort();
+  const difficulties = [...new Set(SCENARIOS.map(s=>s.difficulty))];
+  const readinessLevels = [...new Set(SCENARIOS.map(s=>s.readiness).filter(Boolean))];
+  const q = (state.scenarioLibrarySearch||'').trim().toLowerCase();
+  let list = SCENARIOS.slice();
+  if(q) list = list.filter(s=>[s.internalTitle, s.title, s.topic, s.skill].filter(Boolean).join(' ').toLowerCase().includes(q));
+  if(state.scenarioLibraryTopicFilter) list = list.filter(s=>s.topic===state.scenarioLibraryTopicFilter);
+  if(state.scenarioLibraryDifficultyFilter) list = list.filter(s=>s.difficulty===state.scenarioLibraryDifficultyFilter);
+  if(state.scenarioLibraryReadinessFilter) list = list.filter(s=>s.readiness===state.scenarioLibraryReadinessFilter);
+  const controls = `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+    <input id="scenarioLibrarySearchInput" placeholder="Search scenarios…" value="${escapeHtml(state.scenarioLibrarySearch||'')}" style="flex:1;min-width:180px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+    <select id="scenarioLibraryTopicSelect" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+      <option value="">All topics</option>
+      ${topics.map(t=>`<option value="${escapeHtml(t)}" ${state.scenarioLibraryTopicFilter===t?'selected':''}>${escapeHtml(t)}</option>`).join('')}
+    </select>
+    <select id="scenarioLibraryDifficultySelect" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+      <option value="">All difficulties</option>
+      ${difficulties.map(d=>`<option value="${escapeHtml(d)}" ${state.scenarioLibraryDifficultyFilter===d?'selected':''}>${escapeHtml(d)}</option>`).join('')}
+    </select>
+    <select id="scenarioLibraryReadinessSelect" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+      <option value="">All readiness</option>
+      ${readinessLevels.map(r=>`<option value="${escapeHtml(r)}" ${state.scenarioLibraryReadinessFilter===r?'selected':''}>${escapeHtml(r)}</option>`).join('')}
+    </select>
+  </div>`;
+  const refRows = list.map(s=>{
     const initial = s.playerName.charAt(0).toUpperCase();
     return `<div class="category-scenario-card" data-scenario="${s.id}" style="max-width:640px;">
       <div class="qavatar" style="background:var(--accent);">${initial}</div>
@@ -5180,76 +5672,17 @@ function renderDiagnostics(){
       <span style="font-size:10px;font-weight:700;color:${readinessColor[s.readiness]||'var(--text3)'};border:1px solid ${readinessColor[s.readiness]||'var(--text3)'};border-radius:20px;padding:2px 7px;margin-left:6px;white-space:nowrap;">${s.readiness||'UNCLASSIFIED'}</span>
     </div>`;
   }).join('');
+  return `
+    <div style="color:var(--text2);font-size:13px;margin-bottom:10px;">Agents only ever see topics and get randomly assigned within one - this list, by name, is for your own testing and review only. Click any to start it directly.</div>
+    ${controls}
+    <div style="color:var(--text3);font-size:11.5px;margin-bottom:10px;">${list.length} of ${SCENARIOS.length} scenarios</div>
+    ${list.length ? refRows : `<div class="empty" style="padding:14px 0;">No scenarios match these filters.</div>`}
+  `;
+}
 
-  return `<div class="main" style="padding:26px;overflow-y:auto;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-      <div>
-        <h1 style="margin-top:0;">TL / Management Area</h1>
-        <div style="color:var(--text2);font-size:13px;max-width:640px;line-height:1.6;">Team Progress, the full scenario list, and the Phase 1 test suite - password-gated, not part of the agent-facing app.</div>
-      </div>
-      <button id="btnLockTLArea">\u2190 Lock &amp; back to simulator</button>
-    </div>
-
-    <div class="diag-section">
-      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">Assign a Scenario</h2>
-      <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Shared across devices, instantly - the agent sees this assignment in their own My Assignments as soon as they open the app on any device. Pick from any registered agent, including agents on other TLs' teams - management has shared visibility across the whole roster.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:760px;">
-        <select id="assignAgentName" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-          <option value="">Select agent…</option>
-          ${[...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName)).map(a=>`<option value="${escapeHtml(a.canonicalName)}">${escapeHtml(a.canonicalName)}</option>`).join('')}
-        </select>
-        <select id="assignScenarioSelect" style="flex:2;min-width:220px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-          ${PILOT_SCENARIOS.map(s=>`<option value="${s.id}">${escapeHtml(s.title)} (${escapeHtml(s.difficulty)})</option>`).join('')}
-        </select>
-        <input id="assignedByTLName" placeholder="Your name (assigning TL)" value="${escapeHtml(getLastAssigningTL())}" style="flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <button id="btnAssignScenario" class="primary">Assign</button>
-      </div>
-      ${state.agentDirectory.length===0 ? `<div style="color:var(--text3);font-size:11.5px;margin-top:8px;">No agents registered yet - register one below first.</div>` : ''}
-      <div id="assignWarning" style="display:none;margin-top:10px;"></div>
-      ${renderAssignmentsList()}
-    </div>
-
-    <div class="diag-section">
-      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">Team Leads &amp; Agent Roster</h2>
-      <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Register each agent once under their full name, with their chat name and any other name they go by - every attempt or assignment under any of those names then resolves to this one profile automatically, without ever rewriting past records. Assigning a team below is a convenience filter only: every TL always sees everyone's complete, unfiltered Team Progress - there are no separate TL accounts or access levels.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:820px;">
-        <input id="regAgentFullName" placeholder="Full name" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <input id="regAgentChatName" placeholder="Chat name" style="flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <input id="regAgentAltName" placeholder="Other recognized name (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <input id="regAgentTLName" placeholder="Reports to (TL name)" value="Zainab Yahaya" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <button id="btnRegisterAgent" class="primary">Register agent</button>
-      </div>
-      <div id="registerAgentStatus" style="display:none;margin-top:10px;"></div>
-
-      <h3 style="margin-top:22px;font-size:13.5px;color:var(--text2);font-weight:600;">Team Leads</h3>
-      <div style="color:var(--text3);font-size:11.5px;margin-top:-6px;margin-bottom:4px;">Click a TL's name to view just their team's progress (still fully editable/visible to any TL).</div>
-      ${renderTLRostersList()}
-
-      <h3 style="margin-top:22px;font-size:13.5px;color:var(--text2);font-weight:600;">All Registered Agents</h3>
-      <div style="color:var(--text3);font-size:11.5px;margin-top:-6px;margin-bottom:4px;">Click an agent to load their profile into the form above for editing.</div>
-      ${renderAgentDirectoryList()}
-    </div>
-
-    <div class="diag-section">
-      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">TL Reference: Team Progress</h2>
-      <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Named, team-wide attempt summaries - everyone's scores in one place. This is TL/management-facing only; agents do not have a way to reach this view.</div>
-      <button id="btnOpenTeamProgressDiag">View Team Progress</button>
-    </div>
-
-    <div class="diag-section">
-      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">TL Reference: Feedback &amp; Suggestions</h2>
-      <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Feedback and suggestions agents have submitted from the Feedback / Suggestions page, newest first.</div>
-      <button id="btnLoadFeedbackDiag">Load Feedback</button>
-      <div style="margin-top:12px;">${renderFeedbackDiagList()}</div>
-    </div>
-
-    <div class="diag-section">
-      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">TL Reference: Full Scenario List</h2>
-      <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Agents only ever see topics and get randomly assigned within one - this list, by name, is for your own testing and review only. Click any to start it directly.</div>
-      ${refRows}
-    </div>
-
-    <div class="diag-section">
+function renderSystemTestsSectionBody(){
+  return `
+    <div class="diag-section" style="margin-top:0;padding-top:0;border-top:none;">
       <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">1. Strong vs. Weak Handling Differentiation</h2>
       <div style="color:var(--text2);font-size:13px;">Runs two fixed transcripts for the Delayed Withdrawal scenario through the Evaluation Engine - this scenario is now KB-validated (real "Withdrawals via E-Transfer (Interac)" article). The strong transcript checks both status and Auto-Deposit and states only what real Process Grounding supports (no invented cause). The weak transcript confirms "no issue" without checking either - which Process Grounding explicitly defines as a critical error.</div>
       <button id="runDiag1" style="margin-top:10px;">Run test</button>
@@ -5283,6 +5716,27 @@ function renderDiagnostics(){
         This build could not be executed in a live browser from the environment used to write it - only JavaScript syntax was validated statically. The <code>fetch</code> pattern is unchanged from the version already confirmed working live in this artifact frame in an earlier session. Running the tests above, live, is the actual verification that this build's calls succeed - not an assumption.
       </div>
     </div>
+  `;
+}
+
+function renderDiagnostics(){
+  const pendingCount = state.assignments.filter(a=>!a.completed).length;
+  const unresolvedCount = unresolvedFeedbackCount();
+  return `<div class="main" style="padding:26px;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <h1 style="margin-top:0;">TL Management</h1>
+        <div style="color:var(--text2);font-size:13px;max-width:640px;line-height:1.6;">Assignments, rosters, Team Progress, Feedback, the scenario library, and diagnostics - password-gated, not part of the agent-facing app. Click a section to expand it; opening one never affects the others.</div>
+      </div>
+      <button id="btnLockTLArea">\u2190 Lock &amp; back to simulator</button>
+    </div>
+
+    ${renderDashSection('assign-scenarios', 'Assign Scenarios', `${pendingCount} pending assignment${pendingCount===1?'':'s'}`, renderAssignScenariosSectionBody)}
+    ${renderDashSection('tl-agent-roster', 'Team Leads & Agent Roster', 'Manage registered teams', renderTeamLeadsRosterSectionBody)}
+    ${renderDashSection('team-progress', 'Team Progress', 'View and review attempts', renderTeamProgressSectionBody)}
+    ${renderDashSection('feedback', 'Feedback & Suggestions', `${unresolvedCount} unresolved suggestion${unresolvedCount===1?'':'s'}`, renderFeedbackManagementSectionBody)}
+    ${renderDashSection('scenario-library', 'Scenario Library', `Browse ${SCENARIOS.length} scenarios`, renderScenarioLibrarySectionBody)}
+    ${renderDashSection('system-tests', 'System Tests', 'Development diagnostics', renderSystemTestsSectionBody)}
   </div>`;
 }
 
