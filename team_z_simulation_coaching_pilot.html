@@ -2897,13 +2897,14 @@ async function pushTeamProgressEntry(entry){
 }
 
 function clearMyAttemptData(){
-  // Explicit, user-initiated deletion of this browser's own data only.
+  // Explicit, user-initiated deletion, scoped ONLY to this device's personal practice log
+  // (ATTEMPT_HISTORY_KEY). Deliberately does NOT touch state.teamProgressLog / the backend -
+  // that's the shared coaching record a TL reviews, and nothing an agent does here should be
+  // able to affect what their TL sees. See the confirm dialog's copy for the honest version of
+  // what this does; don't let this drift back into looking like it clears shared data.
   state.attemptHistory = {};
   try{ localStorage.removeItem(ATTEMPT_HISTORY_KEY); }
   catch(err){ console.error('Clearing personal attempt history failed:', err); }
-  state.teamProgressLog = state.teamProgressLog.filter(e => e.deviceId !== deviceId);
-  try{ localStorage.setItem(TEAM_PROGRESS_KEY, JSON.stringify(state.teamProgressLog)); }
-  catch(err){ console.error('Clearing team progress entries failed:', err); }
 }
 
 // Archives exactly ONE attempt, using ONLY values captured on the attemptContext object itself -
@@ -6108,7 +6109,7 @@ function renderIdentityCard(){
       <div style="font-weight:700;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(state.agentName||'No name set')}</div>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
         <button class="small" id="btnChangeName">Change name</button>
-        <button class="small" id="btnClearMyData" style="color:var(--bad);">Clear my attempts</button>
+        <button class="small" id="btnClearMyData" style="color:var(--bad);">Clear my local history</button>
       </div>
     </div>
   </div>`;
@@ -6131,11 +6132,11 @@ function renderClearDataConfirm(){
   overlay.id='clearDataConfirmOverlay';
   overlay.className='modal-overlay';
   overlay.innerHTML = `<div class="modal" style="max-width:420px;">
-    <h2>Clear your attempts?</h2>
-    <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">This permanently deletes all ${count} of your saved attempts - your personal history and your entries in the shared team log. This cannot be undone. Nobody else's attempts are affected.</div>
+    <h2>Clear your local history?</h2>
+    <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">This clears the ${count} attempt${count===1?'':'s'} saved on this device only - the personal practice list you see here. It does not touch anything your TL sees in Team Progress; those records stay exactly as they are. This cannot be undone on this device.</div>
     <div style="display:flex;gap:10px;">
       <button id="btnCancelClearData">Cancel</button>
-      <button id="btnConfirmClearData" class="primary" style="background:var(--bad);border-color:var(--bad);">Clear my attempts</button>
+      <button id="btnConfirmClearData" class="primary" style="background:var(--bad);border-color:var(--bad);">Clear my local history</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
