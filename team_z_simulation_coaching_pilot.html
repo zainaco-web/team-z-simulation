@@ -12,10 +12,30 @@
     --text:#e8eaed; --text2:#9aa3ad; --text3:#6b7480;
     --accent:#2458d9; --accent2:#4a75e6; --agent:#2458d9;
     --ok:#3ecf8e; --warn:#e2a33d; --bad:#e05a5a;
+    --ok-bg:#0f1f16; --ok-border:#1d3a2c;
+    --warn-bg:#241d0f; --warn-border:#4a3a1a;
+    --bad-bg:#241010; --bad-border:#4a1a1a;
+    --bad-bg2:#3a1d1d; --bad-border2:#5a2c2c;
+    --active-bg:#1a2030; --active-border:#2a3550;
+    --hero-grad-1:#0f1c3d; --hero-grad-2:#141414;
+    --hover-tint:rgba(255,255,255,.02); --hairline:rgba(255,255,255,.03); --chip-tint:rgba(255,255,255,.04);
     --radius:10px;
   }
+  :root[data-theme="light"]{
+    --bg:#f4f5f7; --panel:#ffffff; --panel2:#ffffff; --border:#e1e4e9;
+    --text:#1a1d21; --text2:#5b6470; --text3:#848d99;
+    --accent:#2458d9; --accent2:#4a75e6; --agent:#2458d9;
+    --ok:#1f9d63; --warn:#b3760f; --bad:#c8433f;
+    --ok-bg:#e7f8ef; --ok-border:#b9e6cd;
+    --warn-bg:#fdf1de; --warn-border:#eed3a0;
+    --bad-bg:#fdecec; --bad-border:#f3c5c5;
+    --bad-bg2:#fbe1e1; --bad-border2:#eeb7b7;
+    --active-bg:#e8eefc; --active-border:#c3d3f7;
+    --hero-grad-1:#dbe6fb; --hero-grad-2:#ffffff;
+    --hover-tint:rgba(0,0,0,.035); --hairline:rgba(0,0,0,.06); --chip-tint:rgba(0,0,0,.035);
+  }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;transition:background-color .15s ease,color .15s ease;}
   .app{display:grid;grid-template-rows:56px 1fr;height:100vh;}
 
   .topbar-global{grid-column:1/-1;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:16px;}
@@ -32,10 +52,10 @@
   .aht-switch input:checked + .aht-slider:before{transform:translateX(15px);}
   .aht-live-timer{font-size:12.5px;color:var(--warn);font-weight:600;display:flex;align-items:center;gap:5px;}
   .aht-result-box{border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;}
-  .aht-result-box.efficient{border-color:#1d3a2c;background:#0f1f16;}
-  .aht-result-box.acceptable{border-color:#4a3a1a;background:#241d0f;}
-  .aht-result-box.needs-improvement{border-color:#4a1a1a;background:#241010;}
-  .aht-result-box.qualified{border-color:var(--warn);background:#241d0f;}
+  .aht-result-box.efficient{border-color:var(--ok-border);background:var(--ok-bg);}
+  .aht-result-box.acceptable{border-color:var(--warn-border);background:var(--warn-bg);}
+  .aht-result-box.needs-improvement{border-color:var(--bad-border);background:var(--bad-bg);}
+  .aht-result-box.qualified{border-color:var(--warn);background:var(--warn-bg);}
 
   .body-grid{display:grid;grid-template-columns:60px 280px 1fr 340px;grid-template-rows:1fr;overflow:hidden;min-height:0;}
 
@@ -57,19 +77,19 @@
   .skillgroup h2{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin:14px 6px 6px;}
   .scenario-card{background:transparent;border:1px solid transparent;border-radius:10px;padding:9px 8px;margin-bottom:2px;cursor:pointer;transition:background .12s;display:flex;gap:10px;align-items:flex-start;}
   .scenario-card:hover{background:var(--panel2);}
-  .scenario-card.active{background:#1a2030;border-color:#2a3550;}
+  .scenario-card.active{background:var(--active-bg);border-color:var(--active-border);}
   .scenario-card .qavatar{flex-shrink:0;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;}
   .scenario-card .qbody{min-width:0;flex:1;}
   .scenario-card .title{font-size:13px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .scenario-card .qsub{font-size:11.5px;color:var(--text3);}
   .diff-pill{display:inline-block;font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.02em;}
-  .diff-Foundation{background:#1d3a2c;color:var(--ok);}
-  .diff-Applied{background:#3a301a;color:var(--warn);}
-  .diff-Advanced{background:#3a1d1d;color:var(--bad);}
-  .rg-pill{display:inline-block;font-size:9.5px;padding:2px 6px;border-radius:20px;font-weight:700;letter-spacing:.02em;background:#3a1d1d;color:var(--bad);margin-left:5px;}
+  .diff-Foundation{background:var(--ok-bg);color:var(--ok);}
+  .diff-Applied{background:var(--warn-bg);color:var(--warn);}
+  .diff-Advanced{background:var(--bad-bg2);color:var(--bad);}
+  .rg-pill{display:inline-block;font-size:9.5px;padding:2px 6px;border-radius:20px;font-weight:700;letter-spacing:.02em;background:var(--bad-bg2);color:var(--bad);margin-left:5px;}
   .diag-link-wrap{padding:12px 16px;border-top:1px solid var(--border);margin-top:auto;}
 
-  .main{display:flex;flex-direction:column;background:#0d1013;overflow:hidden;min-height:0;min-width:0;}
+  .main{display:flex;flex-direction:column;background:var(--bg);overflow:hidden;min-height:0;min-width:0;}
   .topbar{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
   .topbar .who{font-weight:600;font-size:15px;}
   .topbar .status{font-size:12px;color:var(--text3);}
@@ -117,7 +137,7 @@
   .side-section-head h2{font-size:13px;font-weight:600;color:var(--text);margin:0;text-transform:none;letter-spacing:0;}
   .side-section-head svg{width:14px;height:14px;color:var(--text3);}
   .side-section-body{padding:0 16px 16px;}
-  .info-row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:12.5px;border-bottom:1px solid rgba(255,255,255,.03);}
+  .info-row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:12.5px;border-bottom:1px solid var(--hairline);}
   .info-row:last-child{border-bottom:none;}
   .info-row .ilabel{color:var(--text3);}
   .info-row .ival{color:var(--text);text-align:right;}
@@ -125,8 +145,8 @@
   .box.title{color:var(--text);font-weight:600;font-size:14px;}
   .empty{color:var(--text3);font-size:13px;padding:20px 0;text-align:center;}
 
-  .kb-banner{font-size:11px;color:var(--warn);border:1px solid #4a3a1a;background:#241d0f;padding:6px 9px;border-radius:6px;margin-bottom:10px;line-height:1.4;}
-  .rg-banner{font-size:11px;color:var(--bad);border:1px solid #4a1a1a;background:#241010;padding:6px 9px;border-radius:6px;margin-bottom:10px;line-height:1.4;font-weight:600;}
+  .kb-banner{font-size:11px;color:var(--warn);border:1px solid var(--warn-border);background:var(--warn-bg);padding:6px 9px;border-radius:6px;margin-bottom:10px;line-height:1.4;}
+  .rg-banner{font-size:11px;color:var(--bad);border:1px solid var(--bad-border);background:var(--bad-bg);padding:6px 9px;border-radius:6px;margin-bottom:10px;line-height:1.4;font-weight:600;}
 
   .tab-group{margin-bottom:6px;}
   .tab-group .tab-name{font-size:11.5px;font-weight:700;color:var(--text2);margin:10px 0 5px;text-transform:uppercase;letter-spacing:.03em;}
@@ -142,14 +162,14 @@
   .rubric-row .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
   .rubric-row .label{font-weight:600;font-size:13.5px;}
   .rubric-row .aiVal{font-size:12px;padding:3px 9px;border-radius:20px;background:var(--panel2);border:1px solid var(--border);}
-  .rubric-row .aiVal.af{background:#3a1d1d;color:var(--bad);border-color:#5a2c2c;font-weight:700;}
+  .rubric-row .aiVal.af{background:var(--bad-bg2);color:var(--bad);border-color:var(--bad-border2);font-weight:700;}
   .score-badge{font-size:38px;font-weight:700;line-height:1.1;}
   .score-label{font-size:12px;color:var(--text3);margin-top:4px;}
   .rubric-row .cite{font-size:12.5px;color:var(--text2);line-height:1.5;margin-bottom:8px;}
   .rubric-row select{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;font-size:12.5px;font-family:inherit;}
   .rubric-row textarea.notes{width:100%;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 9px;font-family:inherit;font-size:12.5px;resize:vertical;min-height:36px;}
   .critical{color:var(--bad);font-weight:700;}
-  .tag-autofail{background:#3a1d1d;color:var(--bad);border:1px solid #5a2c2c;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;margin-left:8px;}
+  .tag-autofail{background:var(--bad-bg2);color:var(--bad);border:1px solid var(--bad-border2);padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;margin-left:8px;}
 
   .diag-section{border-top:1px solid var(--border);margin-top:20px;padding-top:16px;}
   .diag-result{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:10px;font-size:12.5px;line-height:1.5;}
@@ -157,9 +177,10 @@
   .diag-fail{color:var(--bad);font-weight:700;}
 
   /* TL Management dashboard - collapsible top-level sections, same card language as .box elsewhere */
-  .dash-card{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:18px;overflow:hidden;flex-shrink:0;}
+  .dash-card{background:var(--panel2);border:1px solid var(--border);border-left:4px solid var(--section-accent, var(--border));border-radius:var(--radius);margin-bottom:18px;overflow:hidden;flex-shrink:0;}
+  .dash-card-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:color-mix(in srgb, var(--section-accent, var(--text3)) 16%, transparent);color:var(--section-accent, var(--text3));}
   .dash-card-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 18px;cursor:pointer;-webkit-user-select:none;user-select:none;}
-  .dash-card-header:hover{background:rgba(255,255,255,.02);}
+  .dash-card-header:hover{background:var(--hover-tint);}
   .dash-card-title{display:flex;align-items:center;gap:10px;min-width:0;}
   .dash-card-arrow{display:inline-block;color:var(--text3);font-size:12px;transition:transform .15s ease;flex-shrink:0;}
   .dash-card-arrow.open{transform:rotate(90deg);}
@@ -168,7 +189,7 @@
   .dash-card-body{padding:0 18px 20px;border-top:1px solid var(--border);padding-top:18px;}
   .dash-subsection{border:1px solid var(--border);border-radius:8px;margin-top:18px;overflow:hidden;}
   .dash-subsection-header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;-webkit-user-select:none;user-select:none;background:var(--panel);}
-  .dash-subsection-header:hover{background:rgba(255,255,255,.02);}
+  .dash-subsection-header:hover{background:var(--hover-tint);}
   .dash-subsection-header h3{margin:0;font-size:13px;color:var(--text2);font-weight:600;overflow-wrap:break-word;}
   .dash-subsection-body{padding:14px;}
   /* .main's width is whatever's left after the fixed-width rail/scenario-list/side-panel columns,
@@ -185,6 +206,14 @@
   .category-tile-icon{margin-bottom:10px;}
   .category-tile-title{font-weight:700;font-size:15px;margin-bottom:4px;}
   .category-tile-sub{font-size:12px;color:var(--text3);}
+
+  .home-hero{background:linear-gradient(135deg,var(--hero-grad-1) 0%,var(--hero-grad-2) 65%);border:1px solid var(--border);border-radius:14px;padding:32px 34px;margin-bottom:28px;max-width:900px;}
+  .home-hero-eyebrow{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin-bottom:10px;}
+  .home-hero h1{margin:0 0 12px;font-size:26px;line-height:1.3;}
+  .home-hero-sub{color:var(--text2);font-size:13.5px;line-height:1.65;max-width:640px;}
+  .home-hero-stats{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;}
+  .home-stat-chip{background:var(--chip-tint);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;}
+  .home-stat-chip strong{color:var(--text);font-weight:700;}
   .category-scenario-card{display:flex;align-items:center;gap:14px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;max-width:700px;cursor:pointer;transition:border-color .1s;}
   .category-scenario-card:hover{border-color:var(--accent);}
 </style>
@@ -218,7 +247,7 @@ const KB_AMBIGUOUS_BANNER = "GENUINE KB GAP - real Betty KB was checked, but it 
 
 function kbBannerFor(s){
   if(s.kbStatus==='validated'){
-    return `<div class="kb-banner" style="color:var(--ok);border-color:#1d3a2c;background:#0f1f16;">\u2713 KB-VALIDATED: ${escapeHtml(s.kbSource||'')}</div>`;
+    return `<div class="kb-banner" style="color:var(--ok);border-color:var(--ok-border);background:var(--ok-bg);">\u2713 KB-VALIDATED: ${escapeHtml(s.kbSource||'')}</div>`;
   }
   if(s.kbStatus==='mixed'){
     return `<div class="kb-banner">MIXED KB STATUS: ${escapeHtml(s.kbSource||'')}</div>`;
@@ -227,7 +256,7 @@ function kbBannerFor(s){
     return `<div class="kb-banner">${escapeHtml(KB_AMBIGUOUS_BANNER)}<br><br>${escapeHtml(s.kbSource||'')}</div>`;
   }
   if(s.kbStatus==='coaching'){
-    return `<div class="kb-banner" style="color:var(--warn);border-color:#4a3a1a;background:#241d0f;">${escapeHtml(KB_COACHING_GROUNDED_BANNER)}<br><br>${escapeHtml(s.kbSource||'')}</div>`;
+    return `<div class="kb-banner" style="color:var(--warn);border-color:var(--warn-border);background:var(--warn-bg);">${escapeHtml(KB_COACHING_GROUNDED_BANNER)}<br><br>${escapeHtml(s.kbSource||'')}</div>`;
   }
   return `<div class="kb-banner">${escapeHtml(KB_NOT_VALIDATED_BANNER)}</div>`;
 }
@@ -1811,7 +1840,8 @@ let state = {
   tlReviewStatus:'',
   teamProgressLog:[],      // shared summary records (name/scenario/score/time), visible in Team Progress view
   categoryFilter:null,     // topic string when browsing scenarios by category via Home, null otherwise
-  view:'sim',
+  view:'categories',       // opens to Home by default, not the empty chat pane
+  theme:'dark',            // 'dark' | 'light' - saved per device, see loadTheme/saveTheme
   tlUnlocked:false,   // session-only gate for the TL/management area - never persisted, resets on reload
   chatStartedAt:null,        // Date.now() at scenario start - ALWAYS set, unlike ahtStartTime (AHT-only)
   silenceCheckInterval:null, // setInterval handle for the ambient silence watcher (runs regardless of AHT Mode)
@@ -1905,6 +1935,8 @@ const ICONS = {
   chevronDown: '<path d="m6 9 6 6 6-6"/>',
   x: '<path d="M18 6 6 18"/><path d="M6 6l12 12"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+  sun: '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>',
+  moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
 };
 function icon(name, size=18){
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}">${ICONS[name]||''}</svg>`;
@@ -1943,6 +1975,11 @@ function renderTopbarGlobal(){
     <div class="aht-toggle-wrap" id="ahtToggleWrap" title="When on, tracks your handling time in this practice session against a practice target for this case type - not a production AHT expectation">
       ${icon('clock',14)}<span>AHT Mode</span>
       <label class="aht-switch"><input type="checkbox" id="ahtModeCheckbox" ${state.ahtMode?'checked':''}><span class="aht-slider"></span></label>
+    </div>
+    <div class="aht-toggle-wrap" id="themeToggleWrap" title="Switch between dark and light mode">
+      ${icon('moon',14)}
+      <label class="aht-switch"><input type="checkbox" id="themeModeCheckbox" ${state.theme==='light'?'checked':''}><span class="aht-slider"></span></label>
+      ${icon('sun',14)}
     </div>
     <div class="topbar-badge">${icon('bolt',13)} ${PILOT_SCENARIOS.length}</div>
     <div class="topbar-avatar" title="${state.agentName ? escapeHtml(state.agentName) : ''}">${initial}</div>
@@ -2027,15 +2064,29 @@ function renderCategoriesView(){
     </div>`;
   }).join('');
   const assignedBanner = renderMyAssignmentsHomeWidget();
+  const totalScenarios = PILOT_SCENARIOS.length;
+  const totalTopics = Object.keys(topics).length;
+  const hero = `<div class="home-hero">
+    <div class="home-hero-eyebrow">Team Z \u00b7 Simulation Engine</div>
+    <h1>Practice the real conversations, before they happen for real.</h1>
+    <div class="home-hero-sub">This is Team Z\u2019s training space \u2014 practice handling real-style player chats with an AI-played customer, then get scored the same way a real chat would be: on the outcome, on how it felt to the player, and on your documentation. No real player accounts are ever involved.</div>
+    <div class="home-hero-stats">
+      <div class="home-stat-chip">${icon('grid',13)} <strong>${totalScenarios}</strong> practice scenarios</div>
+      <div class="home-stat-chip">${icon('archive',13)} <strong>${totalTopics}</strong> topics</div>
+      <div class="home-stat-chip">${icon('check',13)} Grounded in real Betty KB</div>
+      <div class="home-stat-chip">${icon('bolt',13)} Scored like a real QA review</div>
+    </div>
+  </div>`;
   return `<div class="main" style="padding:32px;overflow-y:auto;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;">
+    ${hero}
+    ${assignedBanner}
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-top:${assignedBanner?'28px':'0'};">
       <div>
         <h1 style="margin-top:0;">Browse by Topic</h1>
         <div style="color:var(--text2);font-size:13px;max-width:600px;line-height:1.6;">What a player would actually be contacting about, not the skill being tested \u2014 mirrors how real chats get tagged. Pick a topic to see its scenarios, easiest first.</div>
       </div>
       <button id="btnRandomizeAll" class="primary" style="white-space:nowrap;">\ud83c\udfb2 Surprise Me</button>
     </div>
-    ${assignedBanner}
     <div class="category-grid" style="margin-top:24px;">${tiles}</div>
   </div>`;
 }
@@ -2353,6 +2404,9 @@ function wireEvents(){
   const btnSubmitFeedback=document.getElementById('btnSubmitFeedback');
   if(btnSubmitFeedback) btnSubmitFeedback.addEventListener('click', submitFeedback);
 
+  const themeCheckbox=document.getElementById('themeModeCheckbox');
+  if(themeCheckbox) themeCheckbox.addEventListener('change', e=>{ setTheme(e.target.checked ? 'light' : 'dark'); });
+
   const ahtCheckbox=document.getElementById('ahtModeCheckbox');
   if(ahtCheckbox) ahtCheckbox.addEventListener('change', e=>{
     state.ahtMode = e.target.checked;
@@ -2644,6 +2698,31 @@ function saveAgentName(name){
   state.agentName = name;
   try{ localStorage.setItem(AGENT_NAME_KEY, name); }
   catch(err){ console.error('Saving agent name locally failed (still works for this session):', err); }
+}
+
+// ---------- THEME (dark/light, per-device, applied via a data-theme attribute on <html>) ----------
+const THEME_KEY = 'zteamz_theme_v1';
+
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme==='light' ? 'light' : 'dark');
+}
+
+function loadTheme(){
+  try{
+    const saved = localStorage.getItem(THEME_KEY);
+    if(saved==='light' || saved==='dark') state.theme = saved;
+  }catch(err){
+    // localStorage unavailable - just use the default
+  }
+  applyTheme(state.theme);
+}
+
+function setTheme(theme){
+  state.theme = (theme==='light') ? 'light' : 'dark';
+  applyTheme(state.theme);
+  try{ localStorage.setItem(THEME_KEY, state.theme); }
+  catch(err){ console.error('Saving theme locally failed (still works for this session):', err); }
+  render();
 }
 
 // ---------- PERSISTENCE ----------
@@ -3927,7 +4006,7 @@ function renderAHTBox(elapsedMinutes, targetMinutes, resolvedCorrectly, lateStar
 // It's the "where did the time actually go" coaching sentence, never a score input.
 function renderEfficiencyNarrativeBox(ev){
   if(!ev || !ev.efficiencyNarrative) return '';
-  return `<div class="box" style="border-color:#2a3550;">
+  return `<div class="box" style="border-color:var(--active-border);">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
       <strong style="font-size:13.5px;">\u23f1 Efficiency Coaching</strong>
       <span style="font-size:10.5px;color:var(--text3);">Not part of the score</span>
@@ -4701,7 +4780,7 @@ function renderFeedbackPage(){
   return `<div class="main" style="padding:32px;overflow-y:auto;">
     <h1 style="margin-top:0;">Feedback & Suggestions</h1>
     <div style="color:var(--text2);font-size:13px;max-width:600px;margin-bottom:20px;line-height:1.6;">Ideas, confusing behaviour, things that felt unrealistic - anything. Saved on this device so it doesn't get lost if you switch away.</div>
-    ${state.feedbackJustSubmitted ? `<div class="box" style="border-color:#1d3a2c;color:var(--ok);max-width:600px;margin-bottom:16px;">\u2713 Saved - thank you!</div>` : ''}
+    ${state.feedbackJustSubmitted ? `<div class="box" style="border-color:var(--ok-border);color:var(--ok);max-width:600px;margin-bottom:16px;">\u2713 Saved - thank you!</div>` : ''}
     ${state.feedbackSubmitError ? `<div class="box" style="border-color:var(--bad);color:var(--bad);max-width:600px;margin-bottom:16px;">Couldn\u2019t save just now: ${escapeHtml(state.feedbackSubmitError)}</div>` : ''}
     <textarea id="feedbackTextarea" placeholder="What's on your mind?" style="width:100%;max-width:600px;min-height:140px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:12px;font-family:inherit;font-size:13.5px;resize:vertical;">${escapeHtml(state.feedbackText||'')}</textarea>
     <div style="margin-top:12px;"><button id="btnSubmitFeedback" class="primary">Send</button></div>
@@ -5227,7 +5306,7 @@ function renderCoachingSignalsBox(coachingSignals){
     </div>`;
   }).join('');
   if(!rows) return '';
-  return `<div class="box" style="border-color:#2a3550;margin-top:12px;">
+  return `<div class="box" style="border-color:var(--active-border);margin-top:12px;">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
       <strong style="font-size:13.5px;">Coaching Signals</strong>
       <span style="font-size:10.5px;color:var(--text3);">Not part of the score - behaviour observations only</span>
@@ -5501,11 +5580,13 @@ function renderMyAssignmentsPage(){
 // opening one never touches any other's entry in that map. bodyFn is a thunk (a zero-arg function
 // that RETURNS html) rather than a pre-built string, so a collapsed section's (sometimes nontrivial)
 // content never gets computed at all - it's only called when open is true.
-function renderDashSection(id, title, summary, bodyFn){
+function renderDashSection(id, title, summary, bodyFn, iconName, accentColor){
   const open = !!state.diagSectionsOpen[id];
-  return `<div class="dash-card">
+  const swatch = iconName ? `<div class="dash-card-icon">${icon(iconName,18)}</div>` : '';
+  return `<div class="dash-card" style="${accentColor?`--section-accent:${accentColor};`:''}">
     <div class="dash-card-header" data-toggle-dash-section="${id}">
       <div class="dash-card-title">
+        ${swatch}
         <span class="dash-card-arrow${open?' open':''}">▶</span>
         <h2>${escapeHtml(title)}</h2>
       </div>
@@ -5788,12 +5869,12 @@ function renderDiagnostics(){
       <button id="btnLockTLArea">\u2190 Lock &amp; back to simulator</button>
     </div>
 
-    ${renderDashSection('assign-scenarios', 'Assign Scenarios', `${pendingCount} pending assignment${pendingCount===1?'':'s'}`, renderAssignScenariosSectionBody)}
-    ${renderDashSection('tl-agent-roster', 'Team Leads & Agent Roster', 'Manage registered teams', renderTeamLeadsRosterSectionBody)}
-    ${renderDashSection('team-progress', 'Team Progress', 'View and review attempts', renderTeamProgressSectionBody)}
-    ${renderDashSection('feedback', 'Feedback & Suggestions', `${unresolvedCount} unresolved suggestion${unresolvedCount===1?'':'s'}`, renderFeedbackManagementSectionBody)}
-    ${renderDashSection('scenario-library', 'Scenario Library', `Browse ${SCENARIOS.length} scenarios`, renderScenarioLibrarySectionBody)}
-    ${renderDashSection('system-tests', 'System Tests', 'Development diagnostics', renderSystemTestsSectionBody)}
+    ${renderDashSection('assign-scenarios', 'Assign Scenarios', `${pendingCount} pending assignment${pendingCount===1?'':'s'}`, renderAssignScenariosSectionBody, 'bolt', '#5b7cff')}
+    ${renderDashSection('tl-agent-roster', 'Team Leads & Agent Roster', 'Manage registered teams', renderTeamLeadsRosterSectionBody, 'users', '#a06bd6')}
+    ${renderDashSection('team-progress', 'Team Progress', 'View and review attempts', renderTeamProgressSectionBody, 'chart', '#3ecf8e')}
+    ${renderDashSection('feedback', 'Feedback & Suggestions', `${unresolvedCount} unresolved suggestion${unresolvedCount===1?'':'s'}`, renderFeedbackManagementSectionBody, 'chat', '#e2a33d')}
+    ${renderDashSection('scenario-library', 'Scenario Library', `Browse ${SCENARIOS.length} scenarios`, renderScenarioLibrarySectionBody, 'grid', '#5bc0be')}
+    ${renderDashSection('system-tests', 'System Tests', 'Development diagnostics', renderSystemTestsSectionBody, 'gear', '#8a919c')}
   </div>`;
 }
 
@@ -6110,6 +6191,7 @@ function renderTLPasswordModal(){
 }
 
 async function init(){
+  loadTheme();
   deviceId = getOrCreateDeviceId();
   loadAgentName();
   loadPersistedAttemptHistory();
