@@ -4703,7 +4703,11 @@ async function loadAllFeedback(){
 // but per Zainab's spec they still show in the Active list until archived or deleted - only the
 // count treats them as "handled."
 function unresolvedFeedbackCount(){
-  return (state.allFeedback||[]).filter(f=>{ const s=feedbackStatus(f); return s!=='resolved' && s!=='archived'; }).length;
+  // Keep this in sync with the same one-entry hide in renderFeedbackEntries() - otherwise the TL
+  // Management badge count still includes a submission that's no longer shown in the list itself.
+  return (state.allFeedback||[])
+    .filter(f => !(!f.id && f.agentName==='Zainab' && f.text==='Love ir'))
+    .filter(f=>{ const s=feedbackStatus(f); return s!=='resolved' && s!=='archived'; }).length;
 }
 function renderFeedbackManagementSectionBody(){
   if(state.feedbackLoadError){
@@ -4716,7 +4720,12 @@ function renderFeedbackEntries(){
     <button class="small${state.feedbackStatusFilter==='active'?' primary':''}" data-feedback-filter="active">Active</button>
     <button class="small${state.feedbackStatusFilter==='archived'?' primary':''}" data-feedback-filter="archived">Archived</button>
   </div>`;
-  const list = state.allFeedback || [];
+  // Hides one specific pre-dating-the-management-system test entry (Zainab's own "Love ir" submission
+  // from early testing, no id so it could never be managed/deleted through the normal buttons above).
+  // Confirmed with Zainab directly - her own old test data, not a real agent's feedback. Filtered here
+  // rather than deleted server-side since this file has no path to the backend's database directly;
+  // this keeps it out of the list for everyone loading this build, which is what actually matters.
+  const list = (state.allFeedback || []).filter(f => !(!f.id && f.agentName==='Zainab' && f.text==='Love ir'));
   const filtered = state.feedbackStatusFilter==='archived'
     ? list.filter(f=>feedbackStatus(f)==='archived')
     : list.filter(f=>feedbackStatus(f)!=='archived');
