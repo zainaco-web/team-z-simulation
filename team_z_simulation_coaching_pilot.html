@@ -1873,6 +1873,20 @@ function pickRandomScenario(pool){
   return leastAttempted[Math.floor(Math.random()*leastAttempted.length)];
 }
 
+// Click-outside-to-close: a click that lands on the darkened backdrop itself (not something inside
+// the modal box) triggers whichever close/cancel button the modal already has - so it does exactly
+// what that button does, nothing more. Only wired onto modals where dismissing costs nothing (a
+// read-only viewer, a confirmation you can cancel). Modals that collect required input with no
+// cancel option (documentation after a chat, the first-time name prompt) are deliberately left out,
+// since a stray click there would silently drop something the agent needed to submit.
+function wireBackdropClose(overlay, closeBtnId){
+  overlay.addEventListener('click', e=>{
+    if(e.target !== overlay) return;
+    const btn = document.getElementById(closeBtnId);
+    if(btn) btn.click();
+  });
+}
+
 function randomizeAndMaybeConfirm(pool){
   if(pool.length===0) return;
   const picked = pickRandomScenario(pool);
@@ -1897,6 +1911,7 @@ function randomizeAndMaybeConfirm(pool){
     </div>
   </div>`;
   document.body.appendChild(overlay);
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
   document.getElementById('btnRandomizeAgain').addEventListener('click', ()=>{ overlay.remove(); randomizeAndMaybeConfirm(pool); });
   document.getElementById('btnRandomizeStartAnyway').addEventListener('click', ()=>{ overlay.remove(); startScenario(picked.id); });
 }
@@ -2085,7 +2100,7 @@ function renderCategoriesView(){
   const hero = `<div class="home-hero">
     <div class="home-hero-eyebrow">Team Z \u00b7 Simulation Engine</div>
     <h1>Practice the real conversations, before they happen for real.</h1>
-    <div class="home-hero-sub">This is Team Z\u2019s training space \u2014 practice handling real-style player chats with an AI-played customer, then get scored the same way a real chat would be: on the outcome, on how it felt to the player, and on your documentation. No real player accounts are ever involved.</div>
+    <div class="home-hero-sub">This is Team Z\u2019s training space. Practice handling real-style player chats with an AI-played customer, then get scored the same way a real chat would be: on the outcome, on how it felt to the player, and on your documentation. No real player accounts are ever involved.</div>
     <div class="home-hero-stats">
       <div class="home-stat-chip">${icon('grid',13)} <strong>${totalScenarios}</strong> practice scenarios</div>
       <div class="home-stat-chip">${icon('archive',13)} <strong>${totalTopics}</strong> topics</div>
@@ -2099,7 +2114,7 @@ function renderCategoriesView(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-top:${assignedBanner?'28px':'0'};">
       <div>
         <h1 style="margin-top:0;">Browse by Topic</h1>
-        <div style="color:var(--text2);font-size:13px;max-width:600px;line-height:1.6;">What a player would actually be contacting about, not the skill being tested \u2014 mirrors how real chats get tagged. Pick a topic to see its scenarios, easiest first.</div>
+        <div style="color:var(--text2);font-size:13px;max-width:600px;line-height:1.6;">Pick a topic to see its scenarios, easiest first.</div>
       </div>
       <button id="btnRandomizeAll" class="primary" style="white-space:nowrap;">\ud83c\udfb2 Surprise Me</button>
     </div>
@@ -3133,7 +3148,7 @@ async function triggerPlayerLeaves(reasonTag){
     const {text:reply} = await callClaude(sys + leaveInstruction, apiMsgs, 'quick');
     state.turnCounter++;
     state.transcript.push({speaker:'player', text:reply, turn:state.turnCounter, ts:Date.now()});
-    state.transcript.push({speaker:'system', text:'\u2014 Player left the chat (no response from agent) \u2014', ts:Date.now()});
+    state.transcript.push({speaker:'system', text:'(Player left the chat - no response from agent)', ts:Date.now()});
   }catch(err){
     console.error('Player-leaves message generation failed, ending the chat anyway:', err);
     state.transcript.push({speaker:'system', text:'(The player left the chat.)', ts:Date.now()});
@@ -3351,7 +3366,7 @@ async function sendAgentMessage(){
     if(endedByPlayer){
       state.playerLeftEarly = true;
       state.playerLeftReason = 'conversational';
-      state.transcript.push({speaker:'system', text:'\u2014 Player left the chat \u2014', ts:Date.now()});
+      state.transcript.push({speaker:'system', text:'(Player left the chat)', ts:Date.now()});
       render();
       finalizeChatEnd();
       return;
@@ -3686,6 +3701,7 @@ function openTeamProgress(filterRoster){
   overlay.innerHTML = renderTeamProgressModal(filterRoster);
   document.body.appendChild(overlay);
   state.teamProgressOpen=true;
+  wireBackdropClose(overlay, 'closeEvalModal');
   wireTeamProgressModal(overlay, filterRoster);
   // Pull the latest shared attempts and reviews in the background so a TL sees teammates' newest work
   // and other TLs' reviews; re-render in place only if this list is still what's on screen.
@@ -3766,6 +3782,7 @@ function openGlobalHistory(){
   overlay.className='modal-overlay';
   overlay.innerHTML = renderGlobalHistoryModal();
   document.body.appendChild(overlay);
+  wireBackdropClose(overlay, 'closeEvalModal');
 
   const closeBtn=document.getElementById('closeEvalModal');
   if(closeBtn) closeBtn.addEventListener('click', ()=> overlay.remove());
@@ -3812,6 +3829,7 @@ function openHistoryList(scenarioId){
   overlay.className='modal-overlay';
   overlay.innerHTML = renderHistoryListModal(scenarioId);
   document.body.appendChild(overlay);
+  wireBackdropClose(overlay, 'closeEvalModal');
 
   const closeBtn=document.getElementById('closeEvalModal');
   if(closeBtn) closeBtn.addEventListener('click', ()=> overlay.remove());
@@ -3863,6 +3881,7 @@ function renderEvalModal(){
   overlay.className='modal-overlay';
   overlay.innerHTML = evalModalContent();
   document.body.appendChild(overlay);
+  wireBackdropClose(overlay, 'closeEvalModal');
 
   const closeBtn=document.getElementById('closeEvalModal');
   if(closeBtn) closeBtn.addEventListener('click', ()=> overlay.remove());
@@ -4106,7 +4125,7 @@ function renderCoachingToolkitTip(sec){
       <div style="color:var(--text2);font-size:13px;line-height:1.55;margin-bottom:10px;">${escapeHtml(sec.body)}</div>
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Example phrasing</div>
       ${sec.phrases.map(p=>`<div style="font-size:13px;color:var(--text);background:var(--panel2);border-radius:6px;padding:7px 10px;margin-bottom:5px;">\u201c${escapeHtml(p)}\u201d</div>`).join('')}
-      ${sec.avoid ? `<div style="font-size:11px;color:var(--bad);text-transform:uppercase;letter-spacing:.04em;margin:10px 0 4px;">Avoid</div>${sec.avoid.map(p=>`<div style="font-size:13px;color:var(--text3);padding:2px 10px;">\u2014 ${escapeHtml(p)}</div>`).join('')}` : ''}
+      ${sec.avoid ? `<div style="font-size:11px;color:var(--bad);text-transform:uppercase;letter-spacing:.04em;margin:10px 0 4px;">Avoid</div>${sec.avoid.map(p=>`<div style="font-size:13px;color:var(--text3);padding:2px 10px;">\u2022 ${escapeHtml(p)}</div>`).join('')}` : ''}
     </div>`;
 }
 
@@ -4655,7 +4674,7 @@ function renderAmbiguousNamesPanel(log){
     <div style="font-weight:700;color:var(--warn);margin-bottom:8px;">\u26a0 ${ambiguous.length} name${ambiguous.length===1?'':'s'} need manual resolution</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">These match more than one registered agent, so they have NOT been auto-matched to either one - their attempts are held out of everyone's grouped history below until you pick the right person.</div>
     ${ambiguous.map(a=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
-      <span style="font-size:13px;">"${escapeHtml(a.raw)}" is \u2014</span>
+      <span style="font-size:13px;">"${escapeHtml(a.raw)}" is:</span>
       <select class="ambiguousResolveSelect" data-raw="${escapeHtml(a.raw)}">
         <option value="">Choose the agent\u2026</option>
         ${a.candidates.map(c=>`<option value="${escapeHtml(c.canonicalName)}">${escapeHtml(c.canonicalName)}</option>`).join('')}
@@ -4921,7 +4940,7 @@ async function sendChallengeMessage(slotIndex){
     if(endedByPlayer){
       slot.playerLeftEarly = true;
       slot.playerLeftReason = 'conversational';
-      slot.transcript.push({speaker:'system', text:'\u2014 Player left the chat \u2014', ts:Date.now()});
+      slot.transcript.push({speaker:'system', text:'(Player left the chat)', ts:Date.now()});
       finalizeChallengeSlotChat(slotIndex);
       return;
     }
@@ -4983,7 +5002,7 @@ async function triggerChallengeLeave(slotIndex, reasonTag){
     const {text:reply} = await callClaude(sys + leaveInstruction, apiMsgs, 'quick');
     slot.turnCounter++;
     slot.transcript.push({speaker:'player', text:reply, turn:slot.turnCounter, ts:Date.now()});
-    slot.transcript.push({speaker:'system', text:'\u2014 Player left the chat (no response from agent) \u2014', ts:Date.now()});
+    slot.transcript.push({speaker:'system', text:'(Player left the chat - no response from agent)', ts:Date.now()});
   }catch(err){
     console.error('Challenge slot leave-message generation failed, ending anyway:', err);
     slot.transcript.push({speaker:'system', text:'(The player left the chat.)', ts:Date.now()});
@@ -6120,6 +6139,7 @@ function renderClearDataConfirm(){
     </div>
   </div>`;
   document.body.appendChild(overlay);
+  wireBackdropClose(overlay, 'btnCancelClearData');
   document.getElementById('btnCancelClearData').addEventListener('click', ()=> overlay.remove());
   document.getElementById('btnConfirmClearData').addEventListener('click', async ()=>{
     await clearMyAttemptData();
@@ -6186,6 +6206,7 @@ function renderTLPasswordModal(){
     </div>
   </div>`;
   document.body.appendChild(overlay);
+  wireBackdropClose(overlay, 'btnCancelTLPassword');
   const input = document.getElementById('tlPasswordInput');
   input.focus();
   const submit = ()=>{
