@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Team Z Coaching Pilot — Simulation Engine (Phase 1 Prototype)</title>
+<title>Team Z Coaching Pilot - Simulation Engine (Phase 1 Prototype)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -222,7 +222,7 @@
 <div class="app" id="app"></div>
 <script>
 /* ============================================================
-   TEAM Z COACHING PILOT — PHASE 1 PROTOTYPE (Corrected build)
+   TEAM Z COACHING PILOT - PHASE 1 PROTOTYPE (Corrected build)
    Scenario/player content is fictional training data - no real Betty player accounts involved.
    Chat/scoring calls and shared Team Progress + TL Assignments run through a real backend server
    (see BACKEND_URL below), with attempt data persisted server-side, not just in this browser tab.
@@ -1754,7 +1754,7 @@ const SCENARIOS = [
     endConditionsGuide:'End once the conversation reaches a controlled, professional close - the correct policy outcome delivered without the agent getting personally pulled into defending their own credibility. That can look like the player accepting the screenshot request and a note left on file as a real next step, or it can look like the player still leaving frustrated because earlier defensiveness cost that same next step its credibility - not just once the player stops responding or logs off.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
     readiness:'PILOT_READY',
-    metadata:{kbSources:['Refer a Friend (RAF) — Choose Your RAF policy article','Manual Adjustments & Goodwill Compensation Policy (Promotion Issues table)','Compliance case review, Chat ID TM13DFZAKS'], lastValidatedDate:'2026-09-30', validatedBy:'Zainab (TL), corroborated by Compliance case review', reviewTriggerCategory:'Complaints & Escalations', policyVersionRef:null},
+    metadata:{kbSources:['Refer a Friend (RAF) - Choose Your RAF policy article','Manual Adjustments & Goodwill Compensation Policy (Promotion Issues table)','Compliance case review, Chat ID TM13DFZAKS'], lastValidatedDate:'2026-09-30', validatedBy:'Zainab (TL), corroborated by Compliance case review', reviewTriggerCategory:'Complaints & Escalations', policyVersionRef:null},
     kbSource:'Fully grounded (validated 2026-09-30 against the real RAF article and the Manual Adjustments & Goodwill Compensation Policy), and revised the same day after a closer TL read of the actual transcript. The reward decision itself is real KB, not a judgment call: the RAF article’s dispute-tag table defines exactly this case - “RAF: Link/Promo expired - the friend’s deposit landed after the promo window” - and the Manual Adjustments table’s Promotion Issues section separately lists “Delayed deposits → Decline the request.” So the referral being denied is policy-correct, and the agent should hold that line. The scoring focus of this scenario is deliberately NOT whether the agent knows that policy - it’s whether they can deliver a correct, unwelcome answer without getting personally pulled into defending their own credibility. In the real transcript this is modeled on, the agent’s process answer was right the whole way through; what damaged the interaction was a pattern of self-defensive phrasing (“I do not lie,” “I work here and know our procedures,” a comment about not wanting “a passive aggressive conversation to start my shift”) and letting the player repeatedly bait her into re-litigating a “gotcha” about the word “review” instead of resetting it once. Note: a TL/supervisor hand-off is deliberately NOT treated as a required response to the legal threat here - no KB document makes that a hard rule, and the real agent did not do that either. What the real agent DID do - keep asking for screenshots and leave a note on the account as a return path - was a legitimate next step; the coaching problem was that the delivery up to that point had already cost the trust needed for that next step to land as credible. This is confirmed by the real outcome, not just a training-materials read: Compliance formally reviewed this exact chat (Chat ID TM13DFZAKS), flagged it as a rude and inappropriate way to speak to the customer, explicitly noted the customer was wrong on the underlying policy, and still recommended a one-time goodwill gesture plus an apology "considering how their query was handled." Both were issued, alongside feedback delivered to the agent and her TL. Betty’s own Compliance team reached the identical conclusion this scenario is built to teach: being right on policy did not protect against a real cost once delivery broke down. That cost is a reason to fix the in-the-moment behavior, not a reason to preemptively offer compensation on a case you’re right about. Per the real QA Chat Scorecard, Resolution & Obligations and Player Experience are scored as fully independent questions - this scenario is built specifically to test that a correct, well-defended reward denial cannot pull up a poor Player Experience score.',
 
     playerKnowledge:{
@@ -1819,7 +1819,7 @@ let state = {
   evaluation:null,
   tlOverrides:{},
   investigated:{},      // caseData id -> true, once revealed. Reset per scenario.
-  actionLog:[],           // [{label, tab, atTurn}] — investigation actions, in order, for evaluator evidence
+  actionLog:[],           // [{label, tab, atTurn}] - investigation actions, in order, for evaluator evidence
   attemptHistory:{},      // scenarioId -> [{attemptNum, timestamp, transcript, actionLog, evaluation, tlOverrides, docNote, docTag}]
   currentAttemptArchived:false,  // true once the in-progress attempt has been saved into attemptHistory
   docNote:'',
@@ -1954,6 +1954,14 @@ function render(){
   const activeId = active && active.id;
   const selStart = (active && typeof active.selectionStart === 'number') ? active.selectionStart : null;
   const selEnd = (active && typeof active.selectionEnd === 'number') ? active.selectionEnd : null;
+  // Same problem, same fix, for scroll position: rebuilding .main and .side from scratch resets
+  // their scrollTop to 0 every time, which is very noticeable when expanding/collapsing a TL
+  // Management section (e.g. Team Progress) scrolls the whole page back to the top instead of
+  // leaving you where you were. Capture before the rebuild, restore after.
+  const prevMainScroll = document.querySelector('.main');
+  const prevMainScrollTop = prevMainScroll ? prevMainScroll.scrollTop : null;
+  const prevSideScroll = document.querySelector('.side');
+  const prevSideScrollTop = prevSideScroll ? prevSideScroll.scrollTop : null;
   app.innerHTML = renderTopbarGlobal() + `<div class="body-grid">${renderIconRail()}${renderScenarioList()}${renderMain()}${renderSide()}</div>`;
   wireEvents();
   if(activeId){
@@ -1964,6 +1972,14 @@ function render(){
         try{ restored.setSelectionRange(selStart, selEnd); }catch(err){}
       }
     }
+  }
+  if(prevMainScrollTop!==null){
+    const newMain = document.querySelector('.main');
+    if(newMain) newMain.scrollTop = prevMainScrollTop;
+  }
+  if(prevSideScrollTop!==null){
+    const newSide = document.querySelector('.side');
+    if(newSide) newSide.scrollTop = prevSideScrollTop;
   }
   scrollChatToBottom();
 }
