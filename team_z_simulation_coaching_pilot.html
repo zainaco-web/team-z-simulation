@@ -1807,6 +1807,7 @@ let state = {
   diagSectionsOpen:{},
   diagSubsectionsOpen:{},
   manageAssignmentsAgent:'', // which agent's assignments are shown in the Manage Assignments subsection
+  assignFormSelectedAgent:'', // narrows the Assign Scenarios scenario dropdown to what this agent can see
   agentDirectorySearch:'',   // search text for the All Registered Agents subsection
   editingAgentCanonical:null, // canonical name currently loaded into the registration form for editing
   scenarioLibrarySearch:'',
@@ -1854,10 +1855,32 @@ let state = {
   playerLeftReason:null,     // 'silence' | 'conversational' - which trigger fired, for the evaluator's context
   challenge:null,             // {active, tier, slots[], activeSlotIndex, sessionStartedAt, switchLog, sessionEvaluation, sessionEvalLoading} while a Challenge Mode session is running
   challengeSilenceInterval:null,
+  challengeArrivalInterval:null,
+  composerDraft:'', // preserves an unsent message in the single-chat composer across re-renders (e.g. a silence nudge arriving mid-sentence)
   historyDrilldownScenario:null, // scenario id when drilled into one scenario's attempts on the History page
   feedbackText:'',
   feedbackJustSubmitted:false,
   feedbackSubmitError:null,
+
+  // ---------- TL SCENARIO BUILDER ----------
+  customScenarios:[],          // TL-created scenarios, shared backend, see loadCustomScenarios()
+  customScenariosLoadError:null,
+  scenarioBuilderTLName:'',    // "working as" TL identity for Create Scenario - same model as getLastAssigningTL()
+  scenarioBuilderMode:'scratch', // 'scratch' | 'duplicate'
+  scenarioBuilderIntake:{ whatHappened:'', struggle:'', desiredBehavior:'', correctProcess:'', kbInfo:'', playerBehavior:'', difficulty:'Applied', topic:'', escalationNotes:'' },
+  scenarioBuilderGenerating:false,
+  scenarioBuilderGenerated:null, // the structured scenario object, in preview/edit, before saving
+  scenarioBuilderEditingId:null, // set when editing an existing custom scenario instead of creating new
+  scenarioBuilderError:null,
+  scenarioBuilderVisibility:'private', // 'private' | 'team' | 'library'
+  scenarioBuilderTargetAgent:'',
+  scenarioBuilderDuplicateSource:'',
+  scenarioBuilderSourceType:'scratch', // 'scratch' | 'duplicate' - carried onto the saved record
+  scenarioBuilderDuplicatedFromId:null,
+  scenarioBuilderPendingReviewReset:false, // true when editing a previously-reviewed scenario - saving resubmits it
+  scenarioBuilderSavedNotice:null,
+  scenarioLibraryViewingTLName:'', // scopes "My Created Scenarios" / review queue visibility helpers
+  reviewQueueDraftNotes:{},     // scenarioId -> in-progress review note text, session-only
 };
 
 // Agent-facing pool: excludes ENGINE_TEST_ONLY scenarios (fictional system mechanics agents
@@ -1865,7 +1888,364 @@ let state = {
 // still use the full SCENARIOS list - only pools an agent can browse/randomize into are filtered.
 const PILOT_SCENARIOS = SCENARIOS.filter(s => s.readiness !== 'ENGINE_TEST_ONLY');
 
-function scenarioById(id){ return SCENARIOS.find(s=>s.id===id); }
+// Checks built-ins first, then TL-created custom scenarios - so every existing caller (attempt
+// history, TL review, assignments, Challenge Mode) resolves a custom scenario exactly like a built-in
+// one, with zero changes needed at the call site. Built-ins are never mutated by anything in this
+// file (there is no "edit built-in scenario" UI) - a TL "editing" a built-in via Duplicate always
+// produces a brand-new id in state.customScenarios instead, so this lookup never has to choose
+// between two different versions of the same built-in id.
+function scenarioById(id){ return SCENARIOS.find(s=>s.id===id) || state.customScenarios.find(s=>s.id===id); }
+
+// ---------- TL SCENARIO BUILDER: visibility / permissions ----------
+// These are the ONLY gate custom scenarios pass through before appearing in any agent- or TL-facing
+// list. Per Zainab's explicit requirement, this is enforced from the stored scenario's own metadata
+// (visibility/targetAgent/targetTeam/reviewStatus), not just a UI element being hidden - every one of
+// the lists below (Home browse-by-topic, Challenge Mode composition, the assignment picker, the
+// duplicate-source picker) is built by filtering through these functions, never by reading
+// state.customScenarios directly.
+//
+// Honest limitation (documented once here, not repeated everywhere): this app has no TL login/account
+// system - "which TL am I" is a free-text name the TL types, the same soft-identity model already used
+// for "assigning TL" on assignments. That means visibility here is real, metadata-driven filtering
+// (nothing "private" is ever sent into a shared/browsable list), but it is not a cryptographic access
+// boundary - a TL who deliberately types a different TL's name can see what that name can see. That
+// matches the trust level of the rest of this internal pilot tool (see "Team/TL filter is
+// convenience-only" elsewhere), and should be revisited if this ever needs real per-person accounts.
+function canAgentSeeCustomScenario(cs, agentCanonicalName){
+  if(!cs) return false;
+  if(cs.visibility==='library') return cs.reviewStatus==='approved';
+  if(cs.visibility==='private') return !!agentCanonicalName && namesMatch(cs.targetAgent, agentCanonicalName);
+  if(cs.visibility==='team'){
+    if(!agentCanonicalName || !cs.targetTeam) return false;
+    const roster = state.tlRosters.find(r=>namesMatch(r.tlName, cs.targetTeam));
+    return !!roster && roster.agents.some(a=>namesMatch(a, agentCanonicalName));
+  }
+  return false;
+}
+// Pool an agent can browse/practice/be randomized into, in addition to the normal built-in pool.
+function visibleCustomScenariosFor(agentCanonicalName){
+  return state.customScenarios.filter(cs => cs.readiness!=='ENGINE_TEST_ONLY' && canAgentSeeCustomScenario(cs, agentCanonicalName));
+}
+// Full practice pool (built-in + whatever custom scenarios this specific agent is allowed to see) -
+// use this anywhere PILOT_SCENARIOS was used for an agent-facing browse/randomize/Challenge pool.
+function practicePoolFor(agentCanonicalName){
+  return [...PILOT_SCENARIOS, ...visibleCustomScenariosFor(agentCanonicalName)];
+}
+// A TL always sees their own created scenarios regardless of visibility (private/team/library, any
+// review status) - this is their own working list, not the agent-facing pool above.
+function customScenariosCreatedBy(tlName){
+  if(!tlName) return [];
+  return state.customScenarios.filter(cs => namesMatch(cs.createdBy, tlName));
+}
+// The org-wide review queue: every scenario any TL has submitted for the shared library, regardless
+// of who created it or which team they lead - reviewing is a QA/management function, not scoped to
+// one TL's own team the way private/team visibility is.
+function libraryReviewQueue(){
+  return state.customScenarios.filter(cs => cs.visibility==='library');
+}
+// What a TL can offer as a "duplicate this" starting point: built-ins, their own custom scenarios
+// (any status), and any already-approved shared-library scenario - never another TL's private/team
+// draft, which would defeat the point of it being private/team-scoped in the first place.
+function duplicateSourcePoolFor(tlName){
+  const ownOrApproved = state.customScenarios.filter(cs => namesMatch(cs.createdBy, tlName) || (cs.visibility==='library' && cs.reviewStatus==='approved'));
+  return [...SCENARIOS.filter(s=>s.readiness!=='ENGINE_TEST_ONLY'), ...ownOrApproved];
+}
+function genCustomScenarioId(){
+  return 'cs_' + Date.now().toString(36) + '_' + (deviceId||'d').slice(0,8) + '_' + Math.random().toString(36).slice(2,8);
+}
+
+// ---------- TL SCENARIO BUILDER: generation, duplication, editing, saving ----------
+function buildScenarioGenerationPrompt(intake){
+  return `You are helping a Team Lead at Betty (an iGaming customer support operation) turn a plain-language coaching need into a structured practice scenario for an internal training simulator. Output ONLY a single JSON object - no markdown fences, no commentary before or after.
+
+The TL described:
+- What happened in the real chat: ${intake.whatHappened || '(not provided)'}
+- What the agent struggled with: ${intake.struggle || '(not provided)'}
+- What behaviour they want practised: ${intake.desiredBehavior || '(not provided)'}
+- What the correct process/outcome should be: ${intake.correctProcess || '(not provided)'}
+- Relevant KB/process info the TL provided (use ONLY this for specifics - do not invent additional specific policy numbers, timeframes, or KB citations beyond what's given here or directly implied by "correct process/outcome" above): ${intake.kbInfo || '(none provided - keep process grounding general and do not invent specific numbers/policies)'}
+- Desired player behaviour/persona: ${intake.playerBehavior || '(use your judgment for a realistic, moderately challenging player)'}
+- Escalation/tagging/documentation requirements the TL specified: ${intake.escalationNotes || '(none specified - use reasonable defaults)'}
+- Difficulty: ${intake.difficulty}
+- Topic/category: ${intake.topic || 'General'}
+
+CRITICAL GROUNDING RULE: this scenario will be labeled "TL Coaching Draft - Not Validated" regardless of what you write, because it has not been checked against real Betty KB. Do not write the process grounding as if it were a verified KB citation - phrase it as the coaching standard the TL described. If the TL did not give specific numbers/timeframes/policy details, do NOT invent precise-sounding ones (no specific hour counts, dollar thresholds, or policy names that weren't given) - instead keep guidance general and note any gaps in ambiguityNotes.
+
+Produce a JSON object with EXACTLY these fields (match this shape precisely, using realistic Betty iGaming customer-support content):
+{
+  "title": "short player-facing title, e.g. 'Delayed Withdrawal (Interac)'",
+  "playerName": "a first name for the simulated player",
+  "agentBriefing": "1-2 sentences, what the agent sees before the chat starts",
+  "personaPrompt": "a full second-person persona prompt for the AI playing the customer, 150-350 words, written exactly like: 'You are [Name], [age/tone]... [situation]... [how they react to good vs vague answers]... [what they do and do not know]...' - make it specific to this scenario and difficulty level",
+  "playerKnowledgeSituation": "1-2 sentences, the player's own account of their situation",
+  "caseData": [ {"tab":"a case-data tab name like 'Transaction History'", "label":"short label", "value":"the actual detail the agent would see", "gated": true or false, "gateLabel": "button text if gated, e.g. 'View Transaction History'"} , ... 2 to 4 items ],
+  "correctTag": "the single best-matching documentation tag for this case, Betty-style, e.g. 'Withdrawal: Interac: In Progress'",
+  "tagOptions": ["correctTag plus 3 other plausible-but-wrong tags, 4 total"],
+  "hasSecondaryRGTag": true or false (true only if the TL's description genuinely involves a Responsible Gambling concern),
+  "correctSecondaryTag": "an RG flag tag if hasSecondaryRGTag is true, else null",
+  "secondaryTagOptions": ["None", "the correct RG flag", "one other plausible RG flag"] or null,
+  "ahtTargetMinutes": a reasonable integer 5-20 based on difficulty/complexity,
+  "processGrounding": {
+    "kbTopic": "short topic label for this process area",
+    "kbText": "the correct-process explanation, grounded in what the TL described - phrase this as coaching guidance, not a verified KB quote",
+    "requiredActions": ["2-4 specific things the agent must do, derived from the TL's 'correct process/outcome' description"],
+    "optionalActions": ["0-2 good-but-not-mandatory actions"],
+    "escalationCriteria": "when this should be escalated, from the TL's description or a reasonable default",
+    "criticalErrors": "1-3 sentences on what a critical failure looks like for this case, derived from what the TL said the agent struggled with",
+    "ambiguityNotes": "note any real gaps or assumptions you had to make because the TL didn't specify something - be honest here, do not pretend everything was fully specified"
+  }
+}
+
+Write naturally and specifically - avoid generic filler. The persona should feel like a real player, with a believable name, tone, and reaction pattern. Output ONLY the JSON object.`;
+}
+
+function normalizeGeneratedScenario(raw, intake){
+  raw = raw || {};
+  const topic = (intake.topic||'General').trim() || 'General';
+  const difficulty = intake.difficulty || 'Applied';
+  const caseData = Array.isArray(raw.caseData) ? raw.caseData.map((c,i)=>({
+    id: 'c'+(i+1),
+    tab: String((c&&c.tab)||'Case Details'),
+    label: String((c&&c.label)||'Detail'),
+    value: String((c&&c.value)||''),
+    gated: !!(c&&c.gated),
+    gateLabel: (c&&c.gateLabel) ? String(c.gateLabel) : 'Investigate',
+  })) : [];
+  const tagOptions = Array.isArray(raw.tagOptions) && raw.tagOptions.length ? raw.tagOptions.map(String) : [String(raw.correctTag||'General: Unclear Query')];
+  const hasSecondary = !!raw.hasSecondaryRGTag && !!raw.correctSecondaryTag;
+  const pg = raw.processGrounding || {};
+  const scenario = {
+    isCustom:true,
+    skill: topic, skillCode:'CUSTOM', difficulty,
+    internalTitle: String(raw.title||'Untitled Scenario'), title: String(raw.title||'Untitled Scenario'),
+    playerName: String(raw.playerName||'Player'),
+    agentBriefing: String(raw.agentBriefing||''),
+    endConditionsGuide: 'End once the case reaches a clear, complete resolution or a reasonable natural close.',
+    kbStatus:'tl_coaching_draft', engineTestRG:false, rgScoringRelevant: hasSecondary,
+    readiness:'PRACTICE_ONLY',
+    metadata:{kbSources:[], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:topic, policyVersionRef:null},
+    kbSource: intake.kbInfo ? 'TL-provided process info (not independently verified): ' + intake.kbInfo.slice(0,300) : 'No specific KB citation provided by the creating TL - coaching draft only.',
+    playerKnowledge:{ situation: String(raw.playerKnowledgeSituation||'') },
+    personaPrompt: String(raw.personaPrompt||''),
+    caseData,
+    correctTag: String(raw.correctTag||tagOptions[0]),
+    tagOptions,
+    ahtTargetMinutes: Number.isFinite(raw.ahtTargetMinutes) ? Math.round(raw.ahtTargetMinutes) : 12,
+    topic,
+    processGrounding:{
+      kbTopic: String(pg.kbTopic||topic),
+      kbText: String(pg.kbText||''),
+      requiredActions: Array.isArray(pg.requiredActions)&&pg.requiredActions.length ? pg.requiredActions.map(String) : ['Confirm the details with the player before responding.'],
+      optionalActions: Array.isArray(pg.optionalActions) ? pg.optionalActions.map(String) : [],
+      escalationCriteria: String(pg.escalationCriteria||'Escalate to a TL if the player disputes the outcome or the case falls outside normal handling.'),
+      criticalErrors: String(pg.criticalErrors||'Giving the player inaccurate or unsupported information, or failing to resolve the core issue.'),
+      ambiguityNotes: String(pg.ambiguityNotes||''),
+    },
+  };
+  if(hasSecondary){
+    scenario.correctSecondaryTag = String(raw.correctSecondaryTag);
+    scenario.secondaryTagOptions = Array.isArray(raw.secondaryTagOptions)&&raw.secondaryTagOptions.length ? raw.secondaryTagOptions.map(String) : ['None', String(raw.correctSecondaryTag)];
+  }
+  return scenario;
+}
+
+async function generateScenarioFromIntake(){
+  const intake = state.scenarioBuilderIntake;
+  if(!intake.whatHappened.trim() && !intake.correctProcess.trim()){
+    state.scenarioBuilderError = 'Please describe at least what happened and what the correct process/outcome should be before generating.';
+    render();
+    return;
+  }
+  state.scenarioBuilderGenerating = true;
+  state.scenarioBuilderError = null;
+  render();
+  try{
+    const prompt = buildScenarioGenerationPrompt(intake);
+    const raw = await callClaudeJson(prompt, 'complex');
+    state.scenarioBuilderGenerated = normalizeGeneratedScenario(raw, intake);
+    state.scenarioBuilderEditingId = null;
+    state.scenarioBuilderSourceType = 'scratch';
+    state.scenarioBuilderDuplicatedFromId = null;
+    state.scenarioBuilderPendingReviewReset = false;
+  }catch(err){
+    state.scenarioBuilderError = 'Scenario generation failed: ' + (err.message || String(err));
+  }finally{
+    state.scenarioBuilderGenerating = false;
+    render();
+  }
+}
+
+// Deep-clones only the content fields a scenario shares with the simulation/scoring engine - never
+// id, createdBy, visibility, or review state. Safe both for "duplicate someone else's approved
+// scenario" and "load my own draft back into the form to edit."
+function cloneScenarioContentFields(s){
+  return JSON.parse(JSON.stringify({
+    isCustom:true,
+    skill:s.skill||s.topic, skillCode:s.skillCode||'CUSTOM', difficulty:s.difficulty,
+    internalTitle:s.internalTitle||s.title, title:s.title, playerName:s.playerName,
+    agentBriefing:s.agentBriefing||'', endConditionsGuide:s.endConditionsGuide||'End once the case reaches a clear, complete resolution or a reasonable natural close.',
+    kbStatus:'tl_coaching_draft', engineTestRG:false, rgScoringRelevant:!!s.rgScoringRelevant,
+    readiness:'PRACTICE_ONLY',
+    metadata:s.metadata||{kbSources:[],lastValidatedDate:null,validatedBy:null,reviewTriggerCategory:s.topic,policyVersionRef:null},
+    kbSource:s.kbSource||'',
+    playerKnowledge: s.playerKnowledge||{situation:''},
+    personaPrompt:s.personaPrompt||'',
+    caseData: (s.caseData||[]).map((c,i)=>({id:c.id||('c'+(i+1)), tab:c.tab, label:c.label, value:c.value, gated:!!c.gated, gateLabel:c.gateLabel||'Investigate'})),
+    correctTag:s.correctTag, tagOptions:[...(s.tagOptions||[])],
+    ...(s.correctSecondaryTag ? {correctSecondaryTag:s.correctSecondaryTag, secondaryTagOptions:[...(s.secondaryTagOptions||['None'])]} : {}),
+    ahtTargetMinutes:s.ahtTargetMinutes||12,
+    topic:s.topic,
+    processGrounding: s.processGrounding||{kbTopic:'',kbText:'',requiredActions:[],optionalActions:[],escalationCriteria:'',criticalErrors:'',ambiguityNotes:''},
+  }));
+}
+
+function startDuplicateFromSource(sourceId){
+  const source = scenarioById(sourceId);
+  if(!source) return;
+  const cloned = cloneScenarioContentFields(source);
+  cloned.title = source.title + ' (Copy)';
+  cloned.internalTitle = (source.internalTitle||source.title) + ' (Copy)';
+  state.scenarioBuilderGenerated = cloned;
+  state.scenarioBuilderEditingId = null;
+  state.scenarioBuilderSourceType = 'duplicate';
+  state.scenarioBuilderDuplicatedFromId = source.id;
+  state.scenarioBuilderPendingReviewReset = false;
+  state.scenarioBuilderVisibility = 'private';
+  state.scenarioBuilderTargetAgent = '';
+  state.scenarioBuilderError = null;
+  render();
+}
+
+function startEditCustomScenario(id){
+  const cs = state.customScenarios.find(s=>s.id===id);
+  if(!cs) return;
+  const cloned = cloneScenarioContentFields(cs);
+  const wasReviewed = cs.visibility==='library' && (cs.reviewStatus==='approved' || cs.reviewStatus==='rejected_archived' || cs.reviewStatus==='changes_requested');
+  // Editing content that already passed (or failed) review must not keep its old verdict silently
+  // attached to now-different content - see the banner this triggers in the preview/edit form.
+  cloned.kbStatus = wasReviewed ? 'tl_coaching_draft' : cs.kbStatus;
+  state.scenarioBuilderGenerated = cloned;
+  state.scenarioBuilderEditingId = id;
+  state.scenarioBuilderSourceType = cs.sourceType||'scratch';
+  state.scenarioBuilderDuplicatedFromId = cs.duplicatedFromId||null;
+  state.scenarioBuilderPendingReviewReset = wasReviewed;
+  state.scenarioBuilderVisibility = cs.visibility;
+  state.scenarioBuilderTargetAgent = cs.targetAgent||'';
+  state.scenarioBuilderError = null;
+  state.scenarioBuilderSavedNotice = null;
+  render();
+  const anchor = document.getElementById('scenarioBuilderPreviewAnchor');
+  if(anchor) anchor.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+async function deleteCustomScenarioWithConfirm(id){
+  await deleteCustomScenarioRemote(id);
+  if(state.scenarioBuilderEditingId===id){ state.scenarioBuilderGenerated=null; state.scenarioBuilderEditingId=null; }
+  render();
+}
+
+async function saveScenarioBuilderDraft(){
+  const gen = state.scenarioBuilderGenerated;
+  if(!gen) return;
+  // Final normalization pass - textareas are synced as raw split('\n') arrays while typing (see
+  // wireEvents) so the field doesn't fight the user mid-edit; clean them up once, here, right before
+  // anything is persisted.
+  gen.title = (gen.title||'').trim();
+  gen.internalTitle = gen.title;
+  gen.playerName = (gen.playerName||'').trim() || 'Player';
+  gen.ahtTargetMinutes = Number(gen.ahtTargetMinutes) > 0 ? Math.round(Number(gen.ahtTargetMinutes)) : 12;
+  gen.correctTag = (gen.correctTag||'').trim();
+  gen.tagOptions = (gen.tagOptions||[]).map(s=>s.trim()).filter(Boolean);
+  if(gen.correctTag && !gen.tagOptions.includes(gen.correctTag)) gen.tagOptions.unshift(gen.correctTag);
+  if(gen.tagOptions.length===0) gen.tagOptions = [gen.correctTag||'General: Unclear Query'];
+  if(gen.correctSecondaryTag!==undefined){
+    gen.correctSecondaryTag = (gen.correctSecondaryTag||'').trim();
+    gen.secondaryTagOptions = (gen.secondaryTagOptions||[]).map(s=>s.trim()).filter(Boolean);
+    if(!gen.secondaryTagOptions.includes('None')) gen.secondaryTagOptions.unshift('None');
+    if(gen.correctSecondaryTag && !gen.secondaryTagOptions.includes(gen.correctSecondaryTag)) gen.secondaryTagOptions.push(gen.correctSecondaryTag);
+    if(!gen.correctSecondaryTag){ delete gen.correctSecondaryTag; delete gen.secondaryTagOptions; }
+  }
+  gen.processGrounding.requiredActions = (gen.processGrounding.requiredActions||[]).map(s=>s.trim()).filter(Boolean);
+  gen.processGrounding.optionalActions = (gen.processGrounding.optionalActions||[]).map(s=>s.trim()).filter(Boolean);
+  if(gen.processGrounding.requiredActions.length===0) gen.processGrounding.requiredActions = ['Confirm the details with the player before responding.'];
+  const tlName = (state.scenarioBuilderTLName||'').trim();
+  if(!tlName){ state.scenarioBuilderError = 'Enter your name as the creating TL before saving.'; render(); return; }
+  if(!gen.title || !gen.title.trim()){ state.scenarioBuilderError = 'Title is required.'; render(); return; }
+  if(state.scenarioBuilderVisibility==='private' && !state.scenarioBuilderTargetAgent){
+    state.scenarioBuilderError = 'Pick the agent this private scenario is for.'; render(); return;
+  }
+  state.scenarioBuilderError = null;
+  setLastAssigningTL(tlName);
+  const now = Date.now();
+  const existing = state.scenarioBuilderEditingId ? state.customScenarios.find(s=>s.id===state.scenarioBuilderEditingId) : null;
+
+  let reviewStatus = 'draft';
+  if(state.scenarioBuilderVisibility==='library'){
+    if(state.scenarioBuilderPendingReviewReset){
+      reviewStatus = 'pending_qa_review';
+    } else {
+      const existingStatus = (existing && existing.visibility==='library') ? existing.reviewStatus : null;
+      reviewStatus = (existingStatus==='pending_qa_review' || existingStatus==='approved') ? existingStatus : 'pending_qa_review';
+    }
+  }
+
+  const commonFields = {
+    ...gen,
+    visibility: state.scenarioBuilderVisibility,
+    targetAgent: state.scenarioBuilderVisibility==='private' ? state.scenarioBuilderTargetAgent : null,
+    targetTeam: state.scenarioBuilderVisibility==='team' ? tlName : null,
+    reviewStatus,
+  };
+
+  if(state.scenarioBuilderEditingId){
+    const versionEntry = { version:(existing?.version||1)+1, editedBy:tlName, editedAt:now, changeSummary: state.scenarioBuilderPendingReviewReset ? 'Edited and resubmitted for review' : 'Edited via Create Scenario form' };
+    const patch = { ...commonFields, version: versionEntry.version, history:[...(existing?.history||[]), versionEntry] };
+    await patchCustomScenarioRemote(state.scenarioBuilderEditingId, patch);
+    state.scenarioBuilderSavedNotice = `Saved changes to "${gen.title}".`;
+  } else {
+    const id = genCustomScenarioId();
+    const entry = {
+      ...commonFields, id,
+      createdBy: tlName, createdAt: now,
+      sourceType: state.scenarioBuilderSourceType||'scratch',
+      duplicatedFromId: state.scenarioBuilderDuplicatedFromId||null,
+      reviewedBy:null, reviewedDate:null, reviewNotes:null,
+      version:1,
+      history:[{version:1, editedBy:tlName, editedAt:now, changeSummary:'Created'}],
+    };
+    await createCustomScenarioRemote(entry);
+    state.scenarioBuilderSavedNotice = `Saved "${gen.title}" - ${scenarioVisibilityLabel(entry)}${entry.reviewStatus==='pending_qa_review' ? ' (submitted for QA review)' : ''}.`;
+  }
+  state.scenarioBuilderGenerated = null;
+  state.scenarioBuilderEditingId = null;
+  state.scenarioBuilderPendingReviewReset = false;
+  state.scenarioBuilderIntake = emptyScenarioIntake();
+  render();
+}
+
+async function submitReviewAction(id, reviewStatus){
+  const reviewerInput = document.querySelector(`[data-review-reviewer-name="${id}"]`);
+  const notesInput = document.querySelector(`[data-review-notes="${id}"]`);
+  const kbStatusInput = document.querySelector(`[data-review-kb-status="${id}"]`);
+  const reviewerName = reviewerInput ? reviewerInput.value.trim() : '';
+  const notes = notesInput ? notesInput.value.trim() : '';
+  if(!reviewerName){ alert('Enter your name as the reviewer before taking action.'); return; }
+  if((reviewStatus==='changes_requested' || reviewStatus==='rejected_archived') && !notes){
+    alert('Please add review notes explaining what needs to change (or why this was rejected).');
+    return;
+  }
+  setLastAssigningTL(reviewerName);
+  const patch = { reviewStatus, reviewedBy: reviewerName, reviewedDate: Date.now(), reviewNotes: notes || null };
+  if(reviewStatus==='approved'){
+    // The reviewer explicitly chooses the resulting kbStatus - approval NEVER silently inherits or
+    // upgrades a label on its own; "Leave as TL Coaching Draft" is a legitimate approval outcome
+    // (e.g. approved as a good practice exercise without being tied to an authoritative citation).
+    patch.kbStatus = kbStatusInput ? kbStatusInput.value : 'tl_coaching_draft';
+  }
+  await patchCustomScenarioRemote(id, patch);
+  delete state.reviewQueueDraftNotes[id];
+  render();
+}
 
 function pickRandomScenario(pool){
   // Bias toward scenarios this agent hasn't attempted yet, so "Randomize" can't be used
@@ -2084,8 +2464,9 @@ function renderScenarioList(){
 }
 
 function renderCategoriesView(){
+  const pool = practicePoolFor(state.agentName);
   const topics = {};
-  PILOT_SCENARIOS.forEach(s=>{ (topics[s.topic]=topics[s.topic]||[]).push(s); });
+  pool.forEach(s=>{ (topics[s.topic]=topics[s.topic]||[]).push(s); });
   const topicIcons = { 'RG':'flag', 'Payments':'wallet', 'Promotions':'bolt', 'Gameplay':'grid', 'KYC & Verification':'check', 'Account & Location':'users', 'Complaints & Escalations':'dots', 'Crisis & Safety':'bell', 'Fraud & Risk':'archive', 'Soft Skills & Communication':'chat' };
   const topicColors = { 'RG':'#3ecf8e', 'Payments':'#5b7cff', 'Promotions':'#e2a33d', 'Gameplay':'#e05a5a', 'KYC & Verification':'#3ecfcf', 'Account & Location':'#a06bd6', 'Complaints & Escalations':'#e05a8e', 'Crisis & Safety':'#e2a33d', 'Fraud & Risk':'#8a919c', 'Soft Skills & Communication':'#5bc0be' };
   const tiles = Object.keys(topics).sort().map(topic=>{
@@ -2098,7 +2479,7 @@ function renderCategoriesView(){
     </div>`;
   }).join('');
   const assignedBanner = renderMyAssignmentsHomeWidget();
-  const totalScenarios = PILOT_SCENARIOS.length;
+  const totalScenarios = pool.length;
   const totalTopics = Object.keys(topics).length;
   const hero = `<div class="home-hero">
     <div class="home-hero-eyebrow">Team Z \u00b7 Simulation Engine</div>
@@ -2128,13 +2509,13 @@ function renderCategoriesView(){
 function renderCategoryScenarioList(){
   const topic = state.categoryFilter;
   const order = {Foundation:0, Applied:1, Advanced:2};
-  const list = PILOT_SCENARIOS.filter(s=>s.topic===topic).sort((a,b)=> (order[a.difficulty]??1) - (order[b.difficulty]??1));
+  const list = practicePoolFor(state.agentName).filter(s=>s.topic===topic).sort((a,b)=> (order[a.difficulty]??1) - (order[b.difficulty]??1));
   const rows = list.map(s=>{
     const initial = s.playerName.charAt(0).toUpperCase();
     return `<div class="category-scenario-card" data-scenario="${s.id}">
       <div class="qavatar" style="background:var(--accent);">${initial}</div>
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:600;font-size:14px;">${escapeHtml(s.title)}</div>
+        <div style="font-weight:600;font-size:14px;">${escapeHtml(s.title)}${s.isCustom ? ` <span style="font-size:10px;color:var(--accent);font-weight:700;border:1px solid var(--accent);border-radius:10px;padding:1px 6px;vertical-align:middle;">TL-CREATED</span>` : ''}</div>
         <div style="font-size:12px;color:var(--text3);margin-top:2px;">${escapeHtml(s.difficulty)}</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
@@ -2200,7 +2581,7 @@ function renderMain(){
     </div>
     <div class="chatlog" id="chatlog">${msgs}</div>
     <div class="composer">
-      <textarea id="composerInput" placeholder="Type a message, the customer will see this" ${composerDisabled}></textarea>
+      <textarea id="composerInput" placeholder="Type a message, the customer will see this" ${composerDisabled}>${escapeHtml(state.composerDraft||'')}</textarea>
       <button id="btnSend" class="primary" ${composerDisabled}>Send</button>
     </div>
   </div>`;
@@ -2280,19 +2661,19 @@ function wireEvents(){
     el.addEventListener('click', ()=> startScenario(el.getAttribute('data-scenario')));
   });
   document.querySelectorAll('[data-category]').forEach(el=>{
-    el.addEventListener('click', ()=>{ randomizeAndMaybeConfirm(PILOT_SCENARIOS.filter(s=>s.topic===el.getAttribute('data-category'))); });
+    el.addEventListener('click', ()=>{ randomizeAndMaybeConfirm(practicePoolFor(state.agentName).filter(s=>s.topic===el.getAttribute('data-category'))); });
   });
   document.querySelectorAll('[data-category-start]').forEach(el=>{
-    el.addEventListener('click', ()=>{ randomizeAndMaybeConfirm(PILOT_SCENARIOS.filter(s=>s.topic===el.getAttribute('data-category-start'))); });
+    el.addEventListener('click', ()=>{ randomizeAndMaybeConfirm(practicePoolFor(state.agentName).filter(s=>s.topic===el.getAttribute('data-category-start'))); });
   });
   const btnRandomizeSidebar=document.getElementById('btnRandomizeSidebar');
-  if(btnRandomizeSidebar) btnRandomizeSidebar.addEventListener('click', e=>{ e.stopPropagation(); randomizeAndMaybeConfirm(PILOT_SCENARIOS); });
+  if(btnRandomizeSidebar) btnRandomizeSidebar.addEventListener('click', e=>{ e.stopPropagation(); randomizeAndMaybeConfirm(practicePoolFor(state.agentName)); });
   const btnBackToCategories=document.getElementById('btnBackToCategories');
   if(btnBackToCategories) btnBackToCategories.addEventListener('click', ()=>{ state.categoryFilter=null; render(); });
   const btnRandomizeAll=document.getElementById('btnRandomizeAll');
-  if(btnRandomizeAll) btnRandomizeAll.addEventListener('click', ()=> randomizeAndMaybeConfirm(PILOT_SCENARIOS));
+  if(btnRandomizeAll) btnRandomizeAll.addEventListener('click', ()=> randomizeAndMaybeConfirm(practicePoolFor(state.agentName)));
   const btnRandomizeTopic=document.getElementById('btnRandomizeTopic');
-  if(btnRandomizeTopic) btnRandomizeTopic.addEventListener('click', ()=> randomizeAndMaybeConfirm(PILOT_SCENARIOS.filter(s=>s.topic===state.categoryFilter)));
+  if(btnRandomizeTopic) btnRandomizeTopic.addEventListener('click', ()=> randomizeAndMaybeConfirm(practicePoolFor(state.agentName).filter(s=>s.topic===state.categoryFilter)));
   const railTLArea=document.getElementById('railTLArea');
   if(railTLArea) railTLArea.addEventListener('click', ()=>{
     if(state.tlUnlocked){ state.view = state.view==='diagnostics'?'sim':'diagnostics'; render(); }
@@ -2303,6 +2684,11 @@ function wireEvents(){
 
   const btnAssignScenario=document.getElementById('btnAssignScenario');
   if(btnAssignScenario) btnAssignScenario.addEventListener('click', assignScenarioFromTLForm);
+  const assignAgentNameSelect=document.getElementById('assignAgentName');
+  if(assignAgentNameSelect) assignAgentNameSelect.addEventListener('change', e=>{
+    state.assignFormSelectedAgent = e.target.value;
+    render();
+  });
 
   const railHistory=document.getElementById('railHistory');
   if(railHistory) railHistory.addEventListener('click', ()=>{ state.view='history'; render(); });
@@ -2365,9 +2751,18 @@ function wireEvents(){
   const btnSendChallenge=document.getElementById('btnSendChallenge');
   const challengeComposerInput=document.getElementById('challengeComposerInput');
   if(btnSendChallenge) btnSendChallenge.addEventListener('click', ()=> sendChallengeMessage(state.challenge.activeSlotIndex));
-  if(challengeComposerInput) challengeComposerInput.addEventListener('keydown', e=>{
-    if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendChallengeMessage(state.challenge.activeSlotIndex); }
-  });
+  if(challengeComposerInput){
+    // A chat you're not even looking at can arrive, nudge or finish scoring while you're mid-sentence in
+    // THIS one - render() redraws the whole screen when that happens. Without this, that redraw would
+    // silently wipe whatever you were typing. Drafts are kept per-slot so switching tabs doesn't lose one either.
+    challengeComposerInput.addEventListener('input', e=>{
+      const slot = state.challenge.slots[state.challenge.activeSlotIndex];
+      if(slot) slot.draftText = e.target.value;
+    });
+    challengeComposerInput.addEventListener('keydown', e=>{
+      if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendChallengeMessage(state.challenge.activeSlotIndex); }
+    });
+  }
   const btnEndChallengeSlot=document.getElementById('btnEndChallengeSlot');
   if(btnEndChallengeSlot) btnEndChallengeSlot.addEventListener('click', ()=>{
     const slot = state.challenge.slots[state.challenge.activeSlotIndex];
@@ -2390,6 +2785,7 @@ function wireEvents(){
   const btnExitChallenge=document.getElementById('btnExitChallenge');
   if(btnExitChallenge) btnExitChallenge.addEventListener('click', ()=>{
     if(state.challengeSilenceInterval){ clearInterval(state.challengeSilenceInterval); state.challengeSilenceInterval=null; }
+    if(state.challengeArrivalInterval){ clearInterval(state.challengeArrivalInterval); state.challengeArrivalInterval=null; }
     state.challenge = null;
     state.view = 'challenge-picker';
     render();
@@ -2477,6 +2873,7 @@ function wireEvents(){
   const input=document.getElementById('composerInput');
   if(send) send.addEventListener('click', sendAgentMessage);
   if(input){
+    input.addEventListener('input', e=>{ state.composerDraft = e.target.value; });
     input.addEventListener('keydown', e=>{
       if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendAgentMessage(); }
     });
@@ -2694,6 +3091,160 @@ function wireEvents(){
   if(scenarioLibraryReadinessSelect) scenarioLibraryReadinessSelect.addEventListener('change', e=>{
     state.scenarioLibraryReadinessFilter = e.target.value;
     render();
+  });
+
+  // ---------- TL SCENARIO BUILDER ----------
+  const scenarioBuilderTLNameInput=document.getElementById('scenarioBuilderTLName');
+  if(scenarioBuilderTLNameInput) scenarioBuilderTLNameInput.addEventListener('input', e=>{ state.scenarioBuilderTLName = e.target.value; });
+  document.querySelectorAll('[data-builder-mode]').forEach(el=>{
+    el.addEventListener('click', ()=>{ state.scenarioBuilderMode = el.getAttribute('data-builder-mode'); render(); });
+  });
+  // Intake form - plain text sync, no re-render needed (nothing else on screen derives from these live).
+  const intakeFieldMap = { intakeWhatHappened:'whatHappened', intakeStruggle:'struggle', intakeDesiredBehavior:'desiredBehavior', intakeCorrectProcess:'correctProcess', intakeKbInfo:'kbInfo', intakePlayerBehavior:'playerBehavior', intakeEscalationNotes:'escalationNotes', intakeTopic:'topic' };
+  Object.keys(intakeFieldMap).forEach(elId=>{
+    const el = document.getElementById(elId);
+    if(el) el.addEventListener('input', e=>{ state.scenarioBuilderIntake[intakeFieldMap[elId]] = e.target.value; });
+  });
+  const intakeDifficultySelect=document.getElementById('intakeDifficulty');
+  if(intakeDifficultySelect) intakeDifficultySelect.addEventListener('change', e=>{ state.scenarioBuilderIntake.difficulty = e.target.value; });
+  const btnGenerateScenario=document.getElementById('btnGenerateScenario');
+  if(btnGenerateScenario) btnGenerateScenario.addEventListener('click', generateScenarioFromIntake);
+  const btnUseDuplicateSource=document.getElementById('btnUseDuplicateSource');
+  if(btnUseDuplicateSource) btnUseDuplicateSource.addEventListener('click', ()=>{
+    const sel = document.getElementById('duplicateSourceSelect');
+    const id = sel ? sel.value : '';
+    if(!id){ state.scenarioBuilderError = 'Pick a scenario to duplicate first.'; render(); return; }
+    startDuplicateFromSource(id);
+  });
+
+  // Preview/edit form - every field is live-synced directly into state.scenarioBuilderGenerated, because
+  // structural toggles below (add/remove case row, the secondary-tag checkbox, visibility radios) call
+  // render() and a full re-render reads every field back out of state - an un-synced field would
+  // silently revert to its last-known value the moment any of those toggles fire.
+  const gen = state.scenarioBuilderGenerated;
+  if(gen){
+    const bindText = (elId, path)=>{
+      const el = document.getElementById(elId);
+      if(!el) return;
+      el.addEventListener('input', e=>{
+        const val = e.target.value;
+        if(path.length===1) gen[path[0]] = val;
+        else gen[path[0]][path[1]] = val;
+      });
+    };
+    bindText('editTitle', ['title']);
+    bindText('editPlayerName', ['playerName']);
+    bindText('editAht', ['ahtTargetMinutes']);
+    bindText('editBriefing', ['agentBriefing']);
+    bindText('editPersona', ['personaPrompt']);
+    bindText('editPlayerSituation', ['playerKnowledge','situation']);
+    bindText('editKbTopic', ['processGrounding','kbTopic']);
+    bindText('editKbText', ['processGrounding','kbText']);
+    bindText('editEscalation', ['processGrounding','escalationCriteria']);
+    bindText('editCriticalErrors', ['processGrounding','criticalErrors']);
+    bindText('editAmbiguity', ['processGrounding','ambiguityNotes']);
+    bindText('editCorrectTag', ['correctTag']);
+    bindText('editSecondaryTag', ['correctSecondaryTag']);
+    const editDifficultySelect=document.getElementById('editDifficulty');
+    if(editDifficultySelect) editDifficultySelect.addEventListener('change', e=>{ gen.difficulty = e.target.value; });
+    const editRequiredActions=document.getElementById('editRequiredActions');
+    if(editRequiredActions) editRequiredActions.addEventListener('input', e=>{ gen.processGrounding.requiredActions = e.target.value.split('\n'); });
+    const editOptionalActions=document.getElementById('editOptionalActions');
+    if(editOptionalActions) editOptionalActions.addEventListener('input', e=>{ gen.processGrounding.optionalActions = e.target.value.split('\n'); });
+    const editTagOptions=document.getElementById('editTagOptions');
+    if(editTagOptions) editTagOptions.addEventListener('input', e=>{ gen.tagOptions = e.target.value.split('\n'); });
+    const editHasSecondary=document.getElementById('editHasSecondary');
+    if(editHasSecondary) editHasSecondary.addEventListener('change', e=>{
+      if(e.target.checked){ gen.correctSecondaryTag = gen.correctSecondaryTag || ''; gen.secondaryTagOptions = gen.secondaryTagOptions || ['None', '']; }
+      else { delete gen.correctSecondaryTag; delete gen.secondaryTagOptions; }
+      render();
+    });
+    const btnAddCaseRow=document.getElementById('btnAddCaseRow');
+    if(btnAddCaseRow) btnAddCaseRow.addEventListener('click', ()=>{
+      gen.caseData = gen.caseData || [];
+      gen.caseData.push({ id:'c'+(gen.caseData.length+1), tab:'', label:'', value:'', gated:false, gateLabel:'Investigate' });
+      render();
+    });
+    document.querySelectorAll('[data-remove-case-row]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const idx = parseInt(el.getAttribute('data-remove-case-row'),10);
+        gen.caseData.splice(idx,1);
+        render();
+      });
+    });
+    document.querySelectorAll('[data-case-field]').forEach(el=>{
+      const idx = parseInt(el.getAttribute('data-case-row'),10);
+      const field = el.getAttribute('data-case-field');
+      const evt = (field==='gated') ? 'change' : 'input';
+      el.addEventListener(evt, e=>{
+        if(!gen.caseData[idx]) return;
+        if(field==='gated'){ gen.caseData[idx].gated = e.target.checked; render(); }
+        else gen.caseData[idx][field] = e.target.value;
+      });
+    });
+    document.querySelectorAll('input[name="builderVisibility"]').forEach(el=>{
+      el.addEventListener('change', e=>{ if(e.target.checked){ state.scenarioBuilderVisibility = e.target.value; render(); } });
+    });
+    const editTargetAgentSelect=document.getElementById('editTargetAgent');
+    if(editTargetAgentSelect) editTargetAgentSelect.addEventListener('change', e=>{ state.scenarioBuilderTargetAgent = e.target.value; });
+    const btnSaveScenarioBuilder=document.getElementById('btnSaveScenarioBuilder');
+    if(btnSaveScenarioBuilder) btnSaveScenarioBuilder.addEventListener('click', saveScenarioBuilderDraft);
+    const btnCancelScenarioBuilder=document.getElementById('btnCancelScenarioBuilder');
+    if(btnCancelScenarioBuilder) btnCancelScenarioBuilder.addEventListener('click', ()=>{
+      state.scenarioBuilderGenerated = null;
+      state.scenarioBuilderEditingId = null;
+      state.scenarioBuilderPendingReviewReset = false;
+      state.scenarioBuilderError = null;
+      render();
+    });
+  }
+
+  // "My Created Scenarios" list actions
+  document.querySelectorAll('[data-edit-custom-scenario]').forEach(el=>{
+    el.addEventListener('click', ()=> startEditCustomScenario(el.getAttribute('data-edit-custom-scenario')));
+  });
+  document.querySelectorAll('[data-duplicate-custom-scenario]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      state.scenarioBuilderMode = 'duplicate';
+      startDuplicateFromSource(el.getAttribute('data-duplicate-custom-scenario'));
+    });
+  });
+  document.querySelectorAll('[data-delete-custom-scenario]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.getAttribute('data-delete-custom-scenario');
+      const slot = document.querySelector(`[data-delete-custom-confirm-slot="${id}"]`);
+      if(!slot) return;
+      if(slot.innerHTML){ slot.innerHTML=''; return; }
+      slot.innerHTML = `<div class="box" style="border-color:var(--warn);margin-top:8px;">
+        <div style="font-size:12.5px;color:var(--warn);margin-bottom:8px;">Permanently delete this scenario? Past attempts that used it keep their own saved record - this only removes it from your list and from anywhere it was visible.</div>
+        <button class="small" data-confirm-delete-custom="${id}">Yes, delete it</button>
+        <button class="small" data-dismiss-delete-custom="${id}">Never mind</button>
+      </div>`;
+      slot.querySelector(`[data-confirm-delete-custom="${id}"]`).addEventListener('click', ()=> deleteCustomScenarioWithConfirm(id));
+      slot.querySelector(`[data-dismiss-delete-custom="${id}"]`).addEventListener('click', ()=>{ slot.innerHTML=''; });
+    });
+  });
+
+  // Review Queue actions
+  document.querySelectorAll('[data-preview-review-scenario]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.getAttribute('data-preview-review-scenario');
+      const slot = document.querySelector(`[data-review-preview-slot="${id}"]`);
+      if(!slot) return;
+      if(slot.innerHTML){ slot.innerHTML=''; return; }
+      const cs = state.customScenarios.find(s=>s.id===id);
+      if(cs) slot.innerHTML = renderFullScenarioPreview(cs);
+    });
+  });
+  document.querySelectorAll('[data-review-notes]').forEach(el=>{
+    el.addEventListener('input', e=>{ state.reviewQueueDraftNotes[el.getAttribute('data-review-notes')] = e.target.value; });
+  });
+  document.querySelectorAll('[data-review-action]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.getAttribute('data-review-id');
+      const action = el.getAttribute('data-review-action');
+      submitReviewAction(id, action);
+    });
   });
 }
 
@@ -3010,6 +3561,7 @@ function startScenario(id, assignmentId){
   state.silenceActionInFlight = false;
   state.playerLeftEarly = false;
   state.playerLeftReason = null;
+  state.composerDraft = '';
   state.view='sim';
   render();
   if(state.ahtMode){
@@ -3349,6 +3901,7 @@ async function sendAgentMessage(){
   state.transcript.push({speaker:'agent', text, turn:state.turnCounter, ts:Date.now()});
   state.silenceNudgeCount = 0; // agent just spoke - clears any pending silence window immediately
   state.silenceActionInFlight = true; // guard: don't let the silence watcher fire mid-reply
+  state.composerDraft = '';
   input.value='';
   render();
 
@@ -3412,7 +3965,8 @@ function formatProcessGroundingForEval(s){
     mixed:'MIXED: some content below is real validated KB, some is fictional/prototype-only - see source note.',
     ambiguous:'GENUINE KB GAP: real KB was checked and does not clearly resolve this case. Do not treat either direction as "correct" - evaluate whether the agent correctly recognized the ambiguity instead.',
     fictional:'FICTIONAL/PROTOTYPE-ONLY. Not real Betty KB - use only for testing engine behaviour, not as a real-world correctness standard.',
-    coaching:'COACHING-GROUNDED, REAL. Based on documented real TL/QA coaching direction, not a formal written KB article - treat as a genuine, authoritative correctness standard for this scenario (this is real guidance an agent would actually be coached on), just not a KB citation. Do not treat it as fictional/prototype-only.'
+    coaching:'COACHING-GROUNDED, REAL. Based on documented real TL/QA coaching direction, not a formal written KB article - treat as a genuine, authoritative correctness standard for this scenario (this is real guidance an agent would actually be coached on), just not a KB citation. Do not treat it as fictional/prototype-only.',
+    tl_coaching_draft:'TL COACHING DRAFT - NOT INDEPENDENTLY VALIDATED. This process grounding was written by the creating Team Lead from their own description of a real coaching need, not a cited KB article, and has not been checked by QA. Still use it as this scenario’s own standard for judging the agent’s handling of THIS practice case - do not refuse to score or soften scoring because of this status - but do not treat it as confirmed official Betty policy.'
   }[s.kbStatus] || 'FICTIONAL/PROTOTYPE-ONLY.';
   let out = `KB STATUS: ${statusLabel}\n${s.kbSource?('Source: '+s.kbSource+'\n'):''}KB Topic: ${pg.kbTopic}\nKB Text: ${pg.kbText}\nRequired Actions: ${pg.requiredActions.join('; ')}\nOptional Actions: ${(pg.optionalActions||[]).join('; ')||'(none)'}\nEscalation Criteria: ${pg.escalationCriteria}\nCritical Errors: ${pg.criticalErrors}\nAmbiguity Notes: ${pg.ambiguityNotes||'(none)'}`;
   if(pg.rgNote){
@@ -3627,6 +4181,11 @@ function renderDocModal(){
     state.currentAttemptContext = attemptContext;
     state.evaluation = attemptContext.evaluation; // same object reference - live UI reflects it immediately
     render();
+    // Show the scoring-in-progress state RIGHT NOW, not just after the result lands - otherwise the
+    // agent is staring at a static "Ended" chat with no sign anything is happening. evalModalContent()
+    // already has a loading branch (used today only by the retry button); this is the missing call that
+    // shows it on the very first submit too.
+    renderEvalModal();
     await runEvaluation(attemptContext);
   });
 }
@@ -4316,6 +4875,52 @@ async function saveManualNameOverrides(){
   }
 }
 
+// ---- Safe, single-record writes for agent directory / TL rosters / name overrides ----
+// Each of these sends only the ONE record that changed, so two TLs editing different agents/rosters/
+// overrides at the same time can never have one's save silently erase the other's - see the matching
+// comment in backend-index.js. Every response carries the server's authoritative full array/map back,
+// which is used to resync local state immediately, so this session also self-heals if it had drifted
+// (e.g. another TL added something while this tab had an older copy loaded).
+async function upsertAgentDirectoryRemote(profile){
+  try{ localStorage.setItem(AGENT_DIRECTORY_KEY, JSON.stringify(state.agentDirectory)); }
+  catch(err){ console.error('Saving agent directory locally failed:', err); }
+  try{
+    const resp = await fetch(BACKEND_URL + '/api/store/agent-directory/upsert', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(profile)
+    });
+    const data = await resp.json();
+    if(Array.isArray(data.agentDirectory)){ state.agentDirectory = data.agentDirectory; try{ localStorage.setItem(AGENT_DIRECTORY_KEY, JSON.stringify(state.agentDirectory)); }catch(err){} }
+  }catch(err){
+    console.error('Saving this agent profile to the shared backend failed (saved locally only for now):', err);
+  }
+}
+async function upsertTLRosterRemote(tlName, addAgents){
+  try{ localStorage.setItem(TL_ROSTERS_KEY, JSON.stringify(state.tlRosters)); }
+  catch(err){ console.error('Saving TL rosters locally failed:', err); }
+  try{
+    const resp = await fetch(BACKEND_URL + '/api/store/tl-rosters/upsert', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({tlName, addAgents})
+    });
+    const data = await resp.json();
+    if(Array.isArray(data.tlRosters)){ state.tlRosters = data.tlRosters; try{ localStorage.setItem(TL_ROSTERS_KEY, JSON.stringify(state.tlRosters)); }catch(err){} }
+  }catch(err){
+    console.error('Saving this TL roster update to the shared backend failed (saved locally only for now):', err);
+  }
+}
+async function setManualNameOverrideRemote(key, canonicalName){
+  try{ localStorage.setItem(MANUAL_NAME_OVERRIDES_KEY, JSON.stringify(state.manualNameOverrides||{})); }
+  catch(err){ console.error('Saving manual name overrides locally failed:', err); }
+  try{
+    const resp = await fetch(BACKEND_URL + '/api/store/manual-name-overrides/set', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({key, canonicalName})
+    });
+    const data = await resp.json();
+    if(data.manualNameOverrides && typeof data.manualNameOverrides==='object'){ state.manualNameOverrides = data.manualNameOverrides; try{ localStorage.setItem(MANUAL_NAME_OVERRIDES_KEY, JSON.stringify(state.manualNameOverrides)); }catch(err){} }
+  }catch(err){
+    console.error('Saving this name override to the shared backend failed (saved locally only for now):', err);
+  }
+}
+
 function firstToken(name){ return (name||'').trim().split(/\s+/)[0] || ''; }
 
 // Resolves a raw typed name against the registered agent directory. Returns one of:
@@ -4358,8 +4963,9 @@ function canonicalNameFor(name){
 // the original stored agentName on past records is never touched.
 async function resolveAmbiguousName(rawName, canonicalName){
   state.manualNameOverrides = state.manualNameOverrides || {};
-  state.manualNameOverrides[rawName.trim().toLowerCase()] = canonicalName;
-  await saveManualNameOverrides();
+  const key = rawName.trim().toLowerCase();
+  state.manualNameOverrides[key] = canonicalName;
+  await setManualNameOverrideRemote(key, canonicalName);
 }
 
 // Registers or updates one agent's canonical profile, and (optionally) attaches them to a TL's
@@ -4372,7 +4978,7 @@ async function registerAgent({fullName, chatName, additionalName, tlName}){
   const profile = { canonicalName, fullName: canonicalName, chatName:(chatName||'').trim()||null, aliases };
   if(existingIdx>=0) state.agentDirectory[existingIdx] = profile;
   else state.agentDirectory.push(profile);
-  await saveAgentDirectory();
+  await upsertAgentDirectoryRemote(profile); // single-profile write - never clobbers another TL's concurrent registration
   if(tlName && tlName.trim()){
     const rosterIdx = state.tlRosters.findIndex(r=>namesMatch(r.tlName, tlName));
     if(rosterIdx>=0){
@@ -4382,7 +4988,7 @@ async function registerAgent({fullName, chatName, additionalName, tlName}){
     }else{
       state.tlRosters.push({tlName: tlName.trim(), agents:[canonicalName]});
     }
-    await saveTLRosters();
+    await upsertTLRosterRemote(tlName.trim(), [canonicalName]); // single-roster merge, same reason
   }
   return profile;
 }
@@ -4499,6 +5105,65 @@ function namesMatch(a, b){
   if(!a || !b) return false;
   return canonicalNameFor(a).trim().toLowerCase() === canonicalNameFor(b).trim().toLowerCase();
 }
+
+// ---------- CUSTOM SCENARIOS (TL Scenario Builder) ----------
+// Same shared-backend, per-record pattern as assignments/feedback above - see those for why whole-
+// array replacement is deliberately avoided (two TLs creating/editing scenarios at once must not be
+// able to clobber each other).
+const CUSTOM_SCENARIOS_KEY = 'zteamz_customScenarios_v1';
+async function loadCustomScenarios(){
+  state.customScenariosLoadError = null;
+  try{
+    const response = await fetch(BACKEND_URL + '/api/store');
+    if(response.ok){
+      const data = await response.json();
+      if(Array.isArray(data.customScenarios)){ state.customScenarios = data.customScenarios; return; }
+    }
+  }catch(err){
+    console.error('Loading shared custom scenarios from backend failed, falling back to this device’s local copy:', err);
+    state.customScenariosLoadError = err.message;
+  }
+  try{
+    const raw = localStorage.getItem(CUSTOM_SCENARIOS_KEY);
+    if(raw){ const parsed = JSON.parse(raw); if(Array.isArray(parsed)) state.customScenarios = parsed; }
+  }catch(err){ console.error('Loading custom scenarios failed:', err); }
+}
+function cacheCustomScenariosLocally(){
+  try{ localStorage.setItem(CUSTOM_SCENARIOS_KEY, JSON.stringify(state.customScenarios)); }
+  catch(err){ console.error('Caching custom scenarios locally failed:', err); }
+}
+async function createCustomScenarioRemote(entry){
+  state.customScenarios.push(entry);
+  cacheCustomScenariosLocally();
+  try{
+    await fetch(BACKEND_URL + '/api/store/custom-scenarios/new', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry)
+    });
+  }catch(err){
+    console.error('Creating custom scenario on the shared backend failed (saved locally only for now):', err);
+  }
+}
+async function patchCustomScenarioRemote(id, patch){
+  const cs = state.customScenarios.find(s=>s.id===id);
+  if(cs) Object.assign(cs, patch);
+  cacheCustomScenariosLocally();
+  try{
+    await fetch(BACKEND_URL + '/api/store/custom-scenarios/' + encodeURIComponent(id), {
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(patch)
+    });
+  }catch(err){
+    console.error('Updating custom scenario on the shared backend failed (saved locally only for now):', err);
+  }
+}
+async function deleteCustomScenarioRemote(id){
+  state.customScenarios = state.customScenarios.filter(s=>s.id!==id);
+  cacheCustomScenariosLocally();
+  try{
+    await fetch(BACKEND_URL + '/api/store/custom-scenarios/' + encodeURIComponent(id), { method:'DELETE' });
+  }catch(err){
+    console.error('Deleting custom scenario on the shared backend failed (removed locally only for now):', err);
+  }
+}
 // Returns the existing incomplete assignment for this agent+scenario, if any - used to warn a TL
 // before creating an accidental duplicate, per "avoid unintentionally assigning the same scenario
 // repeatedly unless a repeat is intentional."
@@ -4604,7 +5269,7 @@ async function addOrUpdateTLRoster(tlName, agentsCsv){
   } else {
     state.tlRosters.push({ tlName: tlName.trim(), agents: newAgents });
   }
-  await saveTLRosters();
+  await upsertTLRosterRemote(tlName.trim(), newAgents); // single-roster merge - safe under concurrent edits by other TLs
 }
 
 // Every distinct raw agentName string appearing in Team Progress that resolves as genuinely
@@ -4869,7 +5534,7 @@ function composeChallengeScenarios(tier){
   const def = CHALLENGE_TIERS[tier];
   if(!def) return [];
   if(def.composition==='random'){
-    const pool = [...PILOT_SCENARIOS];
+    const pool = practicePoolFor(state.agentName);
     const picked = [];
     for(let i=0;i<def.chatCount && pool.length;i++){
       const idx = Math.floor(Math.random()*pool.length);
@@ -4884,7 +5549,25 @@ function composeChallengeScenarios(tier){
   }).filter(Boolean);
 }
 
-function makeChallengeSlot(scenario){
+function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+
+// Real queue volume doesn't hand an agent three fully-formed conversations at once, and it doesn't
+// make them say "hello" first either. Chat 1 arrives almost immediately; after that, each later chat
+// either lands close behind the previous one (a burst, the way volume actually spikes) or after a
+// real gap (a genuine stagger) - never a fixed, predictable interval either way.
+function scheduleChallengeArrivals(count){
+  // Kept short enough that a training session doesn't spend most of its time waiting for chats to
+  // show up: worst case (two real staggers back to back) is well under a minute.
+  const delays = [randInt(800,2500)];
+  for(let i=1;i<count;i++){
+    const burst = Math.random()<0.45;
+    const gap = burst ? randInt(1500,6000) : randInt(4000,13000);
+    delays.push(delays[i-1]+gap);
+  }
+  return delays;
+}
+
+function makeChallengeSlot(scenario, arrivesAt){
   return {
     scenario,
     transcript:[],
@@ -4894,8 +5577,11 @@ function makeChallengeSlot(scenario){
     docNote:'', docTag:null, docSecondaryTag:null,
     evaluation:null,
     tlOverrides:{},
-    status:'active', // 'active' | 'documenting' | 'scoring' | 'ended'
-    chatStartedAt: Date.now(),
+    status:'incoming', // 'incoming' | 'active' | 'documenting' | 'scoring' | 'ended'
+    draftText:'', // preserves an in-progress, unsent message across re-renders triggered by OTHER slots
+    arrivesAt,
+    chatStartedAt: null, // set when the chat actually arrives (arriveChallengeSlot), not at session creation -
+                          // AHT should measure real handling time from when the player showed up, not queue wait.
     personaTrait: pickPersonaTrait(scenario),
     silenceNudgeCount:0,
     silenceActionInFlight:false,
@@ -4907,20 +5593,70 @@ function makeChallengeSlot(scenario){
 
 function startChallengeMode(tier){
   if(state.challengeSilenceInterval){ clearInterval(state.challengeSilenceInterval); state.challengeSilenceInterval=null; }
+  if(state.challengeArrivalInterval){ clearInterval(state.challengeArrivalInterval); state.challengeArrivalInterval=null; }
   const scenarios = composeChallengeScenarios(tier);
+  const now = Date.now();
+  const delays = scheduleChallengeArrivals(scenarios.length);
   state.challenge = {
     active:true,
     tier,
-    slots: scenarios.map(makeChallengeSlot),
+    slots: scenarios.map((sc,i)=> makeChallengeSlot(sc, now+delays[i])),
     activeSlotIndex:0,
-    sessionStartedAt: Date.now(),
-    switchLog: [{toSlotIndex:0, ts:Date.now()}],
+    sessionStartedAt: now,
+    switchLog: [{toSlotIndex:0, ts:now}],
     sessionEvaluation:null,
     sessionEvalLoading:false,
   };
   state.view='challenge';
   render();
   state.challengeSilenceInterval = setInterval(checkChallengeSilence, 5000);
+  state.challengeArrivalInterval = setInterval(checkChallengeArrivals, 1000);
+  checkChallengeArrivals(); // covers the (common) case where slot 0's short delay already elapsed by first render
+}
+
+// Ticks once a second, independently of the silence checker: flips any 'incoming' slot whose arrival
+// time has passed into 'active' and fires its opening message. Runs regardless of which tab the agent
+// is looking at - arrival, like the rest of Challenge Mode, is never gated on what's on screen.
+function checkChallengeArrivals(){
+  if(!state.challenge || !state.challenge.active) return;
+  state.challenge.slots.forEach((slot, idx)=>{
+    if(slot.status==='incoming' && Date.now()>=slot.arrivesAt) arriveChallengeSlot(idx);
+  });
+  if(state.challenge.slots.every(s=>s.status!=='incoming') && state.challengeArrivalInterval){
+    clearInterval(state.challengeArrivalInterval);
+    state.challengeArrivalInterval=null;
+  }
+}
+
+// A chat "arriving" means the player opens with their own reason for contacting support - the agent
+// should never be the one who has to break the ice. Falls back to a plain system join-notice (never a
+// blank chat) if the API call fails, so one flaky request can't leave a slot looking broken.
+async function arriveChallengeSlot(slotIndex){
+  const slot = state.challenge.slots[slotIndex];
+  if(!slot || slot.status!=='incoming') return;
+  // 'arriving' is a short transitional state, not 'active' yet - the opening message is still in
+  // flight, and flipping straight to 'active' here would show the agent an "active" chat with a
+  // misleadingly blank log for however long the API call takes. The tab still reads/renders as
+  // "waiting" throughout (see renderChallengeMain), it only becomes truly active once the player
+  // has actually said something.
+  slot.status='arriving';
+  slot.chatStartedAt = Date.now();
+  slot.silenceActionInFlight = true;
+  render();
+  try{
+    const sys = buildPlayerSystemPrompt(slot.scenario, slot.personaTrait);
+    const openInstruction = `\n\nSPECIAL INSTRUCTION FOR THIS TURN ONLY: you are opening this chat - nobody has said anything yet and no agent has greeted you. Send the OPENING message yourself: get straight into why you're contacting support, in your own words, matching your persona. Real players very often start this way rather than waiting to be greeted first. One to three sentences.`;
+    const apiMsgs = [{role:'user', content:'(the chat session has just started - send your opening message to the agent)'}];
+    const {text:reply} = await callClaude(sys + openInstruction, apiMsgs, 'quick');
+    slot.turnCounter++;
+    slot.transcript.push({speaker:'player', text:reply, turn:slot.turnCounter, ts:Date.now()});
+  }catch(err){
+    console.error('Challenge slot opening message failed (non-fatal, chat still opens):', err);
+    slot.transcript.push({speaker:'system', text:'(Player has joined the chat.)', ts:Date.now()});
+  }
+  slot.status='active';
+  slot.silenceActionInFlight = false;
+  render();
 }
 
 function switchChallengeSlot(idx){
@@ -4940,6 +5676,7 @@ async function sendChallengeMessage(slotIndex){
   slot.transcript.push({speaker:'agent', text, turn:slot.turnCounter, ts:Date.now()});
   slot.silenceNudgeCount = 0;
   slot.silenceActionInFlight = true;
+  slot.draftText = '';
   if(inputEl) inputEl.value='';
   render();
   try{
@@ -5099,6 +5836,7 @@ function archiveChallengeSlotAttempt(slot){
 function checkChallengeSessionComplete(){
   if(!state.challenge.slots.every(s=>s.status==='ended')) return;
   if(state.challengeSilenceInterval){ clearInterval(state.challengeSilenceInterval); state.challengeSilenceInterval=null; }
+  if(state.challengeArrivalInterval){ clearInterval(state.challengeArrivalInterval); state.challengeArrivalInterval=null; }
   runChallengeSessionEvaluation();
 }
 
@@ -5188,28 +5926,33 @@ function renderChallengeMain(){
         if(mins>=1) waitBadge = `<span style="font-size:10px;color:var(--warn);margin-left:6px;">${mins}m</span>`;
       }
     }
-    const statusDot = slot.status==='ended' ? 'var(--ok)' : (slot.status==='documenting'||slot.status==='scoring' ? 'var(--text3)' : 'var(--accent)');
-    return `<div class="challenge-tab ${isActive?'active':''}" data-challenge-tab="${idx}" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:2px solid ${isActive?'var(--accent)':'transparent'};white-space:nowrap;">
+    const isWaiting = slot.status==='incoming' || slot.status==='arriving';
+    const statusDot = slot.status==='ended' ? 'var(--ok)' : isWaiting ? 'var(--text3)' : (slot.status==='documenting'||slot.status==='scoring' ? 'var(--text3)' : 'var(--accent)');
+    const incomingBadge = isWaiting ? `<span style="font-size:10px;color:var(--accent);font-weight:700;margin-left:4px;">• arriving</span>` : '';
+    return `<div class="challenge-tab ${isActive?'active':''}" data-challenge-tab="${idx}" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:2px solid ${isActive?'var(--accent)':'transparent'};white-space:nowrap;${isWaiting?'opacity:0.65;':''}">
       <span style="width:7px;height:7px;border-radius:50%;background:${statusDot};display:inline-block;flex-shrink:0;"></span>
-      <span style="font-size:12.5px;font-weight:${isActive?700:500};">${escapeHtml(slot.scenario.title)}</span>
-      ${waitBadge}
+      <span style="font-size:12.5px;font-weight:${isActive?700:500};">${isWaiting ? 'Chat '+(idx+1) : escapeHtml(slot.scenario.title)}</span>
+      ${incomingBadge}${waitBadge}
     </div>`;
   }).join('');
 
   const activeSlot = c.slots[c.activeSlotIndex];
+  const activeIsWaiting = activeSlot.status==='incoming' || activeSlot.status==='arriving';
   const composerDisabled = activeSlot.status!=='active' ? 'disabled' : '';
-  const msgs = activeSlot.transcript.map(m=>{
-    if(m.speaker==='system') return `<div class="msg system">${escapeHtml(m.text)}</div>`;
-    const who = m.speaker==='player' ? activeSlot.scenario.playerName : 'You (Agent)';
-    return `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${escapeHtml(m.text)}</div>`;
-  }).join('');
+  const msgs = activeIsWaiting
+    ? `<div class="empty" style="margin:auto;text-align:center;color:var(--text3);">Waiting for this player to join\u2026<br>Your other active chat${c.slots.length>2?'s':''} won\u2019t wait - keep working ${c.slots.length>2?'them':'it'} while this one arrives.</div>`
+    : activeSlot.transcript.map(m=>{
+        if(m.speaker==='system') return `<div class="msg system">${escapeHtml(m.text)}</div>`;
+        const who = m.speaker==='player' ? activeSlot.scenario.playerName : 'You (Agent)';
+        return `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${escapeHtml(m.text)}</div>`;
+      }).join('');
 
   return `<div class="main">
     <div style="display:flex;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0;">${tabs}</div>
     <div class="topbar">
       <div>
-        <div class="who">${escapeHtml(activeSlot.scenario.playerName)}</div>
-        <div class="status">${escapeHtml(activeSlot.scenario.title)} \u00b7 ${activeSlot.status==='active'?'In progress':(activeSlot.status==='documenting'||activeSlot.status==='scoring')?'Completing documentation\u2026':'Ended'}</div>
+        <div class="who">${activeIsWaiting ? 'Incoming chat' : escapeHtml(activeSlot.scenario.playerName)}</div>
+        <div class="status">${activeIsWaiting ? 'Waiting for player to join\u2026' : escapeHtml(activeSlot.scenario.title)} \u00b7 ${activeSlot.status==='active'?'In progress':activeIsWaiting?'Not started yet':activeSlot.status==='documenting'?'Completing documentation\u2026':activeSlot.status==='scoring'?'Scoring this chat\u2026 your other chats stay active':'Ended'}</div>
       </div>
       <div class="btns">
         <button id="btnEndChallengeSlot" class="primary" ${activeSlot.status!=='active'?'disabled':''}>End This Chat</button>
@@ -5217,7 +5960,7 @@ function renderChallengeMain(){
     </div>
     <div class="chatlog" id="challengeChatlog">${msgs}</div>
     <div class="composer">
-      <textarea id="challengeComposerInput" placeholder="Type a message" ${composerDisabled}></textarea>
+      <textarea id="challengeComposerInput" placeholder="${activeIsWaiting?'This player hasn\u2019t joined yet':'Type a message'}" ${composerDisabled}>${escapeHtml(activeSlot.draftText||'')}</textarea>
       <button id="btnSendChallenge" class="primary" ${composerDisabled}>Send</button>
     </div>
   </div>`;
@@ -5334,7 +6077,8 @@ function renderChallengeSessionReport(){
 
   return `<div class="main" style="padding:32px;overflow-y:auto;">
     <h1 style="margin-top:0;">Session Report - ${escapeHtml(CHALLENGE_TIERS[c.tier].label)}</h1>
-    <div style="color:var(--text2);font-size:13px;margin-bottom:20px;">Each chat is scored on the real scorecard, same as always. The session performance below is separate - it judges the juggling, not any individual chat\u2019s correctness.</div>
+    <div style="color:var(--text2);font-size:13px;margin-bottom:4px;">Each chat is scored on the real scorecard, same as always. The session performance below is separate - it judges the juggling, not any individual chat\u2019s correctness.</div>
+    <div style="color:var(--text3);font-size:11.5px;margin-bottom:20px;">This is AI practice feedback, not an official QA review - your TL remains your coach.</div>
     <div style="max-width:640px;">${rows}</div>
     <div style="max-width:640px;margin-top:16px;">${sessionBox}</div>
     <div style="margin-top:20px;"><button id="btnExitChallenge">Back to Training Modes</button></div>
@@ -5376,6 +6120,7 @@ function scoreHeaderHtml(ev, tlOverrides, ahtElapsedMinutes, ahtTargetMinutes, a
         <div class="score-badge" style="font-size:24px;color:${tlScore.pass?'var(--ok)':'var(--bad)'};">${tlScore.af?'0%':tlScore.pct+'%'} ${tlScore.pass?'\u{1F44D}':'\u{1F44E}'}</div>
         <div class="score-label">${tlScore.af?`AF - ${escapeHtml(tlScore.afDuty)} - FAIL`:(tlScore.pass?'PASS':'FAIL')} \u00b7 TL-validated score</div>
       </div>` : ''}
+      <div style="margin-top:10px;font-size:11.5px;color:var(--text3);line-height:1.5;">This is AI practice feedback against Betty\u2019s real QA Chat Scorecard (Resolution &amp; Obligations \u00b7 Player Experience \u00b7 Documentation) - not an official QA review. Your TL can review and override it, and remains your coach.</div>
     </div>
     ${renderAHTBox(ahtElapsedMinutes, ahtTargetMinutes, resolvedCorrectly, ahtLateStart)}`;
 }
@@ -5419,7 +6164,7 @@ function evalModalContent(){
   const s=state.activeScenario;
   const ev=state.evaluation;
   if(ev.loading){
-    return `<div class="modal"><h2>Scoring transcript...</h2><div class="empty">Evaluating against Betty's real QA Chat Scorecard.</div></div>`;
+    return `<div class="modal"><h2>Scoring your simulation…</h2><div class="empty">Evaluating your transcript and documentation against Betty's real QA Chat Scorecard. Please keep this page open while your results are being generated - this usually takes a few seconds.</div></div>`;
   }
   if(ev.error){
     return `<div class="modal"><h2>Evaluation failed - real error</h2>
@@ -5757,20 +6502,31 @@ async function assignScenarioFromTLForm(){
 }
 
 function renderAssignScenariosSectionBody(){
+  // Once an agent is picked, narrow the scenario list to what that agent is actually allowed to see
+  // (built-ins + any custom scenario visible to them) - a TL can't accidentally assign a scenario the
+  // agent wouldn't otherwise be able to open. Before an agent is picked, show the broadest reasonable
+  // default: all built-ins plus the current TL's own custom scenarios and anything already approved
+  // for the shared library.
+  const selectedAgent = state.assignFormSelectedAgent || '';
+  const assignPool = selectedAgent
+    ? practicePoolFor(selectedAgent)
+    : [...PILOT_SCENARIOS, ...customScenariosCreatedBy(state.scenarioBuilderTLName||getLastAssigningTL()), ...state.customScenarios.filter(cs=>cs.visibility==='library'&&cs.reviewStatus==='approved')];
+  const uniqueAssignPool = Array.from(new Map(assignPool.map(s=>[s.id,s])).values());
   return `
     <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Shared across devices, instantly - the agent sees this assignment in their own My Assignments as soon as they open the app on any device. Pick from any registered agent, including agents on other TLs' teams - management has shared visibility across the whole roster.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:760px;">
       <select id="assignAgentName" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <option value="">Select agent…</option>
-        ${[...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName)).map(a=>`<option value="${escapeHtml(a.canonicalName)}">${escapeHtml(a.canonicalName)}</option>`).join('')}
+        ${[...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName)).map(a=>`<option value="${escapeHtml(a.canonicalName)}" ${selectedAgent===a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}
       </select>
       <select id="assignScenarioSelect" style="flex:2;min-width:220px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        ${PILOT_SCENARIOS.map(s=>`<option value="${s.id}">${escapeHtml(s.title)} (${escapeHtml(s.difficulty)})</option>`).join('')}
+        ${uniqueAssignPool.map(s=>`<option value="${s.id}">${escapeHtml(s.title)} (${escapeHtml(s.difficulty)})${s.isCustom?' - TL-created':''}</option>`).join('')}
       </select>
       <input id="assignedByTLName" placeholder="Your name (assigning TL)" value="${escapeHtml(getLastAssigningTL())}" style="flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
       <button id="btnAssignScenario" class="primary">Assign</button>
     </div>
     ${state.agentDirectory.length===0 ? `<div style="color:var(--text3);font-size:11.5px;margin-top:8px;">No agents registered yet - register one below first.</div>` : ''}
+    ${selectedAgent ? '' : `<div style="color:var(--text3);font-size:11.5px;margin-top:8px;">Pick an agent above to narrow this list to exactly what they're allowed to see (private/team-only custom scenarios included only where that agent qualifies).</div>`}
     <div id="assignWarning" style="display:none;margin-top:10px;"></div>
     ${renderDashSubsection('manage-assignments', 'Manage Assignments', renderManageAssignmentsSubsection, true)}
   `;
@@ -5861,9 +6617,313 @@ function renderScenarioLibrarySectionBody(){
   return `
     <div style="color:var(--text2);font-size:13px;margin-bottom:10px;">Agents only ever see topics and get randomly assigned within one - this list, by name, is for your own testing and review only. Click any to start it directly.</div>
     ${controls}
-    <div style="color:var(--text3);font-size:11.5px;margin-bottom:10px;">${list.length} of ${SCENARIOS.length} scenarios</div>
+    <div style="color:var(--text3);font-size:11.5px;margin-bottom:10px;">${list.length} of ${SCENARIOS.length} built-in scenarios</div>
     ${list.length ? refRows : `<div class="empty" style="padding:14px 0;">No scenarios match these filters.</div>`}
+    ${renderDashSubsection('review-queue', `Review Queue - Shared Library Submissions (${libraryReviewQueue().length})`, renderReviewQueueSubsection, false)}
   `;
+}
+
+// ---------- TL SCENARIO BUILDER: shared labels/helpers ----------
+const SCENARIO_KB_STATUS_LABELS = {
+  tl_coaching_draft:'TL Coaching Draft - Not Validated',
+  coaching:'Coaching-Grounded (Real)',
+  validated:'KB-Validated',
+  mixed:'Mixed (Partly Validated)',
+  ambiguous:'Ambiguous (Genuine KB Gap)',
+  fictional:'Fictional / Prototype-Only',
+};
+const SCENARIO_REVIEW_STATUS_LABELS = {
+  draft:'Draft (Not Submitted)',
+  pending_qa_review:'Pending QA Review',
+  changes_requested:'Changes Requested',
+  approved:'Approved',
+  rejected_archived:'Rejected / Archived',
+};
+const SCENARIO_REVIEW_STATUS_COLORS = {
+  draft:'var(--text3)', pending_qa_review:'var(--warn)', changes_requested:'var(--warn)',
+  approved:'var(--ok)', rejected_archived:'var(--bad)',
+};
+function scenarioVisibilityLabel(cs){
+  if(cs.visibility==='private') return 'Private to ' + (cs.targetAgent||'(no agent set)');
+  if(cs.visibility==='team') return 'Team only: ' + (cs.targetTeam||'(no team set)');
+  if(cs.visibility==='library') return 'Submitted to shared library';
+  return 'Unknown visibility';
+}
+function renderCustomScenarioBadges(cs){
+  return `<span style="font-size:10px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:10px;padding:1px 6px;white-space:nowrap;">TL-CREATED</span>
+    <span style="font-size:10px;font-weight:700;color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:1px 6px;white-space:nowrap;">${escapeHtml(SCENARIO_KB_STATUS_LABELS[cs.kbStatus]||cs.kbStatus)}</span>
+    ${cs.visibility==='library' ? `<span style="font-size:10px;font-weight:700;color:${SCENARIO_REVIEW_STATUS_COLORS[cs.reviewStatus]||'var(--text3)'};border:1px solid ${SCENARIO_REVIEW_STATUS_COLORS[cs.reviewStatus]||'var(--text3)'};border-radius:10px;padding:1px 6px;white-space:nowrap;">${escapeHtml(SCENARIO_REVIEW_STATUS_LABELS[cs.reviewStatus]||cs.reviewStatus)}</span>` : ''}`;
+}
+
+function renderReviewQueueSubsection(){
+  const queue = libraryReviewQueue().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  if(queue.length===0) return `<div class="empty" style="padding:8px 0;">Nothing submitted for shared-library review yet.</div>`;
+  return `<div style="color:var(--text3);font-size:11.5px;margin-bottom:10px;">Every TL's shared-library submissions, across every team - reviewing is an org-wide function, not scoped to one team. A scenario only reaches the general practice pool once it's Approved here; Private/Team-only scenarios never pass through this queue at all.</div>
+    ${queue.map(cs=>{
+      const draftNote = state.reviewQueueDraftNotes[cs.id] || '';
+      return `<div class="box" style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div>
+            <strong>${escapeHtml(cs.title)}</strong>
+            <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${escapeHtml(cs.topic)} · ${escapeHtml(cs.difficulty)} · created by ${escapeHtml(cs.createdBy||'(unknown)')} on ${new Date(cs.createdAt).toLocaleDateString()}${cs.sourceType==='duplicate' ? ' · duplicated from '+escapeHtml(cs.duplicatedFromId||'?') : ''}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;">${renderCustomScenarioBadges(cs)}</div>
+        </div>
+        <div style="margin-top:8px;font-size:12.5px;color:var(--text2);"><strong>Agent briefing:</strong> ${escapeHtml(cs.agentBriefing)}</div>
+        <div style="margin-top:4px;font-size:12.5px;color:var(--text2);"><strong>Process grounding (KB text):</strong> ${escapeHtml(cs.processGrounding.kbText)}</div>
+        ${cs.reviewNotes ? `<div style="margin-top:6px;font-size:12px;color:var(--warn);"><strong>Previous review notes:</strong> ${escapeHtml(cs.reviewNotes)}${cs.reviewedBy?' — '+escapeHtml(cs.reviewedBy):''}</div>` : ''}
+        <button class="small" data-preview-review-scenario="${cs.id}" style="margin-top:8px;">View full scenario</button>
+        <div data-review-preview-slot="${cs.id}"></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <input data-review-reviewer-name="${cs.id}" placeholder="Your name (reviewer)" value="${escapeHtml(getLastAssigningTL())}" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:12.5px;">
+            <select data-review-kb-status="${cs.id}" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:12.5px;">
+              <option value="tl_coaching_draft">Leave as TL Coaching Draft</option>
+              <option value="coaching">Mark Coaching-Grounded (Real)</option>
+              <option value="validated">Mark KB-Validated</option>
+            </select>
+          </div>
+          <textarea data-review-notes="${cs.id}" placeholder="Review notes (required for Changes Requested / Rejected, optional for Approved)" style="width:100%;margin-top:8px;min-height:50px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:12.5px;">${escapeHtml(draftNote)}</textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <button class="small primary" data-review-action="approved" data-review-id="${cs.id}">Approve</button>
+            <button class="small" data-review-action="changes_requested" data-review-id="${cs.id}">Request Changes</button>
+            <button class="small" data-review-action="rejected_archived" data-review-id="${cs.id}" style="color:var(--bad);">Reject / Archive</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+}
+
+// ---------- TL SCENARIO BUILDER: Create Scenario section ----------
+function topicOptionsForBuilder(){ return [...new Set(SCENARIOS.map(s=>s.topic))].sort(); }
+
+function emptyScenarioIntake(){
+  return { whatHappened:'', struggle:'', desiredBehavior:'', correctProcess:'', kbInfo:'', playerBehavior:'', difficulty:'Applied', topic:'', escalationNotes:'' };
+}
+
+function renderCreateScenarioSectionBody(){
+  const tlName = state.scenarioBuilderTLName || '';
+  const myScenarios = customScenariosCreatedBy(tlName).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  return `
+    <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Describe a coaching need in plain language and generate a structured practice scenario - no HTML, JavaScript, or JSON editing required. Every scenario you create starts as a <strong>TL Coaching Draft - Not Validated</strong>. That only changes when a reviewer explicitly marks it otherwise in the Review Queue (Scenario Library section) - nothing here is ever silently labeled as validated Betty process.</div>
+    <div style="margin-bottom:14px;">
+      <input id="scenarioBuilderTLName" placeholder="Your name (creating TL)" value="${escapeHtml(tlName)}" style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <button class="small ${state.scenarioBuilderMode==='scratch'?'primary':''}" data-builder-mode="scratch">Create from scratch</button>
+      <button class="small ${state.scenarioBuilderMode==='duplicate'?'primary':''}" data-builder-mode="duplicate">Duplicate existing</button>
+    </div>
+    ${state.scenarioBuilderMode==='duplicate' ? renderScenarioDuplicatePicker(tlName) : renderScenarioIntakeForm()}
+    ${state.scenarioBuilderError ? `<div class="box" style="border-color:var(--bad);color:var(--bad);margin-top:12px;font-size:12.5px;">${escapeHtml(state.scenarioBuilderError)}</div>` : ''}
+    ${state.scenarioBuilderGenerated ? renderScenarioPreviewEditForm() : ''}
+    ${state.scenarioBuilderSavedNotice ? `<div class="box" style="border-color:var(--ok);color:var(--ok);margin-top:12px;font-size:12.5px;">${escapeHtml(state.scenarioBuilderSavedNotice)}</div>` : ''}
+    ${renderDashSubsection('my-created-scenarios', `My Created Scenarios (${myScenarios.length})`, ()=>renderMyCreatedScenariosList(myScenarios), true)}
+  `;
+}
+
+function renderScenarioIntakeForm(){
+  const intake = state.scenarioBuilderIntake;
+  const topics = topicOptionsForBuilder();
+  return `
+    <div class="box" style="margin-bottom:14px;">
+      <div style="display:grid;gap:10px;">
+        <label style="font-size:12px;color:var(--text2);">What happened in the real chat?
+          <textarea id="intakeWhatHappened" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.whatHappened)}</textarea>
+        </label>
+        <label style="font-size:12px;color:var(--text2);">What did the agent struggle with?
+          <textarea id="intakeStruggle" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.struggle)}</textarea>
+        </label>
+        <label style="font-size:12px;color:var(--text2);">What behaviour do you want them to practise?
+          <textarea id="intakeDesiredBehavior" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.desiredBehavior)}</textarea>
+        </label>
+        <label style="font-size:12px;color:var(--text2);">What should the correct process/outcome be?
+          <textarea id="intakeCorrectProcess" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.correctProcess)}</textarea>
+        </label>
+        <label style="font-size:12px;color:var(--text2);">Relevant KB/process info (optional - paste as much as you have; this alone never makes the scenario "validated")
+          <textarea id="intakeKbInfo" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.kbInfo)}</textarea>
+        </label>
+        <label style="font-size:12px;color:var(--text2);">What player behaviour/persona do you want simulated?
+          <textarea id="intakePlayerBehavior" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.playerBehavior)}</textarea>
+        </label>
+        <label style="font-size:12px;color:var(--text2);">Escalation, tagging, or documentation requirements (optional)
+          <textarea id="intakeEscalationNotes" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.escalationNotes)}</textarea>
+        </label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <select id="intakeDifficulty" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+            ${['Foundation','Applied','Advanced'].map(d=>`<option value="${d}" ${intake.difficulty===d?'selected':''}>${d}</option>`).join('')}
+          </select>
+          <input id="intakeTopic" list="scenarioBuilderTopicsList" placeholder="Topic (existing or new)" value="${escapeHtml(intake.topic)}" style="flex:1;min-width:200px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+          <datalist id="scenarioBuilderTopicsList">${topics.map(t=>`<option value="${escapeHtml(t)}">`).join('')}</datalist>
+        </div>
+      </div>
+      <button id="btnGenerateScenario" class="primary" style="margin-top:12px;" ${state.scenarioBuilderGenerating?'disabled':''}>${state.scenarioBuilderGenerating?'Generating…':'Generate Scenario'}</button>
+    </div>
+  `;
+}
+
+function renderScenarioDuplicatePicker(tlName){
+  const pool = duplicateSourcePoolFor(tlName);
+  return `<div class="box" style="margin-bottom:14px;">
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:8px;">Pick a starting point - this creates an independent copy with a new id; the original scenario is never changed.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <select id="duplicateSourceSelect" style="flex:1;min-width:240px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <option value="">Select a scenario…</option>
+        ${pool.map(s=>`<option value="${s.id}">${escapeHtml(s.title)}${s.isCustom?' (TL-created)':''}</option>`).join('')}
+      </select>
+      <button id="btnUseDuplicateSource" class="primary">Use as starting point</button>
+    </div>
+  </div>`;
+}
+
+function renderScenarioPreviewEditForm(){
+  const gen = state.scenarioBuilderGenerated;
+  const isEditing = !!state.scenarioBuilderEditingId;
+  const agentOptions = [...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName));
+  const caseRows = (gen.caseData||[]).map((c,idx)=>`
+    <div class="box" style="margin-bottom:8px;padding:10px;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <input data-case-field="tab" data-case-row="${idx}" placeholder="Tab (e.g. Transaction History)" value="${escapeHtml(c.tab)}" style="flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-family:inherit;font-size:12.5px;">
+        <input data-case-field="label" data-case-row="${idx}" placeholder="Label" value="${escapeHtml(c.label)}" style="flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-family:inherit;font-size:12.5px;">
+        <button class="small" data-remove-case-row="${idx}" style="color:var(--bad);">Remove</button>
+      </div>
+      <input data-case-field="value" data-case-row="${idx}" placeholder="Value (what the agent sees)" value="${escapeHtml(c.value)}" style="width:100%;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-family:inherit;font-size:12.5px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+        <label style="font-size:11.5px;color:var(--text2);display:flex;align-items:center;gap:4px;"><input type="checkbox" data-case-field="gated" data-case-row="${idx}" ${c.gated?'checked':''}> Requires investigation (gated)</label>
+        ${c.gated ? `<input data-case-field="gateLabel" data-case-row="${idx}" placeholder="Button label" value="${escapeHtml(c.gateLabel||'Investigate')}" style="flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-family:inherit;font-size:12px;">` : ''}
+      </div>
+    </div>
+  `).join('');
+  const hasSecondary = !!gen.correctSecondaryTag;
+  return `<div class="box" id="scenarioBuilderPreviewAnchor" style="margin-top:14px;border-color:var(--accent);">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <h3 style="margin:0;">${isEditing?'Edit Scenario':'Preview &amp; Edit Before Saving'}</h3>
+      <span style="font-size:10px;font-weight:700;color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:2px 7px;">${escapeHtml(SCENARIO_KB_STATUS_LABELS[gen.kbStatus]||gen.kbStatus)}</span>
+    </div>
+    ${state.scenarioBuilderPendingReviewReset ? `<div style="color:var(--warn);font-size:12px;margin-top:8px;">This scenario was previously reviewed. Saving these edits returns it to "Pending QA Review" and clears its KB-validated/coaching-grounded status until it's reviewed again.</div>` : ''}
+    <div style="display:grid;gap:10px;margin-top:12px;">
+      <label style="font-size:12px;color:var(--text2);">Title
+        <input id="editTitle" value="${escapeHtml(gen.title)}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+      </label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <label style="font-size:12px;color:var(--text2);flex:1;min-width:140px;">Player name
+          <input id="editPlayerName" value="${escapeHtml(gen.playerName)}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+        </label>
+        <label style="font-size:12px;color:var(--text2);">Difficulty
+          <select id="editDifficulty" style="margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+            ${['Foundation','Applied','Advanced'].map(d=>`<option value="${d}" ${gen.difficulty===d?'selected':''}>${d}</option>`).join('')}
+          </select>
+        </label>
+        <label style="font-size:12px;color:var(--text2);">AHT target (min)
+          <input id="editAht" type="number" min="1" value="${gen.ahtTargetMinutes}" style="width:90px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+        </label>
+      </div>
+      <label style="font-size:12px;color:var(--text2);">Agent briefing
+        <textarea id="editBriefing" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.agentBriefing)}</textarea>
+      </label>
+      <label style="font-size:12px;color:var(--text2);">Player behaviour / persona prompt
+        <textarea id="editPersona" style="width:100%;min-height:90px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.personaPrompt)}</textarea>
+      </label>
+      <label style="font-size:12px;color:var(--text2);">Player's own account of their situation
+        <textarea id="editPlayerSituation" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.playerKnowledge.situation)}</textarea>
+      </label>
+
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Case data (what the agent can see/investigate)</div>
+        ${caseRows}
+        <button class="small" id="btnAddCaseRow">+ Add case data item</button>
+      </div>
+
+      <label style="font-size:12px;color:var(--text2);">Process grounding - KB topic
+        <input id="editKbTopic" value="${escapeHtml(gen.processGrounding.kbTopic)}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+      </label>
+      <label style="font-size:12px;color:var(--text2);">Process grounding - correct-process explanation
+        <textarea id="editKbText" style="width:100%;min-height:60px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.kbText)}</textarea>
+      </label>
+      <label style="font-size:12px;color:var(--text2);">Required actions (one per line)
+        <textarea id="editRequiredActions" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml((gen.processGrounding.requiredActions||[]).join('\n'))}</textarea>
+      </label>
+      <label style="font-size:12px;color:var(--text2);">Optional actions (one per line)
+        <textarea id="editOptionalActions" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml((gen.processGrounding.optionalActions||[]).join('\n'))}</textarea>
+      </label>
+      <label style="font-size:12px;color:var(--text2);">Escalation criteria
+        <textarea id="editEscalation" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.escalationCriteria)}</textarea>
+      </label>
+      <label style="font-size:12px;color:var(--text2);">Critical errors
+        <textarea id="editCriticalErrors" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.criticalErrors)}</textarea>
+      </label>
+      <label style="font-size:12px;color:var(--text2);">Ambiguity notes
+        <textarea id="editAmbiguity" style="width:100%;min-height:30px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.ambiguityNotes||'')}</textarea>
+      </label>
+
+      <label style="font-size:12px;color:var(--text2);">Correct tag
+        <input id="editCorrectTag" value="${escapeHtml(gen.correctTag)}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+      </label>
+      <label style="font-size:12px;color:var(--text2);">All tag options (one per line, include the correct one)
+        <textarea id="editTagOptions" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml((gen.tagOptions||[]).join('\n'))}</textarea>
+      </label>
+      <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="editHasSecondary" ${hasSecondary?'checked':''}> This scenario also needs a secondary RG intervention flag
+      </label>
+      ${hasSecondary ? `
+      <label style="font-size:12px;color:var(--text2);">Correct secondary RG tag
+        <input id="editSecondaryTag" value="${escapeHtml(gen.correctSecondaryTag||'')}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+      </label>` : ''}
+    </div>
+
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Who can use this scenario?</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;">
+        <label style="font-size:12.5px;display:flex;align-items:center;gap:5px;"><input type="radio" name="builderVisibility" value="private" ${state.scenarioBuilderVisibility==='private'?'checked':''}> Private to one agent</label>
+        <label style="font-size:12.5px;display:flex;align-items:center;gap:5px;"><input type="radio" name="builderVisibility" value="team" ${state.scenarioBuilderVisibility==='team'?'checked':''}> My team only</label>
+        <label style="font-size:12.5px;display:flex;align-items:center;gap:5px;"><input type="radio" name="builderVisibility" value="library" ${state.scenarioBuilderVisibility==='library'?'checked':''}> Submit for shared library review</label>
+      </div>
+      ${state.scenarioBuilderVisibility==='private' ? `
+        <select id="editTargetAgent" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;min-width:200px;">
+          <option value="">Select the agent…</option>
+          ${agentOptions.map(a=>`<option value="${escapeHtml(a.canonicalName)}" ${state.scenarioBuilderTargetAgent===a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}
+        </select>` : ''}
+      ${state.scenarioBuilderVisibility==='team' ? `<div style="font-size:12px;color:var(--text3);">Visible to agents on ${escapeHtml(state.scenarioBuilderTLName||'(your name above)')}'s roster only.</div>` : ''}
+      ${state.scenarioBuilderVisibility==='library' ? `<div style="font-size:12px;color:var(--text3);">This does NOT publish immediately - it goes into the Review Queue (Scenario Library section) and only reaches the general practice pool once approved.</div>` : ''}
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+      <button id="btnSaveScenarioBuilder" class="primary">${isEditing ? 'Save Changes' : 'Save Scenario'}</button>
+      <button id="btnCancelScenarioBuilder" class="small">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function renderMyCreatedScenariosList(myScenarios){
+  if(myScenarios.length===0) return `<div class="empty" style="padding:8px 0;">You haven't created any scenarios yet.</div>`;
+  return myScenarios.map(cs=>`<div class="box" style="margin-bottom:8px;">
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div>
+        <strong>${escapeHtml(cs.title)}</strong>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${escapeHtml(cs.topic)} · ${escapeHtml(cs.difficulty)} · ${escapeHtml(scenarioVisibilityLabel(cs))} · v${cs.version||1}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;">${renderCustomScenarioBadges(cs)}</div>
+    </div>
+    ${cs.reviewNotes ? `<div style="margin-top:6px;font-size:12px;color:var(--warn);"><strong>Reviewer notes:</strong> ${escapeHtml(cs.reviewNotes)}</div>` : ''}
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+      <button class="small" data-edit-custom-scenario="${cs.id}">Edit</button>
+      <button class="small" data-duplicate-custom-scenario="${cs.id}">Duplicate</button>
+      <button class="small" data-delete-custom-scenario="${cs.id}" style="color:var(--bad);">Delete</button>
+    </div>
+    <div data-delete-custom-confirm-slot="${cs.id}"></div>
+  </div>`).join('');
+}
+
+function renderFullScenarioPreview(cs){
+  return `<div class="box" style="margin-top:8px;background:var(--panel2);">
+    <div style="font-size:12px;"><strong>Player:</strong> ${escapeHtml(cs.playerName)}</div>
+    <div style="font-size:12px;margin-top:6px;"><strong>Persona prompt:</strong><br>${escapeHtml(cs.personaPrompt)}</div>
+    <div style="font-size:12px;margin-top:6px;"><strong>Case data:</strong><br>${(cs.caseData||[]).map(c=>`- [${escapeHtml(c.tab)}] ${escapeHtml(c.label)}: ${escapeHtml(c.value)}${c.gated?' (gated)':''}`).join('<br>')}</div>
+    <div style="font-size:12px;margin-top:6px;"><strong>Required actions:</strong><br>${(cs.processGrounding.requiredActions||[]).map(a=>'- '+escapeHtml(a)).join('<br>')}</div>
+    <div style="font-size:12px;margin-top:6px;"><strong>Escalation criteria:</strong> ${escapeHtml(cs.processGrounding.escalationCriteria)}</div>
+    <div style="font-size:12px;margin-top:6px;"><strong>Critical errors:</strong> ${escapeHtml(cs.processGrounding.criticalErrors)}</div>
+    <div style="font-size:12px;margin-top:6px;"><strong>Correct tag:</strong> ${escapeHtml(cs.correctTag)}${cs.correctSecondaryTag?' + secondary: '+escapeHtml(cs.correctSecondaryTag):''}</div>
+  </div>`;
 }
 
 function renderSystemTestsSectionBody(){
@@ -5918,6 +6978,7 @@ function renderDiagnostics(){
     </div>
 
     ${renderDashSection('assign-scenarios', 'Assign Scenarios', `${pendingCount} pending assignment${pendingCount===1?'':'s'}`, renderAssignScenariosSectionBody, 'bolt', '#5b7cff')}
+    ${renderDashSection('create-scenario', 'Create Scenario', `${customScenariosCreatedBy(state.scenarioBuilderTLName||getLastAssigningTL()).length} created by you`, renderCreateScenarioSectionBody, 'chat', '#e05a8e')}
     ${renderDashSection('tl-agent-roster', 'Team Leads & Agent Roster', 'Manage registered teams', renderTeamLeadsRosterSectionBody, 'users', '#a06bd6')}
     ${renderDashSection('team-progress', 'Team Progress', 'View and review attempts', renderTeamProgressSectionBody, 'chart', '#3ecf8e')}
     ${renderDashSection('feedback', 'Feedback & Suggestions', `${unresolvedCount} unresolved suggestion${unresolvedCount===1?'':'s'}`, renderFeedbackManagementSectionBody, 'chat', '#e2a33d')}
@@ -6250,6 +7311,9 @@ async function init(){
   await loadAgentDirectory();
   await loadTLRosters();
   await seedZainabRosterIfMissing();
+  await loadCustomScenarios();
+  state.scenarioBuilderTLName = getLastAssigningTL();
+  state.scenarioLibraryViewingTLName = getLastAssigningTL();
   render();
   if(!state.agentName) renderNameModal();
 }
