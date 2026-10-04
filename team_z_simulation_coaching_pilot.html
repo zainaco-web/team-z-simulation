@@ -2306,7 +2306,7 @@ async function checkInterpretationFromIntake(correction){
   state.scenarioBuilderError = null;
   render();
   try{
-    const raw = await callClaudeJson(buildInterpretationPrompt(intake, correction, previous), 'complex');
+    const raw = await callClaudeJson(buildInterpretationPrompt(intake, correction, previous), 'complex', {maxTokens: 4000, timeoutMs: 120000});
     state.scenarioBuilderInterpretation = normalizeInterpretation(raw, intake, corrections);
     state.scenarioBuilderStep = 'confirm';
     state.scenarioBuilderCorrectionOpen = false;
@@ -2469,7 +2469,7 @@ async function generateScenarioFromIntake(){
   render();
   try{
     const prompt = buildScenarioGenerationPrompt(intake, interp);
-    const raw = await callClaudeJson(prompt, 'complex');
+    const raw = await callClaudeJson(prompt, 'complex', {maxTokens: 12000, timeoutMs: 240000});
     state.scenarioBuilderGenerated = normalizeGeneratedScenario(raw, intake, interp);
     state.scenarioBuilderEditingId = null;
     state.scenarioBuilderSourceType = 'scratch';
@@ -4218,14 +4218,15 @@ Respond with ONLY your next in-character message as the player. No labels, no st
 // without a Claude account of their own - nothing here depends on anyone's Claude.ai session.
 const BACKEND_URL = "https://team-z-backend-1.onrender.com";
 
-async function callClaudeRaw(system, messages, maxTokens){
+async function callClaudeRaw(system, messages, maxTokens, timeoutMs){
   const body = { messages: messages, max_tokens: maxTokens || 1000 };
   if(system) body.system = system;
   // Real timeout, since a stalled/cold-starting server should never leave the person staring at
   // "Scoring transcript..." forever with no error and nothing saved. 65s covers Render's free/starter
   // cold-start window (usually 30-50s) with margin, then fails LOUDLY instead of hanging silently.
   const controller = new AbortController();
-  const timeoutId = setTimeout(()=>controller.abort(), 65000);
+  const limitMs = timeoutMs || 65000;
+  const timeoutId = setTimeout(()=>controller.abort(), limitMs);
   let response;
   try{
     response = await fetch(BACKEND_URL + "/api/chat", {
@@ -4236,7 +4237,7 @@ async function callClaudeRaw(system, messages, maxTokens){
     });
   }catch(err){
     if(err.name === 'AbortError'){
-      throw new Error(`No response from the server after 65 seconds. It may be waking up from sleep (this can take up to a minute the first time) - please try again.`);
+      throw new Error(`No response from the server after ${Math.round(limitMs/1000)} seconds. It may be waking up from sleep (this can take up to a minute the first time) - please try again.`);
     }
     throw err;
   }finally{
@@ -4265,14 +4266,18 @@ async function callClaude(system, messages, modelTier){
 }
 
 // JSON-only variant for the evaluator - strips markdown fences and parses, replacing sample.json().
-async function callClaudeJson(prompt, modelTier){
-  const {text:raw, stop_reason} = await callClaudeRaw(null, [{role:'user', content:prompt}], 2500);
+// opts.maxTokens / opts.timeoutMs: scenario generation and the interpretation check produce much longer JSON
+// than the evaluator (a full scenario with persona, Case Data, scoring and process grounding), so they
+// pass larger limits. Default stays 2500 for the evaluator calls.
+async function callClaudeJson(prompt, modelTier, opts){
+  const o = opts || {};
+  const {text:raw, stop_reason} = await callClaudeRaw(null, [{role:'user', content:prompt}], o.maxTokens || 2500, o.timeoutMs);
   const clean = raw.replace(/```json|```/g,'').trim();
   try{
     return JSON.parse(clean);
   }catch(e){
     const truncNote = stop_reason==='max_tokens' ? ' (response was cut off - hit max_tokens before finishing)' : '';
-    throw new Error(`Evaluator reply wasn't valid JSON${truncNote}. Ends with: ...${raw.slice(-300)}`);
+    throw new Error(`Model reply wasn't valid JSON${truncNote}. Ends with: ...${raw.slice(-300)}`);
   }
 }
 
