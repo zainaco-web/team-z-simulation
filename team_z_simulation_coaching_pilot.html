@@ -2089,15 +2089,59 @@ function scenarioTagProblems(s){
 function placeholderHits(s){
   const hits = [];
   const chk = (where, t)=>{ if(/\[[^\]\n]{2,}\]/.test(t||'')) hits.push('Bracketed placeholder in '+where+' - replace it with a real value or remove it.'); };
-  chk('the agent briefing', s.agentBriefing);
+  chk('the agent briefing', s.agentBriefing); chk('the pre-chat answer', s.preChatContext); chk('the pre-chat reason', s.preChatReason);
   (s.caseData||[]).forEach(c=>{ chk('Case Data "'+c.label+'"', c.value); chk('a Case Data label', c.label); });
   return [...new Set(hits)];
+}
+// PRE-CHAT RULES: the pre-chat form is what the simulated player types before the chat starts. "Anything else we
+// should know?" comes ONLY from the dedicated preChatContext field (player-known, first person) - never from
+// agentBriefing, processGrounding, requiredActions, coachingSkill or any evaluator content. Blank is valid.
+// This is a heuristic: it cannot judge meaning, so it strips/flags likely violations; it never invents text.
+const PRECHAT_INTERNAL = /\b(game history|free spin history|case data|required actions?|critical errors?|ground truth|coaching|scenario|simulation|evaluat\w*|rubric|scor(e|ed|ing)|manual ?promo|manual ?adjustment|campaign id|internal (record|entry|note)s?|records? (show|confirm)|account records?|before drawing conclusions|expected (outcome|resolution)|correct (handling|process))\b/i;
+const PRECHAT_THIRD = /\b(the|a|this) (player|customer|agent|tl|team lead)\b/i;
+const PRECHAT_INSTRUCT = /\b(review|check|verify|investigat\w*|escalat\w*|troubleshoot\w*|reconcil\w*)\b/i;
+const PRECHAT_MODAL = /\b(should|must|needs? to|has to|ought to)\b/i;
+const PRECHAT_PERSON = /\b(i|i'm|i’m|i've|i’ve|i'd|i’d|i'll|i’ll|my|me|mine|we|our|you|your)\b/i;
+// Reasons a single sentence is not something the player would type. An instructional verb is allowed only when the
+// sentence is clearly spoken by/to the player ("I checked my notifications", "can you check my account").
+function preChatSentenceViolations(sentence){
+  const t = sentence||'';
+  const why = [];
+  if(PRECHAT_INTERNAL.test(t)) why.push('internal support/evaluation wording');
+  if(PRECHAT_THIRD.test(t)) why.push('third-person wording about the player/agent');
+  if(/->|=>|→/.test(t)) why.push('a step sequence');
+  if(PRECHAT_INSTRUCT.test(t) && !PRECHAT_PERSON.test(t)) why.push('an instruction to the agent');
+  if(PRECHAT_MODAL.test(t) && !/\b(i|my|me|we|our)\b/i.test(t)) why.push('an instruction ("should/must")');
+  return why;
+}
+function splitSentences(text){ return (text||'').split(/(?<=[.!?])\s+/).map(x=>x.trim()).filter(Boolean); }
+// Strips offending sentences. If nothing player-like remains (no first-person wording) the field is blanked instead.
+function sanitizePreChat(text, needFirstPerson){
+  const kept = [], stripped = [];
+  splitSentences(text).forEach(sen=>{ (preChatSentenceViolations(sen).length ? stripped : kept).push(sen); });
+  let out = kept.join(' ').trim();
+  if(out && needFirstPerson && !PRECHAT_PERSON.test(out)){ stripped.push(out); out = ''; }
+  return { text: out, stripped };
+}
+function preChatProblems(s){
+  const out = [];
+  const check = (label, text, needFirstPerson)=>{
+    const t = (text||'').trim();
+    if(!t) return;
+    splitSentences(t).forEach(sen=>{ const w = preChatSentenceViolations(sen); if(w.length) out.push('Pre-chat "'+label+'" contains '+w.join(', ')+': "'+sen.slice(0,90)+(sen.length>90?'...':'')+'". Only what the player knows and would type belongs here - remove it or leave the field blank.'); });
+    if(needFirstPerson && !PRECHAT_PERSON.test(t)) out.push('Pre-chat "'+label+'" is not in the player’s voice (no first-person wording). Rewrite it as the player would type it, or leave it blank.');
+    if(t.length > 400) out.push('Pre-chat "'+label+'" is very long for something a player types before a chat - keep it to what they would actually say.');
+  };
+  check('Anything else we should know?', s.preChatContext, true);
+  check('What brings you here?', s.preChatReason, false);
+  return [...new Set(out)];
 }
 // Problems that must be resolved before a scenario can enter the shared library or be approved.
 function scenarioReviewBlockers(s){
   const probs = scenarioTagProblems(s);
   const reqs = ((s.processGrounding||{}).requiredActions||[]).filter(x=>x && x.trim());
   placeholderHits(s).forEach(h=>probs.push(h));
+  if(s.isCustom) preChatProblems(s).forEach(h=>probs.push(h));
   if(!reqs.length) probs.push('No required actions are defined. Add at least one required action (from the TL-stated process) - none are filled in automatically.');
   return probs;
 }
@@ -2166,11 +2210,15 @@ APPROVED SECONDARY (RG) TAG CATALOGUE: ${cat.secondary.join(' | ')}
 
 RULE 6 - DO NOT INVENT PRODUCT SURFACES. Case Data tabs, labels, persona prompts and agent briefings must not invent screen names, tabs, inboxes, teams, channels or UI labels that the TL did not supply. Use the TL's own terms exactly. If the TL used inconsistent terms for the same surface, do not pick one silently - use the TL's wording from the most specific description and mention the inconsistency in ambiguityNotes. For every screen/tab/inbox/team/UI label you use anywhere in caseData tabs, agentBriefing or personaPrompt, add an entry to "uiTerms" with the term and a "sourceQuote" copied verbatim from the TL's description above that supports it.
 
+RULE 7 - PRE-CHAT SOURCE. The pre-chat form ("What brings you here?" and "Anything else we should know?") is typed by the simulated player before the chat starts. "preChatContext" (the answer to "Anything else we should know?") must be derived ONLY from "playerKnowledgeSituation" and the persona's own ground truth - what that player knows and would say - and written in FIRST PERSON as the player. It must never be derived from, or paraphrase, agentBriefing, processGrounding, requiredActions, criticalErrors, the coaching skill, evidenceReconciliation or any evaluator content. It must contain no instructions or support/investigation language (review, check, verify, investigate, escalate, "before drawing conclusions"), no internal screen or record names (Game History, Free Spin History, Case Data), no record statuses or IDs the player cannot see, no expected resolution and no third-person wording ("the player"). If there is nothing safe the player would realistically add, return an empty string - blank is correct and preferred over inventing text. "preChatReason" follows the same rule. Bad: "Review the full reward history before drawing conclusions." Good: "My 100 Sweet Bonanza free spins still show in my notifications but I can't find them in the game."
+
 Produce a JSON object with EXACTLY these fields (match this shape precisely, using realistic Betty iGaming customer-support content):
 {
   "title": "short player-facing title, e.g. 'Delayed Withdrawal (Interac)'",
   "playerName": "a first name for the simulated player",
-  "agentBriefing": "1-2 sentences, what the agent sees before the chat starts",
+  "preChatReason": "what the player would type for 'What brings you here?' - a few words, in the player's own voice and terms (for example 'Free spins still showing but I cannot play them'). Never a diagnosis, a record status or a coaching label; empty string if unsure",
+  "preChatContext": "the player's typed answer to 'Anything else we should know?' - 1-2 sentences, FIRST PERSON, only what this player knows, derived only from playerKnowledgeSituation and the persona ground truth (see RULE 7); empty string if nothing safe",
+  "agentBriefing": "1 neutral sentence for the agent-side Scenario panel naming only the player's stated contact reason; no records, no conclusions, no instructions. It is NOT used in the pre-chat form",
   "personaPrompt": "a full second-person persona prompt for the AI playing the customer, 150-350 words, written exactly like: 'You are [Name], [age/tone]... [situation]... [how they react to good vs vague answers]... [what they do and do not know]...' - make it specific to this scenario and difficulty level, and follow RULE 3",
   "playerKnowledgeSituation": "1-2 sentences, the player's own account of their situation",
   "evidenceReconciliation": { "timeline": ["each supplied record/event in chronological order, with what it shows"], "conclusion": "what is actually settled and what actually remains open", "unresolvedConflicts": "any evidence that cannot be reconciled, or 'none'" },
@@ -2409,6 +2457,9 @@ function normalizeGeneratedScenario(raw, intake, interp){
     if(!blob.includes(t) && !supportedTerms.has(t)) warnings.push('Case Data tab "'+c.tab+'" was not named in your description - confirm it matches a real Betty screen before saving.');
   });
 
+  const preContext = sanitizePreChat(String(raw.preChatContext||''), true);
+  const preReason = sanitizePreChat(String(raw.preChatReason||''), false);
+  [['Anything else we should know?', preContext], ['What brings you here?', preReason]].forEach(([lbl, r])=>{ if(r.stripped.length) warnings.push('Pre-chat "'+lbl+'" text was removed because it was not something the player would type: "'+r.stripped.join(' / ').slice(0,160)+'". The field is '+(r.text?'shortened':'blank')+'.'); });
   const pg = raw.processGrounding || {};
   const reconciliation = formatEvidenceReconciliation(raw.evidenceReconciliation);
   const scenario = {
@@ -2417,6 +2468,8 @@ function normalizeGeneratedScenario(raw, intake, interp){
     internalTitle: String(raw.title||'Untitled Scenario'), title: String(raw.title||'Untitled Scenario'),
     playerName: String(raw.playerName||'Player'),
     agentBriefing: String(raw.agentBriefing||''),
+    preChatReason: preReason.text,
+    preChatContext: preContext.text,
     endConditionsGuide: 'End once the case reaches a clear, complete resolution or a reasonable natural close.',
     kbStatus:'tl_coaching_draft', engineTestRG:false, rgScoringRelevant: hasSecondary,
     readiness:'PRACTICE_ONLY',
@@ -2491,7 +2544,7 @@ function cloneScenarioContentFields(s){
     isCustom:true,
     skill:s.skill||s.topic, skillCode:s.skillCode||'CUSTOM', difficulty:s.difficulty,
     internalTitle:s.internalTitle||s.title, title:s.title, playerName:s.playerName,
-    agentBriefing:s.agentBriefing||'', endConditionsGuide:s.endConditionsGuide||'End once the case reaches a clear, complete resolution or a reasonable natural close.',
+    agentBriefing:s.agentBriefing||'', preChatReason:s.preChatReason||'', preChatContext:s.preChatContext||'', endConditionsGuide:s.endConditionsGuide||'End once the case reaches a clear, complete resolution or a reasonable natural close.',
     kbStatus:'tl_coaching_draft', engineTestRG:false, rgScoringRelevant:!!s.rgScoringRelevant,
     readiness:'PRACTICE_ONLY',
     metadata:s.metadata||{kbSources:[],lastValidatedDate:null,validatedBy:null,reviewTriggerCategory:s.topic,policyVersionRef:null},
@@ -2595,6 +2648,7 @@ async function saveScenarioBuilderDraft(){
   if(gen.tagOptions.length===0){ state.scenarioBuilderError = 'Add at least one tag option from the approved tag catalogue.'; render(); return; }
   if(!gen.correctTag && state.scenarioBuilderVisibility==='library'){ state.scenarioBuilderError = 'Choose the correct tag from the approved tag catalogue before submitting to the shared library.'; render(); return; }
   if(state.scenarioBuilderVisibility==='library' && placeholderHits(gen).length){ state.scenarioBuilderError = placeholderHits(gen).join(' ') + ' Fix this before submitting to the shared library.'; render(); return; }
+  if(state.scenarioBuilderVisibility==='library' && preChatProblems(gen).length){ state.scenarioBuilderError = preChatProblems(gen).join(' ') + ' Fix the pre-chat text before submitting to the shared library.'; render(); return; }
   if(state.scenarioBuilderVisibility==='library' && !(gen.processGrounding.requiredActions||[]).length){ state.scenarioBuilderError = 'Add at least one required action before submitting to the shared library - none are filled in automatically.'; render(); return; }
   if(state.scenarioBuilderVisibility==='library' && uiTermReviewIssues(gen).length && !gen.uiTermsConfirmed){ state.scenarioBuilderError = 'Some screen/UI terms in this scenario are unsupported or on the watch-list. Confirm they match the real Betty screens (tick the box in the red panel) before submitting to the shared library.'; render(); return; }
   gen.tagReviewNeeded = !gen.correctTag;
@@ -2985,8 +3039,8 @@ function renderMain(){
   let msgs=`<div class="prechat-card">
       <div class="pctitle">Pre-chat form</div>
       <div class="pcq">What is your preferred name?</div><div class="pca">${escapeHtml(s.playerName)}</div>
-      <div class="pcq">What brings you here?</div><div class="pca">${escapeHtml(s.title)}</div>
-      <div class="pcq">Anything else we should know?</div><div class="pca">${escapeHtml(s.agentBriefing)}</div>
+      <div class="pcq">What brings you here?</div><div class="pca">${escapeHtml(s.preChatReason||s.title)}</div>
+      <div class="pcq">Anything else we should know?</div><div class="pca">${escapeHtml(s.preChatContext||'')}</div>
     </div>
     <div class="started-divider"><span>Started - Today, ${new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}</span></div>`;
   state.transcript.forEach(m=>{
@@ -3583,6 +3637,8 @@ function wireEvents(){
     bindText('editTitle', ['title']);
     bindText('editPlayerName', ['playerName']);
     bindText('editAht', ['ahtTargetMinutes']);
+    bindText('editPreChatReason', ['preChatReason']);
+    bindText('editPreChatContext', ['preChatContext']);
     bindText('editBriefing', ['agentBriefing']);
     bindText('editPersona', ['personaPrompt']);
     bindText('editPlayerSituation', ['playerKnowledge','situation']);
@@ -7333,7 +7389,7 @@ function renderScenarioPreviewEditForm(){
   const hasSecondary = !!gen.correctSecondaryTag;
   const editorTagProblems = scenarioTagProblems(gen);
   const editorNoReq = (gen.processGrounding.requiredActions||[]).some(x=>x && x.trim()) ? [] : ['No required actions were generated. Add them from the TL-stated process - none are filled in automatically, and the scenario cannot enter the shared library without them.'];
-  const editorWarnings = [...(gen.generationWarnings||[]), ...editorTagProblems.filter(x=>!(gen.generationWarnings||[]).includes(x)), ...editorNoReq, ...placeholderHits(gen)];
+  const editorWarnings = [...(gen.generationWarnings||[]), ...editorTagProblems.filter(x=>!(gen.generationWarnings||[]).includes(x)), ...editorNoReq, ...placeholderHits(gen), ...preChatProblems(gen)];
   const uiIssues = uiTermReviewIssues(gen);
   const uiTermsList = [...new Set([...(gen.caseData||[]).map(c=>c.tab).filter(Boolean), ...((gen.uiTermsUsed||[]))])];
   const uiPanelHtml = (uiIssues.length || uiTermsList.length) ? `<div id="builderUiTermsPanel" style="margin-top:10px;border:2px solid ${uiIssues.length?'var(--bad)':'var(--border)'};border-radius:8px;padding:10px 12px;font-size:12px;">
@@ -7361,7 +7417,13 @@ function renderScenarioPreviewEditForm(){
         
         
       </div>
-      <label style="font-size:12px;color:var(--text2);">Agent briefing
+      <label style="font-size:12px;color:var(--text2);">Pre-chat: What brings you here? <span style="color:var(--text3);">(player&rsquo;s own words, a few words)</span>
+        <input id="editPreChatReason" value="${escapeHtml(gen.preChatReason||'')}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+      </label>
+      <label style="font-size:12px;color:var(--text2);">Pre-chat: Anything else we should know? <span style="color:var(--text3);">(written as the player, first person, only what the player knows. No coaching, records, steps or expected resolution. Blank is fine.)</span>
+        <textarea id="editPreChatContext" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.preChatContext||'')}</textarea>
+      </label>
+      <label style="font-size:12px;color:var(--text2);">Agent briefing <span style="color:var(--text3);">(shown in the agent-side Scenario panel only; never used in the pre-chat form)</span>
         <textarea id="editBriefing" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.agentBriefing)}</textarea>
       </label>
       <label style="font-size:12px;color:var(--text2);">Player behaviour / persona prompt
