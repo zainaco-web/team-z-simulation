@@ -243,9 +243,14 @@
    ============================================================ */
 
 const KB_NOT_VALIDATED_BANNER = "PROCESS NOT YET KB-VALIDATED - ENGINE TEST ONLY. Process content below is fictional/placeholder, not real Betty KB. Do not use for real Team Z coaching until replaced with validated KB content.";
-const KB_AMBIGUOUS_BANNER = "GENUINE KB GAP - real Betty KB was checked, but it does not clearly resolve this exact case. This scenario deliberately tests whether an agent recognizes ambiguity and loops in a TL, rather than confidently guessing either direction.";
+const KB_AMBIGUOUS_BANNER = "GENUINE KB GAP - real Betty KB was checked, but it does not clearly resolve this exact case. This scenario deliberately tests whether an agent recognizes the ambiguity and uses the appropriate review/escalation path rather than confidently guessing either direction.";
 
+const KB_TL_DRAFT_BANNER = "DRAFT-STANDARD SCORE - this scenario is a TL Coaching Draft that has not been validated against Betty KB or reviewed by QA. The score below judges the agent against the creating TL's own stated standard only. A FAIL here is NOT a verified finding about Betty process and should not be used as proof of an agent performance issue.";
+function isDraftStandard(s){ return !!s && s.kbStatus==='tl_coaching_draft'; }
 function kbBannerFor(s){
+  if(s.kbStatus==='tl_coaching_draft'){
+    return `<div class="kb-banner" style="font-weight:700;color:var(--warn);border:2px solid var(--warn-border);background:var(--warn-bg);">\u26a0 ${escapeHtml(KB_TL_DRAFT_BANNER)}</div>`;
+  }
   if(s.kbStatus==='validated'){
     return `<div class="kb-banner" style="color:var(--ok);border-color:var(--ok-border);background:var(--ok-bg);">\u2713 KB-VALIDATED: ${escapeHtml(s.kbSource||'')}</div>`;
   }
@@ -273,9 +278,14 @@ const GLOBAL_EVAL_RULES = `GLOBAL EVALUATION RULES (apply to every criterion bel
 7. DO NOT DOUBLE-DEDUCT THE SAME ROOT CAUSE. If a single mistake affects both Resolution & Obligations (Q1) and Player Experience (Q2), only deduct in both if it genuinely created two separate impacts - one on the correctness/completeness of the outcome, and a distinct one on how the interaction felt to the player. If it's really one impact viewed from two angles, deduct once, in whichever question it most directly belongs to, and note the connection in the other question's citation without deducting there too.
 8. Q1 (Resolution & Obligations) requires SPECIFIC evidence - cite the exact transcript turn(s) or, where relevant, the Agent Action Log. Do not deduct on Q1 based on a general impression of the chat; every Q1 letter below A must trace to a specific, quotable moment or a specific missing action with real predictable cost.
 9. Q2 (Player Experience) may be judged more holistically than Q1 - use representative turns as evidence, but the letter should reflect the overall pattern and feel of the interaction across its full arc, not a single isolated line taken out of context.
-10. Q3 (Documentation) is based STRICTLY on the submitted note and tag(s) after the chat ends. Never infer documentation quality from how well the live chat was HANDLED - a great chat with a thin note still scores low on Q3, and a rough chat with an accurate, complete note scores well on Q3. These are genuinely independent. This independence is about handling quality, not about whether the note is actually true: if the note states an outcome or action occurred (e.g. "escalated to Fraud," "sent for further review," "reward credited") check that claim against the transcript and Action Log the same way rule 5 governs operational claims generally - a note asserting something that the evidence doesn't support is not an accurate note, regardless of how well-written it is, and should not receive Q3's A.
+10. Q3 (Documentation) is based STRICTLY on the submitted note and tag(s) after the chat ends. Never infer documentation quality from how well the live chat was HANDLED - a great chat with a thin note still scores low on Q3, and a rough chat with an accurate, complete note scores well on Q3. These are genuinely independent. This independence is about handling quality, not about whether the note is actually true: if the note states an outcome or action occurred (e.g. "escalated to Fraud," "sent for further review," "reward credited") check that claim against the transcript and Action Log the same way rule 5 governs operational claims generally - a note asserting something that the evidence doesn't support is not an accurate note, regardless of how well-written it is, and should not receive Q3's A. The reverse also holds: a note whose every factual statement is supported by the transcript and Case Data IS accurate, even if it does not interpret how two facts relate (e.g. it says a different deposit was "separate" without speculating whether it was related) - never mark a note down for failing to state a conclusion the scenario never established, and never mark it down for "omitting" something without first re-reading the note to confirm that item is actually absent from its exact wording. Q3 asks whether a colleague could pick the case up from the note (issue, actions taken, outcome, key context) - it is not a checklist of everything the agent did. Do not mark a note down for leaving out an internal investigation step that never affected the player or the outcome (for example checking an alternative promo that was never discussed with the player). Do mark it down when the note states something more specific than the transcript supports, such as naming an approver, team, or channel (e.g. "manager review") when the transcript only shows that something was approved.
 11. NEVER apply an automatic deduction for a scripted or checklist-style behaviour that Process Grounding does not specifically require for this scenario (e.g. do not penalize by default for not asking "is there anything else I can help with" unless failing to do so had an actual, specific impact in this transcript - and even then, evidence and impact must be cited, not assumed from the behaviour's absence alone).
-12. Real Betty Chat Guidelines require confirming the relevant game or promotion name early in a chat. This is real, current guidance - but treat it the same as rule 6: judge by impact, not by presence/absence alone. If the agent never explicitly confirmed the game/promo name but the transcript shows no resulting confusion, wrong-item investigation, or wasted turns, this is at most a minor citation note, not a deduction. Only reflect it in the score if skipping it demonstrably caused incomplete investigation, confusion, or another real consequence in this specific transcript.`;
+12. Real Betty Chat Guidelines require confirming the relevant game or promotion name early in a chat. This is real, current guidance - but treat it the same as rule 6: judge by impact, not by presence/absence alone. If the agent never explicitly confirmed the game/promo name but the transcript shows no resulting confusion, wrong-item investigation, or wasted turns, this is at most a minor citation note, not a deduction. Only reflect it in the score if skipping it demonstrably caused incomplete investigation, confusion, or another real consequence in this specific transcript.
+13. CITE THE INPUTS ACCURATELY. Every deduction and every statement about what Available Case Data, Process Grounding, the transcript, or the submitted note "says" or "established" must match their actual wording. Do not attribute to Case Data a conclusion it does not explicitly state (e.g. Case Data showing one deposit does not establish that no other deposit exists anywhere on the account), and do not call an agent's check "unnecessary" or a "loop" when it was a reasonable response to new or contradictory information the player had just given - verifying that the item in Case Data is really the one the player means is sound practice, not a detour. If your citation relies on what an input says, it must be quotable. This includes whether a Process Grounding item is required or optional: an action listed under Required Actions is required, and one listed under Optional Actions is optional - never reclassify an item, and never describe a required action as optional to soften a miss. A missed required action is weighed by its impact under rule 6, which is where a minor miss earns a small deduction, not by relabeling it.
+14. DO NOT INFER EVENTS THE TRANSCRIPT DOES NOT SHOW. Words like "implied," "presumably," or "likely" are not evidence. If the transcript says only that something was approved, arranged, or handled (e.g. "I was able to get this approved") without showing who did it or how, say it is not evidenced - do not fill in the missing party (a TL, a manager, a team) or the missing step, and never describe a consultation, escalation, or check as shown when it is not. The outcome the agent communicated to the player can still be credited as stated; who or what produced it cannot be assumed. Where the process requires a specific step (such as checking with a TL) and the transcript shows only its result, say the step is not directly evidenced and weigh that by impact under rule 6 instead of treating it as visible.
+15. SIMULATED REVIEW WORKFLOW. When Available Case Data contains items marked [SIMULATED WORKFLOW ACTION] on a Review tab, they stand in for a review step this prototype has no real screen for: the agent clicks the request action (named in the log), and only then can they view the decision. For these items, unlike the other operational actions in rule 5, the Action Log is ground truth: credit a review as requested only if the log shows REVIEW REQUESTED, and credit the agent as knowing the outcome only if the log also shows REVIEW DECISION VIEWED. The decision text in Available Case Data is the outcome that applied to this attempt. If the agent tells the player an approval or a denial without the log showing both steps, treat that outcome as an unsupported claim under rule 2. If the agent acts against the decision (for example promising reinstatement after a Declined decision), that is a process error with player impact. Refer to the reviewer only by the action name shown in the Action Log and Available Case Data (for example "Request Review" or "Request CS Manager Review"); never attribute the decision to a TL, manager, or any other role the log and Case Data do not name.
+16. GROUND TRUTH AND CONFLICTS. Available Case Data (the records the agent could see or investigate) is the ground truth for this scenario. (a) A player statement that contradicts Case Data - not remembering an activity, disputing a record - is pushback, not a fact: do not penalize an agent for politely relying on verified account records over the player's recollection, do not treat the player's claim as having changed the facts, and judge the manner in which the agent handled the dispute. (b) If a Required Action asks the agent to treat something as unresolved or discrepant that a later or additional record in Available Case Data already explains or supersedes (for example an earlier Cancelled reward followed by a replacement that is Used and confirmed by game history), do not deduct the agent for following the evidence; note the conflict in the summary as a possible scenario-construction issue.
+17. FACT VS. QUALIFIED HYPOTHESIS, AND TURN ORDER. (a) Claiming a cause as fact ("this is a display lag") is different from offering a clearly qualified possibility ("it could be a display issue, but I can't confirm that yet") while continuing to verify or troubleshoot; only the former is an unsupported claim under rule 2. (b) A conditional troubleshooting question ("if you're using the app, ...") asked before the player has said which platform they use is not inattention; it is a lapse only if the agent asks it AFTER the player clearly stated the answer. Before saying the agent ignored or contradicted something the player said, check the turn numbers: the player's statement must come in an earlier turn than the agent turn you cite.`;
 
 /* ============================================================
    REAL BETTY QA SCORECARD - replaces the old per-scenario
@@ -392,24 +402,55 @@ const SCENARIOS = [
     playerKnowledge:{
       situation:'You meant to claim the "Weekend Reload" free spins over the weekend and forgot - you\u2019re messaging the next afternoon asking to claim it now.',
     },
-    personaPrompt:'You are Renee, disappointed and a bit annoyed - you meant to claim the "Weekend Reload" promo over the weekend and forgot. You will push back once ("can\u2019t you just make an exception, it was only one day") before accepting a clear, honest answer. If the agent tells you they need to check with their lead, that\u2019s fine - wait for the outcome. If they come back having secured a one-time exception, be genuinely pleased, and if they explain the Midweek Spins alternative first, ask a natural follow-up question about it (e.g. "what\u2019s that one about?") before deciding whether you still want the original promo too. You do not know what other promotions currently exist, and you do not know internal terms for anything - if the agent explains Midweek Spins, take their explanation at face value.',
+    personaPrompt:'You are Renee, disappointed and a bit annoyed - you meant to claim the "Weekend Reload" promo over the weekend and forgot. You will push back once ("can\u2019t you just make an exception, it was only one day") before accepting a clear, honest answer. If the agent tells you they need to check with their lead, that\u2019s fine - wait for the outcome. If they come back saying the exception was not approved, accept it - disappointed but gracious, no further arguing - and if they then explain the Midweek Spins alternative, ask a natural follow-up question about it. If they come back having secured a one-time exception, be genuinely pleased, and if they explain the Midweek Spins alternative first, ask a natural follow-up question about it (e.g. "what\u2019s that one about?") before deciding whether you still want the original promo too. You do not know what other promotions currently exist, and you do not know internal terms for anything - if the agent explains Midweek Spins, take their explanation at face value.',
 
     caseData:[
       {id:'promo1', tab:'Promotion History', label:'Weekend Reload Free Spins', value:'Player was eligible prior to expiry - Expiry: yesterday 11:59pm - Player never opted in or deposited toward this promo - Status: Expired, unclaimed', gated:false},
       {id:'promo2', tab:'Promotion History', label:'Midweek Spins (currently active)', value:'Active - Player Eligible: Yes - Not yet claimed - Terms: opt-in required, then a $20+ qualifying deposit, reward is 20 free spins, valid until Wednesday 11:59pm.', gated:true, gateLabel:'View Promotion History'},
+      {id:'rev_req', tab:'Review', label:'Review request', value:'Review submitted.', gated:true, gateLabel:'Request Review', reviewRole:'request'},
+      {id:'rev_dec', tab:'Review', label:'Review decision', value:'(set per attempt)', gated:true, gateLabel:'View Review Decision', reviewRole:'decision', requiresItem:'rev_req'},
     ],
+
+    // Simulated review workflow (this prototype has no native control for it). The decision is FIXED for each
+    // attempt - never random - chosen by attempt number: attempt 1 = outcomes[0], attempt 2 = outcomes[1], then
+    // it cycles. To pin one outcome for every attempt, list just that outcome in `outcomes`.
+    review:{
+      outcomes:['approved','declined'],
+      results:{
+        approved:{
+          decisionText:'Approved - Weekend Reload may be applied as an exception.',
+          kbNote:'REVIEW OUTCOME FOR THIS ATTEMPT: APPROVED. The review decision shown in Available Case Data is "Approved" - the agent is expected to apply the Weekend Reload exception and frame it correctly.',
+          processGrounding:{
+            requiredActions:['Confirm via Promotion History that the player never opted in/deposited, and that this is expiry-before-engagement, not the "already-awarded-then-expired" case','Recognize that KB does not clearly establish a rule either way for this specific case, and use the Request Review action rather than confidently asserting a policy alone','View the review decision before telling the player any outcome - the Action Log must show both the review request and the decision being viewed','Because the decision is Approved: apply the exception and clearly frame it to the player as a one-time exception - not a standing rule change - and reinforce that future promo eligibility requires opting in and meeting terms within the window','Check Promotion History for the active Midweek Spins alternative and explain its actual terms (opt-in, $20+ deposit, 20 free spins, valid until Wednesday) using what Case Data provides - never invent terms not given here'],
+            optionalActions:['Offer the Midweek Spins alternative even if the Weekend Reload exception is granted, since the player may want both'],
+            escalationCriteria:'This is the correct case to request a review - not because the case is complex, but because the KB itself doesn’t resolve it. A review request that never reaches a viewed decision, or a decision that is never communicated to the player, is an incomplete resolution.',
+            criticalErrors:'Confidently telling the player "no exceptions exist" AND confidently promising reinstatement WITHOUT requesting a review are BOTH critical errors - neither is supported by the KB alone. Telling the player an approval (or any outcome) that the Action Log does not support - no review requested, or the decision never viewed - is confident invention and a critical error. Inventing specific Midweek Spins terms not given in Case Data (a different deposit amount, spin count, or expiry) is a critical error - confident invention, not a neutral simplification. Leaving the review unresolved with no clear outcome communicated to the player is a critical error - the case must actually close.'
+          }
+        },
+        declined:{
+          decisionText:'Declined - Exception not approved. Expired promotion cannot be reinstated.',
+          kbNote:'REVIEW OUTCOME FOR THIS ATTEMPT: DECLINED. The review decision shown in Available Case Data is "Declined" - the agent must NOT apply or promise reinstatement, and is expected to communicate the decision warmly and then surface the active Midweek Spins alternative.',
+          processGrounding:{
+            requiredActions:['Confirm via Promotion History that the player never opted in/deposited, and that this is expiry-before-engagement, not the "already-awarded-then-expired" case','Recognize that KB does not clearly establish a rule either way for this specific case, and use the Request Review action rather than confidently asserting a policy alone','View the review decision before telling the player any outcome - the Action Log must show both the review request and the decision being viewed','Because the decision is Declined: communicate it warmly and clearly - without promising reinstatement, blaming the player, or implying the agent could have decided differently','Check Promotion History for the active Midweek Spins alternative and surface it to the player, explaining its actual terms (opt-in, $20+ deposit, 20 free spins, valid until Wednesday) using what Case Data provides - never invent terms not given here'],
+            optionalActions:['Briefly reinforce that future promo eligibility requires opting in and meeting terms within the window'],
+            escalationCriteria:'This is the correct case to request a review - not because the case is complex, but because the KB itself doesn’t resolve it. A review request that never reaches a viewed decision, or a decision that is never communicated to the player, is an incomplete resolution.',
+            criticalErrors:'Applying the exception or promising reinstatement after a Declined decision is a critical error - it contradicts the outcome the review actually returned. Telling the player an outcome that the Action Log does not support - no review requested, or the decision never viewed - is confident invention and a critical error. Inventing specific Midweek Spins terms not given in Case Data (a different deposit amount, spin count, or expiry) is a critical error - confident invention, not a neutral simplification. Leaving the review unresolved with no clear outcome communicated to the player is a critical error - the case must actually close.'
+          }
+        }
+      }
+    },
 
     correctTag:'Promo: Not Available', tagOptions:['Promo: Not Available', 'Promo: Welcome Bonus', 'Promo: Other', 'Account: Complaint'],
     ahtTargetMinutes:15,
     topic:'Promotions',
 
     processGrounding:{
-      kbTopic:'Promotion Expiry - Genuine KB Gap, Resolved via TL Judgment',
-      kbText:'Real KB defines "Expired" reward status generically ("the promotion period has elapsed, and the player is no longer eligible") but does not explicitly address whether an outright-expired, never-opted-in promotion can be reinstated. The Manual Adjustments table\u2019s "Expired Free Spins" entry (3-day reissue window) covers a DIFFERENT case - spins already awarded that expired unused - not a promotion that expired before the player ever engaged with it. This is a real gap: the KB does not resolve this specific case with a fixed rule. OPERATIONAL COACHING RULE FOR THIS SCENARIO (not a proven KB citation - the RAF table\u2019s one-time-exception language applies to referrals, not promotions, and is not direct evidence for this case): TL may approve a one-time exception where appropriate. A complete resolution here looks like: recognize the case isn\u2019t clearly covered \u2192 check with a TL rather than guessing \u2192 if approved, apply the one-time exception \u2192 clearly tell the player this is a one-time exception, not a standing policy change \u2192 reinforce that future eligibility requires meeting terms within the promotional window. "Flagged for TL, then left the conversation without closing it" is an incomplete resolution, not the ceiling.',
-      requiredActions:['Confirm via Promotion History that the player never opted in/deposited, and that this is expiry-before-engagement, not the "already-awarded-then-expired" case','Recognize that KB does not clearly establish a rule either way for this specific case, and check with a TL rather than confidently asserting a policy alone','If a one-time exception is granted, apply it and clearly frame it to the player as a one-time exception - not a standing rule change - and reinforce that future promo eligibility requires opting in and meeting terms within the window','Check Promotion History for the active Midweek Spins alternative and explain its actual terms (opt-in, $20+ deposit, 20 free spins, valid until Wednesday) using what Case Data provides - never invent terms not given here'],
+      kbTopic:'Promotion Expiry - Genuine KB Gap, Resolved via Review',
+      kbText:'Real KB defines "Expired" reward status generically ("the promotion period has elapsed, and the player is no longer eligible") but does not explicitly address whether an outright-expired, never-opted-in promotion can be reinstated. The Manual Adjustments table\u2019s "Expired Free Spins" entry (3-day reissue window) covers a DIFFERENT case - spins already awarded that expired unused - not a promotion that expired before the player ever engaged with it. This is a real gap: the KB does not resolve this specific case with a fixed rule. OPERATIONAL COACHING RULE FOR THIS SCENARIO (not a proven KB citation - the RAF table\u2019s one-time-exception language applies to referrals, not promotions, and is not direct evidence for this case): a review may approve a one-time exception where appropriate. A complete resolution here looks like: recognize the case isn\u2019t clearly covered \u2192 request a review rather than guessing \u2192 view the review decision \u2192 if approved, apply the one-time exception \u2192 clearly tell the player this is a one-time exception, not a standing policy change \u2192 reinforce that future eligibility requires meeting terms within the promotional window. "Review requested, then left the conversation without closing it" is an incomplete resolution, not the ceiling.',
+      requiredActions:['Confirm via Promotion History that the player never opted in/deposited, and that this is expiry-before-engagement, not the "already-awarded-then-expired" case','Recognize that KB does not clearly establish a rule either way for this specific case, and use the Request Review action rather than confidently asserting a policy alone','View the review decision before telling the player any outcome - the Action Log must show both the review request and the decision being viewed','If the decision is Approved, apply the exception and clearly frame it to the player as a one-time exception - not a standing rule change - and reinforce that future promo eligibility requires opting in and meeting terms within the window','Check Promotion History for the active Midweek Spins alternative and explain its actual terms (opt-in, $20+ deposit, 20 free spins, valid until Wednesday) using what Case Data provides - never invent terms not given here'],
       optionalActions:['Offer the Midweek Spins alternative even if the Weekend Reload exception is granted, since the player may want both'],
-      escalationCriteria:'This is the correct case to loop in a TL - not because the case is complex, but because the KB itself doesn\u2019t resolve it. A TL check that never reaches a stated outcome is an incomplete resolution.',
-      criticalErrors:'Confidently telling the player "no exceptions exist" AND confidently promising reinstatement WITHOUT checking are BOTH critical errors - neither is supported by the KB alone. Inventing specific Midweek Spins terms not given in Case Data (a different deposit amount, spin count, or expiry) is a critical error - confident invention, not a neutral simplification. Leaving a TL check unresolved with no clear outcome communicated to the player is a critical error - the case must actually close.',
+      escalationCriteria:'This is the correct case to request a review - not because the case is complex, but because the KB itself doesn\u2019t resolve it. A review request that never reaches a viewed decision, or a decision never communicated to the player, is an incomplete resolution.',
+      criticalErrors:'Confidently telling the player "no exceptions exist" AND confidently promising reinstatement WITHOUT requesting a review are BOTH critical errors - neither is supported by the KB alone. Inventing specific Midweek Spins terms not given in Case Data (a different deposit amount, spin count, or expiry) is a critical error - confident invention, not a neutral simplification. Leaving the review unresolved with no clear outcome communicated to the player is a critical error - the case must actually close.',
       ambiguityNotes:'This scenario tests whether an agent can recognize a genuine KB gap AND carry it through to a real resolution, not just flag it and stop. Real KB reviewed: "Promotions: Key Information, Player Eligibility, Troubleshooting" and "Manual Adjustments & Goodwill Compensation Policy."'
     },
 
@@ -904,12 +945,43 @@ const SCENARIOS = [
     playerKnowledge:{
       situation:'You\u2019re certain you opted into a quest promotion, but the reward never showed up in your account.',
     },
-    personaPrompt:'You are Renee, confident you opted in - you genuinely believe you did, even though the records will show otherwise. Push back once when told there\u2019s no record of opt-in ("I\u2019m sure I clicked it, can you just check again?") but accept a clear, calm explanation once given. If the agent tells you they need to check with their team/manager before deciding, that\u2019s fine - wait for the outcome, you\u2019re not upset about a brief wait. If the agent comes back having secured an exception, be pleased. If the agent explains a similar exception was already used before (back in March) and this one may not be possible, but they\u2019re checking with their manager to be sure, accept that calmly - you\u2019re not upset about the process, just want a real answer either way.',
+    personaPrompt:'You are Renee, confident you opted in - you genuinely believe you did, even though the records will show otherwise. Push back once when told there\u2019s no record of opt-in ("I\u2019m sure I clicked it, can you just check again?") but accept a clear, calm explanation once given. If the agent tells you they need to check with their team/manager before deciding, that\u2019s fine - wait for the outcome, you\u2019re not upset about a brief wait. If the agent comes back saying the exception was not approved, accept it calmly - a little disappointed but gracious, no further arguing. If the agent comes back having secured an exception, be pleased. If the agent explains a similar exception was already used before (back in March) and this one may not be possible, but they\u2019re checking with their manager to be sure, accept that calmly - you\u2019re not upset about the process, just want a real answer either way.',
 
     caseData:[
       {id:'quest1', tab:'Promotion History', label:'Quest in question', value:'No opt-in on record for this quest period. Deposit and play requirements were otherwise met.', gated:false},
       {id:'quest2', tab:'Promotion History', label:'Prior exception history', value:'Priority Note, March 14: a one-time Quest reward exception was manually awarded to this player for a missed opt-in.', gated:true, gateLabel:'View Promotion History'},
+      {id:'rev_req', tab:'Review', label:'CS Manager Review request', value:'CS Manager Review submitted.', gated:true, gateLabel:'Request CS Manager Review', reviewRole:'request'},
+      {id:'rev_dec', tab:'Review', label:'CS Manager Review decision', value:'(set per attempt)', gated:true, gateLabel:'View CS Manager Review Decision', reviewRole:'decision', requiresItem:'rev_req'},
     ],
+
+    // Simulated CS Manager Review workflow (this prototype has no native control for it). The label matches the documented
+    // Quest process name. The decision is FIXED per attempt - never random - chosen by attempt number (attempt 1 = outcomes[0],
+    // attempt 2 = outcomes[1], then cycling). To pin one outcome for every attempt, list just that outcome in `outcomes`.
+    review:{
+      outcomes:['approved','declined'],
+      results:{
+        approved:{
+          decisionText:'Approved - Quest reward exception may be applied.',
+          kbNote:'REVIEW OUTCOME FOR THIS ATTEMPT: APPROVED. The CS Manager Review decision shown in Available Case Data is "Approved" - the agent is expected to apply the Quest reward exception and tell the player clearly it has been approved.',
+          processGrounding:{
+            requiredActions:['Confirm via Promotion History that there\u2019s genuinely no opt-in on record for this quest','Check for prior exception history before deciding anything','Because a prior exception exists, do not decide unilaterally in either direction - use the Request CS Manager Review action and tell the player honestly that it needs a quick check','View the CS Manager Review decision before telling the player any outcome - the Action Log must show both the review request and the decision being viewed','Because the decision is Approved: apply the Quest reward exception and tell the player clearly it has been approved, without implying that future missed opt-ins will also be covered'],
+            optionalActions:['Mention any currently active alternative promotion the player may be eligible for, only if one is shown in Case Data - never invent one'],
+            escalationCriteria:'Escalate via CS Manager Review whenever a prior exception already exists on the account - this is the correct path, not an edge case. A review request that never reaches a viewed decision, or a decision never communicated to the player, is an incomplete resolution.',
+            criticalErrors:'Granting the exception without a viewed Approved decision is a critical error. Telling the player an outcome that the Action Log does not support - no CS Manager Review requested, or the decision never viewed - is confident invention and a critical error. Granting or declining the request unilaterally, without going through CS Manager Review, is a critical error - the agent has no unilateral authority here once a prior exception is on file. Confidently telling the player "no exceptions are ever possible" is also incorrect - the process allows for a possible exception via review, not a blanket no.'
+          }
+        },
+        declined:{
+          decisionText:'Declined - Exception not approved for this request.',
+          kbNote:'REVIEW OUTCOME FOR THIS ATTEMPT: DECLINED. The CS Manager Review decision shown in Available Case Data is "Declined" - the agent must NOT apply or promise the exception, and is expected to communicate the decision warmly and clearly, without inventing reasons the decision does not give.',
+          processGrounding:{
+            requiredActions:['Confirm via Promotion History that there\u2019s genuinely no opt-in on record for this quest','Check for prior exception history before deciding anything','Because a prior exception exists, do not decide unilaterally in either direction - use the Request CS Manager Review action and tell the player honestly that it needs a quick check','View the CS Manager Review decision before telling the player any outcome - the Action Log must show both the review request and the decision being viewed','Because the decision is Declined: communicate it warmly and clearly - without promising the reward, blaming the player, inventing reasons the decision does not state, or implying the agent could have decided differently'],
+            optionalActions:['Mention any currently active alternative promotion the player may be eligible for, only if one is shown in Case Data - never invent one'],
+            escalationCriteria:'Escalate via CS Manager Review whenever a prior exception already exists on the account - this is the correct path, not an edge case. A review request that never reaches a viewed decision, or a decision never communicated to the player, is an incomplete resolution.',
+            criticalErrors:'Applying the exception or promising the reward after a Declined decision is a critical error - it contradicts the outcome the review actually returned. Telling the player an outcome that the Action Log does not support - no CS Manager Review requested, or the decision never viewed - is confident invention and a critical error. Granting or declining the request unilaterally, without going through CS Manager Review, is a critical error - the agent has no unilateral authority here once a prior exception is on file. Confidently telling the player "no exceptions are ever possible" is also incorrect - the process allows for a possible exception via review, not a blanket no.'
+          }
+        }
+      }
+    },
 
     correctTag:'Promo: Quests', tagOptions:['Promo: Quests', 'Promo: Not Available', 'Promo: Other', 'Bonus: Goodwill Gesture Request: Granted'],
     ahtTargetMinutes:12,
@@ -917,8 +989,8 @@ const SCENARIOS = [
 
     processGrounding:{
       kbTopic:'Repeat Missed-Opt-In Quest Request - Escalate via CS Manager Review When a Prior Exception Exists',
-      kbText:'CURRENT KB: where there are no previous Quest reward exceptions on the account, a qualifying case may be awarded directly. Where a previous exception already exists, the agent should NOT decide unilaterally in either direction - the correct action is to escalate via the CS Manager Review flow for a possible exception. The agent\u2019s job is to recognize which situation applies and route it correctly, not to grant or decline it themselves once a prior exception is on file.',
-      requiredActions:['Confirm via Promotion History that there\u2019s genuinely no opt-in on record for this quest','Check for prior exception history before deciding anything','If no prior exception exists, award the case directly since the requirement was otherwise met','If a prior exception already exists, do not decide unilaterally - escalate via the CS Manager Review flow for a possible exception, and tell the player honestly that it needs a quick check'],
+      kbText:'CURRENT KB: where there are no previous Quest reward exceptions on the account, a qualifying case may be awarded directly. Where a previous exception already exists, the agent should NOT decide unilaterally in either direction - the correct action is to escalate via the CS Manager Review flow for a possible exception (in this simulation: Request CS Manager Review, then View CS Manager Review Decision). The agent\u2019s job is to recognize which situation applies and route it correctly, not to grant or decline it themselves once a prior exception is on file.',
+      requiredActions:['Confirm via Promotion History that there\u2019s genuinely no opt-in on record for this quest','Check for prior exception history before deciding anything','If no prior exception exists, award the case directly since the requirement was otherwise met','If a prior exception already exists, do not decide unilaterally - escalate via the CS Manager Review flow (Request CS Manager Review), view the decision before telling the player any outcome, and tell the player honestly that it needs a quick check'],
       optionalActions:['Mention any currently active alternative promotion the player may be eligible for, if one exists in Case Data'],
       escalationCriteria:'Escalate via CS Manager Review whenever a prior exception already exists on the account - this is the correct path, not an edge case. The agent should not attempt to resolve this unilaterally in either direction once a prior exception is found.',
       criticalErrors:'Declining the request outright because a prior exception exists, without escalating via CS Manager Review, is a critical error under the current process. Granting a second exception unilaterally, without going through CS Manager Review, is also a critical error - the agent doesn\u2019t have unilateral authority here either way once a prior exception is on file. Confidently telling the player "no exceptions are ever possible" is also incorrect - the current process allows for a possible exception via review, not a blanket no.',
@@ -1157,10 +1229,10 @@ const SCENARIOS = [
     playerKnowledge:{
       situation:'You sent an Interac e-transfer deposit about 20 minutes ago and it still isn\u2019t showing in your Betty balance.',
     },
-    personaPrompt:'You are Adrian, mildly anxious rather than angry - you just want to know your money isn\u2019t lost. You sent the e-transfer about 20 minutes ago. If asked, you can describe roughly when you sent it and confirm the amount. If asked for proof, you\u2019re willing to describe or reference a screenshot showing the transfer was sent (you don\u2019t need to produce an actual image, just say you have it and can describe it). You do not know internal deposit-processing statuses - only that the money left your bank and hasn\u2019t landed in your Betty balance yet. If the agent checks and gives you a real, specific status and a supported timeframe, accept it. If the agent is vague or seems to be guessing, push back gently asking if they actually checked.',
+    personaPrompt:'You are Adrian, mildly anxious rather than angry - you just want to know your money isn\u2019t lost. You sent the e-transfer about 20 minutes ago. CRITICAL: the amount you sent was exactly $75 - if asked the amount, ALWAYS say $75, and never introduce, correct yourself to, or mention any other amount at any point (the scenario only works if your stated amount matches the one deposit on your account). If asked, you can describe roughly when you sent it. If asked for proof, you\u2019re willing to describe or reference a screenshot showing a $75 transfer was sent (you don\u2019t need to produce an actual image, just say you have it and can describe it). You do not know internal deposit-processing statuses - only that the money left your bank and hasn\u2019t landed in your Betty balance yet. If the agent checks and gives you a real, specific status and a supported timeframe, accept it. If the agent is vague or seems to be guessing, push back gently asking if they actually checked.',
 
     caseData:[
-      {id:'dep1', tab:'Transaction History', label:'Deposit #DP-2201', value:'$75.00 - Interac - Status: Started - the e-transfer has been sent by the player\u2019s bank and received by Betty\u2019s payment processor, but has not yet been matched and credited to the account. This typically completes automatically within 30 minutes, rarely up to a few hours.', gated:true, gateLabel:'View Transaction History'},
+      {id:'dep1', tab:'Transaction History', label:'Deposit #DP-2201', value:'$75.00 - Interac - Status: Started', gated:true, gateLabel:'View Transaction History'},
     ],
 
     correctTag:'Deposit: Interac: Started', tagOptions:['Deposit: Interac: Started', 'Deposit: Interac: Failed', 'Deposit: Unable to', 'Deposit: Other'],
@@ -1169,7 +1241,7 @@ const SCENARIOS = [
 
     processGrounding:{
       kbTopic:'Deposit "Started" Status - Same Investigate-Before-Reassuring Standard as Withdrawals (real chat pattern)',
-      kbText:'REAL CHAT PATTERN: a deposit showing "Started" means the transfer has been sent and received by the payment processor but not yet matched/credited - this is the deposit-side equivalent of a withdrawal showing "In Progress," and should be handled the same way: check the actual status before responding, give the real supported timeframe, and don\u2019t invent a cause or a specific promised time.',
+      kbText:'REAL CHAT PATTERN: a deposit showing "Started" means the transfer has been sent and received by the payment processor but not yet matched/credited - this is the deposit-side equivalent of a withdrawal showing "In Progress," and should be handled the same way: check the actual status before responding, give the real supported timeframe, and don\u2019t invent a cause or a specific promised time. The supported timeframe is that a "Started" Interac deposit typically completes automatically within 30 minutes, rarely up to a few hours. NOTE: neither this timeframe nor the meaning of "Started" is shown in Case Data - the transaction screen only displays "Status: Started", matching what the real screen shows. The agent is expected to know both as part of the process, so explaining the status and giving the timeframe accurately is real evidence of applying the KB, and a vague or wrong explanation is a genuine gap rather than something the agent could simply read off the screen. Do not credit an explanation of "Started" as coming from Case Data; judge it against the meaning stated above.',
       requiredActions:['Check Transaction History for the deposit\u2019s actual status before responding','Explain what "Started" actually means in plain terms','Give the real supported timeframe (usually within 30 minutes, rarely a few hours) rather than a vague reassurance','Ask for confirmation of amount/timing to help locate the specific transaction if needed'],
       optionalActions:['Ask if the player has proof of the transfer if the status seems unclear'],
       escalationCriteria:'Not applicable within the normal timeframe. If the deposit remains unmatched well beyond the typical window, this would warrant escalation to Payments, the same way an extended withdrawal delay would.',
@@ -1867,7 +1939,13 @@ let state = {
   customScenariosLoadError:null,
   scenarioBuilderTLName:'',    // "working as" TL identity for Create Scenario - same model as getLastAssigningTL()
   scenarioBuilderMode:'scratch', // 'scratch' | 'duplicate'
-  scenarioBuilderIntake:{ whatHappened:'', struggle:'', desiredBehavior:'', correctProcess:'', kbInfo:'', playerBehavior:'', difficulty:'Applied', topic:'', escalationNotes:'' },
+  scenarioBuilderIntake: emptyScenarioIntake(),
+  scenarioBuilderStep:'intake',          // 'intake' -> 'confirm' (interpretation check) -> preview (scenarioBuilderGenerated)
+  scenarioBuilderInterpreting:false,
+  scenarioBuilderInterpretation:null,    // the TL-reviewed understanding that generation is locked to
+  scenarioBuilderCorrectionOpen:false,
+  scenarioBuilderCorrectionText:'',
+  scenarioBuilderAdvancedOpen:false,
   scenarioBuilderGenerating:false,
   scenarioBuilderGenerated:null, // the structured scenario object, in preview/edit, before saving
   scenarioBuilderEditingId:null, // set when editing an existing custom scenario instead of creating new
@@ -1895,6 +1973,28 @@ const PILOT_SCENARIOS = SCENARIOS.filter(s => s.readiness !== 'ENGINE_TEST_ONLY'
 // produces a brand-new id in state.customScenarios instead, so this lookup never has to choose
 // between two different versions of the same built-in id.
 function scenarioById(id){ return SCENARIOS.find(s=>s.id===id) || state.customScenarios.find(s=>s.id===id); }
+
+// Scenarios with a simulated review workflow (a `review` config) get a per-attempt copy: the review
+// decision is fixed for that attempt (chosen by attempt number, cycling through review.outcomes - never
+// random), the decision item's text and the branch-specific processGrounding are filled in, and the
+// outcome is recorded on the copy. The original built-in scenario is never modified. Scenarios without a
+// `review` config are returned untouched.
+function resolveScenarioForAttempt(s, attemptIndex){
+  if(!s || !s.review || !Array.isArray(s.review.outcomes) || !s.review.outcomes.length) return s;
+  const key = s.review.outcomes[(attemptIndex||0) % s.review.outcomes.length];
+  const res = s.review.results && s.review.results[key];
+  if(!res) return s;
+  const clone = Object.assign({}, s);
+  clone.reviewOutcome = key;
+  clone.caseData = s.caseData.map(c => c.reviewRole==='decision' ? Object.assign({}, c, {value: res.decisionText}) : c);
+  clone.processGrounding = Object.assign({}, s.processGrounding, res.processGrounding||{});
+  if(res.kbNote) clone.processGrounding.kbText = (s.processGrounding.kbText||'') + '\n\n' + res.kbNote;
+  return clone;
+}
+function reviewItemVisible(c, investigatedMap){ return !c.requiresItem || !!investigatedMap[c.requiresItem]; }
+function simulatedWorkflowNote(c){
+  return c.reviewRole ? `<div style="font-size:10.5px;color:var(--text3);margin-top:5px;">Simulated workflow action - this prototype has no real review screen.</div>` : '';
+}
 
 // ---------- TL SCENARIO BUILDER: visibility / permissions ----------
 // These are the ONLY gate custom scenarios pass through before appearing in any agent- or TL-facing
@@ -1954,55 +2054,280 @@ function genCustomScenarioId(){
   return 'cs_' + Date.now().toString(36) + '_' + (deviceId||'d').slice(0,8) + '_' + Math.random().toString(36).slice(2,8);
 }
 
+// ---------- APPROVED TAG CATALOGUE ----------
+// The scenario builder may only use tags from this catalogue - never a generated, rewritten, normalized or
+// inferred tag name. It is seeded from every tag already used by the built-in scenarios (so it is a SEED, not
+// proof of the full real Betty tag list). To extend it, add the exact real tag strings to the two EXTRA arrays
+// below; custom scenarios never feed the catalogue, so a generated tag can never launder itself into it.
+const APPROVED_TAG_CATALOGUE_EXTRA = [];
+const APPROVED_SECONDARY_TAG_CATALOGUE_EXTRA = [];
+function approvedTagCatalogue(){
+  const primary = new Set(APPROVED_TAG_CATALOGUE_EXTRA);
+  const secondary = new Set(APPROVED_SECONDARY_TAG_CATALOGUE_EXTRA);
+  SCENARIOS.forEach(s=>{
+    (s.tagOptions||[]).forEach(t=>primary.add(t));
+    if(s.correctTag) primary.add(s.correctTag);
+    (s.secondaryTagOptions||[]).forEach(t=>{ if(t!=='None') secondary.add(t); });
+    if(s.correctSecondaryTag) secondary.add(s.correctSecondaryTag);
+  });
+  primary.delete('None');
+  return { primary:[...primary].sort(), secondary:[...secondary].sort() };
+}
+function isApprovedPrimaryTag(t){ return !!t && approvedTagCatalogue().primary.includes(t); }
+function isApprovedSecondaryTag(t){ return t==='None' || (!!t && approvedTagCatalogue().secondary.includes(t)); }
+// Exact-match checks only (no trimming/normalizing beyond what the form already did). Returns human-readable problems.
+function scenarioTagProblems(s){
+  const probs = [];
+  if(!s.correctTag) probs.push('No correct tag is set yet - choose one from the approved tag catalogue (flagged for tag review).');
+  else if(!isApprovedPrimaryTag(s.correctTag)) probs.push('Correct tag "'+s.correctTag+'" is not in the approved tag catalogue.');
+  (s.tagOptions||[]).forEach(t=>{ if(t && t!==s.correctTag && !isApprovedPrimaryTag(t)) probs.push('Tag option "'+t+'" is not in the approved tag catalogue.'); });
+  if(s.correctSecondaryTag && !isApprovedSecondaryTag(s.correctSecondaryTag)) probs.push('Secondary tag "'+s.correctSecondaryTag+'" is not in the approved tag catalogue.');
+  (s.secondaryTagOptions||[]).forEach(t=>{ if(t && t!==s.correctSecondaryTag && !isApprovedSecondaryTag(t)) probs.push('Secondary tag option "'+t+'" is not in the approved tag catalogue.'); });
+  return probs;
+}
+// Problems that must be resolved before a scenario can enter the shared library or be approved.
+function scenarioReviewBlockers(s){
+  const probs = scenarioTagProblems(s);
+  const reqs = ((s.processGrounding||{}).requiredActions||[]).filter(x=>x && x.trim());
+  if(!reqs.length) probs.push('No required actions are defined. Add at least one required action (from the TL-stated process) - none are filled in automatically.');
+  return probs;
+}
+// For custom scenarios only: a correct tag that is missing or not in the catalogue is "unresolved" and is never scored.
+function primaryTagResolved(s){ return !s.isCustom || isApprovedPrimaryTag(s.correctTag); }
+function docTagOptionsFor(s){
+  if(!s.isCustom) return s.tagOptions;
+  const ok = (s.tagOptions||[]).filter(isApprovedPrimaryTag);
+  return ok.length ? ok : s.tagOptions;
+}
+
+// ---------- VERIFIED PROCESS NOTES (usable by the generator as TL-stated required process) ----------
+const VERIFIED_PROCESS_NOTES = [
+  {
+    id:'stale-display-after-entitlement-confirmed',
+    appliesWhen:'A player-facing display (for example a notification or a promotion card) still shows a reward/offer/state that the account records show is already resolved (used, cancelled, replaced, or expired) - the entitlement question is settled and what remains is a display discrepancy.',
+    steps:[
+      'Confirm from the account records (not the display) what actually happened to the reward; reconcile cancellation, replacement and gameplay records and do not stop at the first status',
+      'Ask the player to log out and back in, then check the display again',
+      'If the player is on the app, confirm the app is on the latest version (update it if not); if the player is on the website, app-version issues are ruled out',
+      'Only if those steps do not clear it, raise the issue through the appropriate reporting path',
+      'Avoid guessing at the cause - do not state a cause as fact',
+    ],
+    source:'Provided by Zainab Yahaya (Team Lead), 2026-10-04, from a real handled case. These steps are TL-stated; no KB article is cited yet, so re-verify against the KB before treating any scenario built from them as more than a TL coaching draft.',
+  },
+];
+
 // ---------- TL SCENARIO BUILDER: generation, duplication, editing, saving ----------
-function buildScenarioGenerationPrompt(intake){
+function buildScenarioGenerationPrompt(intake, interp){
+  const cat = approvedTagCatalogue();
+  const notes = VERIFIED_PROCESS_NOTES.map((n,i)=>`${i+1}. [${n.id}] APPLIES WHEN: ${n.appliesWhen}\n   STEPS: ${n.steps.join(' | ')}\n   SOURCE: ${n.source}`).join('\n');
   return `You are helping a Team Lead at Betty (an iGaming customer support operation) turn a plain-language coaching need into a structured practice scenario for an internal training simulator. Output ONLY a single JSON object - no markdown fences, no commentary before or after.
 
 The TL described:
-- What happened in the real chat: ${intake.whatHappened || '(not provided)'}
-- What the agent struggled with: ${intake.struggle || '(not provided)'}
-- What behaviour they want practised: ${intake.desiredBehavior || '(not provided)'}
-- What the correct process/outcome should be: ${intake.correctProcess || '(not provided)'}
-- Relevant KB/process info the TL provided (use ONLY this for specifics - do not invent additional specific policy numbers, timeframes, or KB citations beyond what's given here or directly implied by "correct process/outcome" above): ${intake.kbInfo || '(none provided - keep process grounding general and do not invent specific numbers/policies)'}
-- Desired player behaviour/persona: ${intake.playerBehavior || '(use your judgment for a realistic, moderately challenging player)'}
-- Escalation/tagging/documentation requirements the TL specified: ${intake.escalationNotes || '(none specified - use reasonable defaults)'}
-- Difficulty: ${intake.difficulty}
-- Topic/category: ${intake.topic || 'General'}
+- What happened (chronology, including the account/system records that matter): ${intake.whatHappened || '(not provided)'}
+- The coaching issue (what the agent did wrong, missed, assumed or handled poorly): ${intake.struggle || '(not provided)'}
+- What correct handling should look like (ideal behaviour, final outcome, any troubleshooting order or escalation rule): ${intake.correctProcess || '(not provided)'}${intake.desiredBehavior ? '\n- Extra behaviour to practise: ' + intake.desiredBehavior : ''}
+- Evidence the agent can investigate (the ONLY source for Case Data records - exact screens, statuses, times, IDs, amounts, notes): ${intake.evidence || '(none listed - Case Data may only reflect what the TL described above; do not invent records)'}
+- What the player should do in the simulation (tone, what they know, what they may dispute, how they react to good vs poor handling): ${intake.playerBehavior || '(use your judgment for a realistic, moderately challenging player)'}
+- Relevant KB/process source the TL provided (use ONLY this for specifics - do not invent additional specific policy numbers, timeframes, or KB citations beyond what's given here or directly implied by the correct handling above): ${intake.kbInfo || '(none provided - keep process grounding general and do not invent specific numbers/policies)'}
+- Tags / documentation / escalation requirements the TL specified: ${intake.escalationNotes || '(none specified - do not invent any escalation, reporting or tagging requirement)'}
+- Difficulty: ${intake.difficulty || interp?.difficulty || 'Applied'}
+- Topic/category: ${intake.topic || interp?.topic || 'General'}
 
-CRITICAL GROUNDING RULE: this scenario will be labeled "TL Coaching Draft - Not Validated" regardless of what you write, because it has not been checked against real Betty KB. Do not write the process grounding as if it were a verified KB citation - phrase it as the coaching standard the TL described. If the TL did not give specific numbers/timeframes/policy details, do NOT invent precise-sounding ones (no specific hour counts, dollar thresholds, or policy names that weren't given) - instead keep guidance general and note any gaps in ambiguityNotes.
+${interp ? `CONFIRMED INTERPRETATION - the TL reviewed this summary of the scenario and approved it. It is AUTHORITATIVE: your evidenceReconciliation, caseData, persona, requiredActions and criticalErrors must all agree with it, and you must not add a coaching objective that is not in it.
+${formatInterpretationText(interp)}
+` : ''}
+CRITICAL GROUNDING RULE: this scenario will be labeled "TL Coaching Draft - Not Validated" regardless of what you write, because it has not been checked against real Betty KB. Do not write the process grounding as if it were a verified KB citation - phrase it as the coaching standard the TL described. If the TL did not give specific numbers/timeframes/policy details, do NOT invent precise-sounding ones - keep guidance general and note any gaps in ambiguityNotes.
+
+RULE 1 - RECONCILE ALL EVIDENCE CHRONOLOGICALLY BEFORE WRITING ANYTHING ELSE. Before generating the expected resolution, reconcile all supplied evidence chronologically. Later account records, replacement rewards, gameplay history, transaction history, or other direct evidence may supersede or explain earlier statuses. Do not build the coaching objective around an earlier record while ignoring later confirmed evidence. If the evidence genuinely cannot be reconciled, place that conflict in the unresolvedConflicts part of evidenceReconciliation and in ambiguityNotes instead of selecting a narrative. Output your reconciliation in the "evidenceReconciliation" field (timeline in order, then the conclusion about what is actually settled and what actually remains open) and make sure requiredActions, criticalErrors and the persona agree with that conclusion.
+
+RULE 2 - KEEP THREE THINGS SEPARATE. (a) CONFIRMED CASE FACTS: what the supplied records and the TL's account establish. (b) VERIFIED PROCESS: process the TL explicitly stated as correct, or a Verified Process Note below that applies. (c) UNVALIDATED ASSUMPTIONS/GAPS: anything you would be inferring or guessing about Betty process. Only (a) and (b) may appear in requiredActions, escalationCriteria or criticalErrors, because those become hard scoring requirements. Anything in (c) goes in "unvalidatedAssumptions" and is NEVER scored. In particular: do not create an escalation/review/hand-off requirement unless the TL stated it or a Verified Process Note provides it; if no escalation requirement was stated, set escalationCriteria to exactly "Not specified by the creating TL - not a scored requirement." Do not treat a status from an earlier record as an unresolved issue if later evidence resolves it.
+
+VERIFIED PROCESS NOTES (usable as required process when "applies when" matches this case; if none match, ignore them):
+${notes}
+
+RULE 3 - PLAYER PERSONA MUST MATCH GROUND TRUTH. The persona may deny, misremember or dispute an activity or record, but that must never change the scenario's facts. Whenever the player's belief could conflict with the supplied account records, the personaPrompt must say so explicitly: the player may deny or not remember the activity; the account records are accurate; the player stays in character and pushes back politely, and only softens once the agent gives specifics from the records. The persona must not drop or rewrite the facts in caseData.
+
+RULE 4 - CASE DATA. Take records only from the TL's evidence answer and chronology. Include every record that your reconciliation relied on, each as its own caseData item, in the wording/terms the TL supplied (status values, record types, IDs, times). If the player can reasonably dispute a record, include the follow-up evidence a real agent would check next (for example game history or transaction history) as its own GATED item. Include the player-facing surface the player is describing (for example a notification) as its own item when the TL described it. Case Data values are raw record content only - never conclusions, process interpretation, timeframes, what the agent should do, or how the case resolves.
+
+RULE 5 - TAGS ARE LOCKED. Never invent, rewrite, normalize, or infer tag names. "correctTag" and every entry in "tagOptions" must be selected verbatim, character for character, from the approved tag catalogue below. If no existing tag can be confidently matched, set "correctTag" to null, set "tagReviewNote" to a short explanation, and list only catalogue tags in tagOptions - the scenario will be flagged for tag review. Secondary RG tags must likewise come verbatim from the approved secondary catalogue.
+APPROVED PRIMARY TAG CATALOGUE: ${cat.primary.join(' | ')}
+APPROVED SECONDARY (RG) TAG CATALOGUE: ${cat.secondary.join(' | ')}
+
+RULE 6 - DO NOT INVENT PRODUCT SURFACES. Case Data tabs, labels, persona prompts and agent briefings must not invent screen names, tabs, inboxes, teams, channels or UI labels that the TL did not supply. Use the TL's own terms exactly. If the TL used inconsistent terms for the same surface, do not pick one silently - use the TL's wording from the most specific description and mention the inconsistency in ambiguityNotes. For every screen/tab/inbox/team/UI label you use anywhere in caseData tabs, agentBriefing or personaPrompt, add an entry to "uiTerms" with the term and a "sourceQuote" copied verbatim from the TL's description above that supports it.
 
 Produce a JSON object with EXACTLY these fields (match this shape precisely, using realistic Betty iGaming customer-support content):
 {
   "title": "short player-facing title, e.g. 'Delayed Withdrawal (Interac)'",
   "playerName": "a first name for the simulated player",
   "agentBriefing": "1-2 sentences, what the agent sees before the chat starts",
-  "personaPrompt": "a full second-person persona prompt for the AI playing the customer, 150-350 words, written exactly like: 'You are [Name], [age/tone]... [situation]... [how they react to good vs vague answers]... [what they do and do not know]...' - make it specific to this scenario and difficulty level",
+  "personaPrompt": "a full second-person persona prompt for the AI playing the customer, 150-350 words, written exactly like: 'You are [Name], [age/tone]... [situation]... [how they react to good vs vague answers]... [what they do and do not know]...' - make it specific to this scenario and difficulty level, and follow RULE 3",
   "playerKnowledgeSituation": "1-2 sentences, the player's own account of their situation",
-  "caseData": [ {"tab":"a case-data tab name like 'Transaction History'", "label":"short label", "value":"the actual detail the agent would see", "gated": true or false, "gateLabel": "button text if gated, e.g. 'View Transaction History'"} , ... 2 to 4 items ],
-  "correctTag": "the single best-matching documentation tag for this case, Betty-style, e.g. 'Withdrawal: Interac: In Progress'",
-  "tagOptions": ["correctTag plus 3 other plausible-but-wrong tags, 4 total"],
+  "evidenceReconciliation": { "timeline": ["each supplied record/event in chronological order, with what it shows"], "conclusion": "what is actually settled and what actually remains open", "unresolvedConflicts": "any evidence that cannot be reconciled, or 'none'" },
+  "caseData": [ {"tab":"a case-data tab name taken from the TL's own terms", "label":"short label", "value":"the raw record detail the agent would see", "gated": true or false, "gateLabel": "button text if gated, e.g. 'View Transaction History'"} , ... 2 to 6 items ],
+  "uiTerms": [ {"term":"a screen/tab/inbox/team/UI label you used", "sourceQuote":"verbatim text from the TL's description"} ],
+  "correctTag": "ONE tag copied verbatim from the approved primary catalogue, or null",
+  "tagReviewNote": "only if correctTag is null: why no catalogue tag could be confidently matched, else null",
+  "tagOptions": ["correctTag (if not null) plus 3 other plausible-but-wrong tags, all copied verbatim from the approved primary catalogue"],
   "hasSecondaryRGTag": true or false (true only if the TL's description genuinely involves a Responsible Gambling concern),
-  "correctSecondaryTag": "an RG flag tag if hasSecondaryRGTag is true, else null",
-  "secondaryTagOptions": ["None", "the correct RG flag", "one other plausible RG flag"] or null,
+  "correctSecondaryTag": "an RG flag copied verbatim from the approved secondary catalogue if hasSecondaryRGTag is true, else null",
+  "secondaryTagOptions": ["None", "the correct RG flag", "one other plausible RG flag - all from the approved secondary catalogue"] or null,
   "ahtTargetMinutes": a reasonable integer 5-20 based on difficulty/complexity,
   "processGrounding": {
     "kbTopic": "short topic label for this process area",
-    "kbText": "the correct-process explanation, grounded in what the TL described - phrase this as coaching guidance, not a verified KB quote",
-    "requiredActions": ["2-4 specific things the agent must do, derived from the TL's 'correct process/outcome' description"],
+    "kbText": "the correct-process explanation, grounded in what the TL described and consistent with evidenceReconciliation - phrase this as coaching guidance, not a verified KB quote",
+    "requiredActions": ["2-5 specific things the agent must do, ONLY from confirmed facts and TL-stated or Verified-Note process (RULE 2)"],
     "optionalActions": ["0-2 good-but-not-mandatory actions"],
-    "escalationCriteria": "when this should be escalated, from the TL's description or a reasonable default",
-    "criticalErrors": "1-3 sentences on what a critical failure looks like for this case, derived from what the TL said the agent struggled with",
-    "ambiguityNotes": "note any real gaps or assumptions you had to make because the TL didn't specify something - be honest here, do not pretend everything was fully specified"
+    "unvalidatedAssumptions": ["0-4 things about Betty process you would be assuming or inferring - never scored"],
+    "escalationCriteria": "when this should be escalated per the TL or a Verified Process Note, otherwise exactly: Not specified by the creating TL - not a scored requirement.",
+    "criticalErrors": "1-3 sentences on what a critical failure looks like, derived only from what the TL said the agent struggled with and the confirmed facts",
+    "ambiguityNotes": "real gaps, assumptions, unreconciled evidence and terminology inconsistencies - be honest, do not pretend everything was fully specified"
   }
 }
 
 Write naturally and specifically - avoid generic filler. The persona should feel like a real player, with a believable name, tone, and reaction pattern. Output ONLY the JSON object.`;
 }
 
-function normalizeGeneratedScenario(raw, intake){
+
+// ---------- INTERPRETATION CHECK (the checkpoint between intake and generation) ----------
+function formatInterpretationText(i){
+  if(!i) return '';
+  const lines = [
+    ['Player issue', i.playerIssue], ['Ground truth', i.groundTruth], ['Open issue', i.openIssue], ['Coaching skill', i.coachingSkill],
+    ['Expected outcome', i.expectedOutcome], ['Player behaviour', i.playerBehaviour],
+  ].map(([k,v])=>`${k}: ${v||'(not stated)'}`);
+  lines.push('Process gaps: ' + ((i.processGaps||[]).length ? i.processGaps.join(' | ') : 'none'));
+  if((i.assumptions||[]).length) lines.push('Assumed by the builder (not stated by the TL): ' + i.assumptions.join(' | '));
+  lines.push('Tag: ' + (i.tagResolved ? i.tagResolved : 'No approved tag confidently matched - needs tag review.'));
+  return lines.join('\n');
+}
+function buildInterpretationPrompt(intake, correction, previous){
+  const cat = approvedTagCatalogue();
+  return `INTERPRETATION CHECK. You are helping a Team Lead at Betty (an iGaming customer support operation) build a practice scenario. Do NOT build the scenario yet. First summarize, in the Team Lead's own terms, what you understand this scenario to be testing, so they can confirm or correct it. Output ONLY a single JSON object - no markdown fences, no commentary.
+
+The TL described:
+- What happened (chronology, including the account/system records that matter): ${intake.whatHappened || '(not provided)'}
+- The coaching issue: ${intake.struggle || '(not provided)'}
+- What correct handling should look like: ${intake.correctProcess || '(not provided)'}
+- Evidence the agent can investigate: ${intake.evidence || '(none listed)'}
+- What the player should do in the simulation: ${intake.playerBehavior || '(not provided)'}
+- KB/process source: ${intake.kbInfo || '(none provided)'}
+- Tags / documentation / escalation requirements: ${intake.escalationNotes || '(none specified)'}
+- Optional topic/difficulty hints: ${[intake.topic, intake.difficulty].filter(Boolean).join(' / ') || '(none)'}
+${previous ? `\nYOUR PREVIOUS SUMMARY (the TL said it was wrong in some way):\n${formatInterpretationText(previous)}\n` : ''}${correction ? `\nTHE TL'S CORRECTION - this overrides your previous summary and anything it contradicts; keep everything it does not touch: ${correction}\n` : ''}
+RULES:
+1. Reconcile all supplied evidence chronologically before concluding anything. Later account records, replacement rewards, gameplay history, transaction history or other direct evidence may supersede or explain earlier statuses. Do not build the summary around an earlier record while ignoring later confirmed evidence. If evidence genuinely cannot be reconciled, say so in "openIssue" and "processGaps" instead of choosing a narrative.
+2. Use the TL's own words for every screen, tab, status, team and label. Never invent screen names, tabs, inboxes, teams or UI labels.
+3. Never invent Betty process. Anything about process, escalation, reporting paths, tags or timeframes that the TL did not state goes in "processGaps" (not stated at all) or "assumptions" (you are inferring it) - never into "expectedOutcome" as if it were established.
+4. The tag: "tagProposed" must be copied verbatim from the approved catalogue below, or null if none can be confidently matched. Never invent, rewrite or normalize a tag.
+APPROVED PRIMARY TAG CATALOGUE: ${cat.primary.join(' | ')}
+
+Output exactly this shape:
+{
+  "playerIssue": "one sentence: what the player says is wrong, in the TL's terms",
+  "groundTruth": "what the records actually establish, as a chronological chain using ' -> ' between steps",
+  "openIssue": "what actually remains unresolved after the ground truth, or 'Nothing - fully resolved'",
+  "coachingSkill": "the specific skill/behaviour this scenario coaches",
+  "expectedOutcome": "what correct handling achieves for the player, using only what the TL stated",
+  "playerBehaviour": "how the simulated player behaves, including anything they dispute that conflicts with the records",
+  "processGaps": ["things the scenario needs but the TL did not provide - each a short phrase ending in what happens to it, e.g. 'Reporting path not supplied - left unscored'"],
+  "assumptions": ["anything you inferred that the TL did not state; empty array if none"],
+  "tagProposed": "verbatim catalogue tag or null",
+  "tagReason": "short reason for the tag choice, or why none matched",
+  "topic": "short topic label",
+  "difficulty": "Foundation, Applied or Advanced"
+}`;
+}
+function normalizeInterpretation(raw, intake, corrections){
   raw = raw || {};
-  const topic = (intake.topic||'General').trim() || 'General';
-  const difficulty = intake.difficulty || 'Applied';
+  const str = v => (v==null ? '' : String(v)).trim();
+  const proposed = raw.tagProposed==null ? '' : String(raw.tagProposed);
+  const tagResolved = isApprovedPrimaryTag(proposed) ? proposed : '';
+  const gaps = (Array.isArray(raw.processGaps) ? raw.processGaps.map(str).filter(Boolean) : []);
+  // Deterministic gap lines: these must always be visible to the TL regardless of what the model wrote.
+  const det = [];
+  if(!(intake.kbInfo||'').trim()) det.push('No KB/process source supplied - scenario stays a TL Coaching Draft.');
+  if(!(intake.escalationNotes||'').trim()) det.push('No escalation/reporting/tagging requirement supplied - left unscored.');
+  if(!(intake.evidence||'').trim()) det.push('No evidence/records listed - Case Data will only reflect what you described in question 1.');
+  const detKeys = det.map(d=>d.toLowerCase().slice(0,12));
+  const modelGaps = gaps.filter(g=>!detKeys.includes(g.toLowerCase().slice(0,12)));
+  const difficulty = ['Foundation','Applied','Advanced'].includes(str(raw.difficulty)) ? str(raw.difficulty) : 'Applied';
+  return {
+    playerIssue: str(raw.playerIssue), groundTruth: str(raw.groundTruth), openIssue: str(raw.openIssue), coachingSkill: str(raw.coachingSkill),
+    expectedOutcome: str(raw.expectedOutcome), playerBehaviour: str(raw.playerBehaviour),
+    processGaps: [...det, ...modelGaps],
+    assumptions: Array.isArray(raw.assumptions) ? raw.assumptions.map(str).filter(Boolean) : [],
+    tagProposed: proposed, tagResolved, tagReason: str(raw.tagReason),
+    tagDiscarded: !!proposed && !tagResolved,
+    topic: str(raw.topic) || 'General', difficulty,
+    corrections: corrections||[],
+  };
+}
+async function checkInterpretationFromIntake(correction){
+  const intake = state.scenarioBuilderIntake;
+  if(!intake.whatHappened.trim() || !intake.correctProcess.trim()){
+    state.scenarioBuilderError = 'Please answer at least question 1 (what happened) and question 3 (what correct handling looks like) first.';
+    render();
+    return;
+  }
+  const previous = correction ? state.scenarioBuilderInterpretation : null;
+  const corrections = [...((previous && previous.corrections) || []), ...(correction ? [correction] : [])];
+  state.scenarioBuilderInterpreting = true;
+  state.scenarioBuilderError = null;
+  render();
+  try{
+    const raw = await callClaudeJson(buildInterpretationPrompt(intake, correction, previous), 'complex');
+    state.scenarioBuilderInterpretation = normalizeInterpretation(raw, intake, corrections);
+    state.scenarioBuilderStep = 'confirm';
+    state.scenarioBuilderCorrectionOpen = false;
+    state.scenarioBuilderCorrectionText = '';
+  }catch(err){
+    state.scenarioBuilderError = 'Could not check the understanding: ' + (err.message || String(err));
+  }finally{
+    state.scenarioBuilderInterpreting = false;
+    render();
+  }
+}
+function resetScenarioBuilderFlow(){
+  state.scenarioBuilderStep = 'intake';
+  state.scenarioBuilderInterpretation = null;
+  state.scenarioBuilderCorrectionOpen = false;
+  state.scenarioBuilderCorrectionText = '';
+  state.scenarioBuilderAdvancedOpen = false;
+}
+
+function normForMatch(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+function intakeSourceBlob(intake){
+  return normForMatch([intake.whatHappened, intake.struggle, intake.desiredBehavior, intake.correctProcess, intake.evidence, intake.kbInfo, intake.playerBehavior, intake.escalationNotes, intake.topic].join(' \n '));
+}
+function formatEvidenceReconciliation(er){
+  if(!er) return '';
+  if(typeof er==='string') return er.trim();
+  const parts = [];
+  if(Array.isArray(er.timeline) && er.timeline.length) parts.push('Timeline: ' + er.timeline.map(String).join(' -> '));
+  if(er.conclusion) parts.push('Conclusion: ' + String(er.conclusion));
+  if(er.unresolvedConflicts && normForMatch(er.unresolvedConflicts)!=='none') parts.push('Unresolved conflicts: ' + String(er.unresolvedConflicts));
+  return parts.join('\n');
+}
+
+// Words that are ambiguous product-surface names. Checked in agent-facing text (briefing + Case Data) EVEN IF the TL typed them,
+// because a TL repeating a loose word ("inbox", "email") is exactly how a wrong surface name gets into a scenario.
+const UI_TERM_WATCHLIST = ['inbox','email'];
+function uiWatchlistHits(s){
+  const fields = [['the agent briefing', s.agentBriefing]];
+  (s.caseData||[]).forEach(c=>{ fields.push(['Case Data tab "'+c.tab+'"', c.tab]); fields.push(['Case Data label "'+c.label+'"', c.label]); fields.push(['Case Data value of "'+c.label+'"', c.value]); });
+  const hits = [];
+  fields.forEach(([where, text])=>UI_TERM_WATCHLIST.forEach(w=>{ if(new RegExp('\\b'+w+'\\b','i').test(text||'')) hits.push('"'+w+'" appears in '+where+' - confirm this is the real Betty surface name (do not use a loose word for Promotions/Notifications or another screen).'); }));
+  return [...new Set(hits)];
+}
+// Every term that needs a human check before the library: unsupported tabs/terms (from generation) + watch-list hits.
+function uiTermReviewIssues(s){
+  const unsupported = (s.generationWarnings||[]).filter(w=>/^(UI term|Case Data tab) /.test(w));
+  return [...unsupported, ...uiWatchlistHits(s)];
+}
+function normalizeGeneratedScenario(raw, intake, interp){
+  raw = raw || {};
+  const topic = (intake.topic || (interp && interp.topic) || 'General').trim() || 'General';
+  const difficulty = intake.difficulty || (interp && interp.difficulty) || 'Applied';
   const caseData = Array.isArray(raw.caseData) ? raw.caseData.map((c,i)=>({
     id: 'c'+(i+1),
     tab: String((c&&c.tab)||'Case Details'),
@@ -2011,9 +2336,49 @@ function normalizeGeneratedScenario(raw, intake){
     gated: !!(c&&c.gated),
     gateLabel: (c&&c.gateLabel) ? String(c.gateLabel) : 'Investigate',
   })) : [];
-  const tagOptions = Array.isArray(raw.tagOptions) && raw.tagOptions.length ? raw.tagOptions.map(String) : [String(raw.correctTag||'General: Unclear Query')];
-  const hasSecondary = !!raw.hasSecondaryRGTag && !!raw.correctSecondaryTag;
+
+  // Tags are locked to the approved catalogue: anything not matching verbatim is dropped, and an unmatched
+  // correctTag is left unresolved (flagged for tag review) rather than replaced with a guess.
+  const warnings = [];
+  const rawCorrect = raw.correctTag==null ? '' : String(raw.correctTag);
+  let correctTag = isApprovedPrimaryTag(rawCorrect) ? rawCorrect : '';
+  if(rawCorrect && !correctTag) warnings.push('The generator proposed the tag "'+rawCorrect+'", which is not in the approved tag catalogue, so it was discarded. The correct tag is unresolved and needs tag review.');
+  let tagOptions = (Array.isArray(raw.tagOptions) ? raw.tagOptions.map(String) : []).filter((t,i,a)=>isApprovedPrimaryTag(t) && a.indexOf(t)===i);
+  const droppedOpts = (Array.isArray(raw.tagOptions) ? raw.tagOptions.map(String) : []).filter(t=>t!==rawCorrect && !isApprovedPrimaryTag(t));
+  if(droppedOpts.length) warnings.push('Discarded tag option(s) not in the approved catalogue: '+droppedOpts.map(t=>'"'+t+'"').join(', ')+'.');
+  if(correctTag && !tagOptions.includes(correctTag)) tagOptions.unshift(correctTag);
+  if(correctTag && tagOptions.length < 4){
+    // Pad with other catalogue tags (same top-level family first). These are wrong-answer distractors only.
+    const fam = correctTag.split(':')[0];
+    const pool = approvedTagCatalogue().primary.filter(t=>!tagOptions.includes(t));
+    pool.sort((a,b)=>(b.split(':')[0]===fam) - (a.split(':')[0]===fam));
+    while(tagOptions.length<4 && pool.length) tagOptions.push(pool.shift());
+  }
+  const tagReviewNote = !correctTag ? String(raw.tagReviewNote || 'No approved catalogue tag could be confidently matched.') : '';
+
+  let secondaryOk = !!raw.hasSecondaryRGTag && isApprovedSecondaryTag(String(raw.correctSecondaryTag||'')) && raw.correctSecondaryTag && String(raw.correctSecondaryTag)!=='None';
+  if(raw.hasSecondaryRGTag && raw.correctSecondaryTag && !secondaryOk) warnings.push('The generator proposed the secondary tag "'+raw.correctSecondaryTag+'", which is not in the approved catalogue, so it was discarded. Add the right secondary RG flag manually if one applies.');
+  const hasSecondary = secondaryOk;
+
+  // Product-surface check: tabs and uiTerms must trace back to the TL's own words.
+  const blob = intakeSourceBlob(intake);
+  const uiTerms = Array.isArray(raw.uiTerms) ? raw.uiTerms.filter(u=>u && u.term) : [];
+  const supportedTerms = new Set();
+  uiTerms.forEach(u=>{
+    const q = normForMatch(u.sourceQuote);
+    if(q && blob.includes(q)) supportedTerms.add(normForMatch(u.term));
+    else warnings.push('UI term "'+u.term+'" is not backed by a quote from your description - confirm it is a real Betty screen/label or remove it.');
+  });
+  const seenTabs = new Set();
+  caseData.forEach(c=>{
+    const t = normForMatch(c.tab);
+    if(!t || seenTabs.has(t)) return;
+    seenTabs.add(t);
+    if(!blob.includes(t) && !supportedTerms.has(t)) warnings.push('Case Data tab "'+c.tab+'" was not named in your description - confirm it matches a real Betty screen before saving.');
+  });
+
   const pg = raw.processGrounding || {};
+  const reconciliation = formatEvidenceReconciliation(raw.evidenceReconciliation);
   const scenario = {
     isCustom:true,
     skill: topic, skillCode:'CUSTOM', difficulty,
@@ -2028,31 +2393,42 @@ function normalizeGeneratedScenario(raw, intake){
     playerKnowledge:{ situation: String(raw.playerKnowledgeSituation||'') },
     personaPrompt: String(raw.personaPrompt||''),
     caseData,
-    correctTag: String(raw.correctTag||tagOptions[0]),
+    correctTag,
     tagOptions,
     ahtTargetMinutes: Number.isFinite(raw.ahtTargetMinutes) ? Math.round(raw.ahtTargetMinutes) : 12,
     topic,
+    generationWarnings: warnings,
+    ...(interp ? { confirmedInterpretation: formatInterpretationText(interp) } : {}),
+    uiSupportedTerms: [...supportedTerms],
+    uiTermsUsed: uiTerms.map(u=>String(u.term)),
+    ...(tagReviewNote ? { tagReviewNote } : {}),
     processGrounding:{
       kbTopic: String(pg.kbTopic||topic),
       kbText: String(pg.kbText||''),
-      requiredActions: Array.isArray(pg.requiredActions)&&pg.requiredActions.length ? pg.requiredActions.map(String) : ['Confirm the details with the player before responding.'],
+      requiredActions: Array.isArray(pg.requiredActions) ? pg.requiredActions.map(String).filter(x=>x.trim()) : [],
       optionalActions: Array.isArray(pg.optionalActions) ? pg.optionalActions.map(String) : [],
-      escalationCriteria: String(pg.escalationCriteria||'Escalate to a TL if the player disputes the outcome or the case falls outside normal handling.'),
+      unvalidatedAssumptions: Array.isArray(pg.unvalidatedAssumptions) ? pg.unvalidatedAssumptions.map(String).filter(Boolean) : [],
+      evidenceReconciliation: reconciliation,
+      escalationCriteria: String(pg.escalationCriteria||'Not specified by the creating TL - not a scored requirement.'),
       criticalErrors: String(pg.criticalErrors||'Giving the player inaccurate or unsupported information, or failing to resolve the core issue.'),
-      ambiguityNotes: String(pg.ambiguityNotes||''),
+      ambiguityNotes: [String(pg.ambiguityNotes||'').trim(), (interp && interp.processGaps && interp.processGaps.length) ? 'Process gaps flagged at the interpretation check: ' + interp.processGaps.join(' | ') : ''].filter(Boolean).join('\n'),
     },
   };
   if(hasSecondary){
     scenario.correctSecondaryTag = String(raw.correctSecondaryTag);
-    scenario.secondaryTagOptions = Array.isArray(raw.secondaryTagOptions)&&raw.secondaryTagOptions.length ? raw.secondaryTagOptions.map(String) : ['None', String(raw.correctSecondaryTag)];
+    const sec = (Array.isArray(raw.secondaryTagOptions)&&raw.secondaryTagOptions.length ? raw.secondaryTagOptions.map(String) : ['None']).filter(t=>isApprovedSecondaryTag(t));
+    if(!sec.includes('None')) sec.unshift('None');
+    if(!sec.includes(scenario.correctSecondaryTag)) sec.push(scenario.correctSecondaryTag);
+    scenario.secondaryTagOptions = sec;
   }
   return scenario;
 }
 
 async function generateScenarioFromIntake(){
   const intake = state.scenarioBuilderIntake;
-  if(!intake.whatHappened.trim() && !intake.correctProcess.trim()){
-    state.scenarioBuilderError = 'Please describe at least what happened and what the correct process/outcome should be before generating.';
+  const interp = state.scenarioBuilderInterpretation;
+  if(!interp){
+    state.scenarioBuilderError = 'Check my understanding first - the scenario is only built after you confirm the interpretation.';
     render();
     return;
   }
@@ -2060,9 +2436,9 @@ async function generateScenarioFromIntake(){
   state.scenarioBuilderError = null;
   render();
   try{
-    const prompt = buildScenarioGenerationPrompt(intake);
+    const prompt = buildScenarioGenerationPrompt(intake, interp);
     const raw = await callClaudeJson(prompt, 'complex');
-    state.scenarioBuilderGenerated = normalizeGeneratedScenario(raw, intake);
+    state.scenarioBuilderGenerated = normalizeGeneratedScenario(raw, intake, interp);
     state.scenarioBuilderEditingId = null;
     state.scenarioBuilderSourceType = 'scratch';
     state.scenarioBuilderDuplicatedFromId = null;
@@ -2102,6 +2478,12 @@ function cloneScenarioContentFields(s){
 function startDuplicateFromSource(sourceId){
   const source = scenarioById(sourceId);
   if(!source) return;
+  if(source.review){
+    // The simulated review workflow (review items + per-attempt decision branches) isn't carried into custom copies yet.
+    state.scenarioBuilderError = 'This scenario uses the simulated review workflow, which can\u2019t be duplicated yet. Pick a different scenario to start from.';
+    render();
+    return;
+  }
   const cloned = cloneScenarioContentFields(source);
   cloned.title = source.title + ' (Copy)';
   cloned.internalTitle = (source.internalTitle||source.title) + ' (Copy)';
@@ -2157,7 +2539,6 @@ async function saveScenarioBuilderDraft(){
   gen.correctTag = (gen.correctTag||'').trim();
   gen.tagOptions = (gen.tagOptions||[]).map(s=>s.trim()).filter(Boolean);
   if(gen.correctTag && !gen.tagOptions.includes(gen.correctTag)) gen.tagOptions.unshift(gen.correctTag);
-  if(gen.tagOptions.length===0) gen.tagOptions = [gen.correctTag||'General: Unclear Query'];
   if(gen.correctSecondaryTag!==undefined){
     gen.correctSecondaryTag = (gen.correctSecondaryTag||'').trim();
     gen.secondaryTagOptions = (gen.secondaryTagOptions||[]).map(s=>s.trim()).filter(Boolean);
@@ -2165,15 +2546,25 @@ async function saveScenarioBuilderDraft(){
     if(gen.correctSecondaryTag && !gen.secondaryTagOptions.includes(gen.correctSecondaryTag)) gen.secondaryTagOptions.push(gen.correctSecondaryTag);
     if(!gen.correctSecondaryTag){ delete gen.correctSecondaryTag; delete gen.secondaryTagOptions; }
   }
+  gen.processGrounding.unvalidatedAssumptions = (gen.processGrounding.unvalidatedAssumptions||[]).map(s=>s.trim()).filter(Boolean);
   gen.processGrounding.requiredActions = (gen.processGrounding.requiredActions||[]).map(s=>s.trim()).filter(Boolean);
   gen.processGrounding.optionalActions = (gen.processGrounding.optionalActions||[]).map(s=>s.trim()).filter(Boolean);
-  if(gen.processGrounding.requiredActions.length===0) gen.processGrounding.requiredActions = ['Confirm the details with the player before responding.'];
   const tlName = (state.scenarioBuilderTLName||'').trim();
   if(!tlName){ state.scenarioBuilderError = 'Enter your name as the creating TL before saving.'; render(); return; }
   if(!gen.title || !gen.title.trim()){ state.scenarioBuilderError = 'Title is required.'; render(); return; }
   if(state.scenarioBuilderVisibility==='private' && !state.scenarioBuilderTargetAgent){
     state.scenarioBuilderError = 'Pick the agent this private scenario is for.'; render(); return;
   }
+  // Tags are locked to the approved catalogue (exact match). A blank correct tag is allowed (it means "unresolved - needs tag review")
+  // but only for private/team scenarios; it can never enter the shared library or be approved until it is resolved.
+  const tagProblems = scenarioTagProblems(gen);
+  const invalidTags = tagProblems.filter(p=>!/^No correct tag is set/.test(p));
+  if(invalidTags.length){ state.scenarioBuilderError = 'Tags must be selected verbatim from the approved tag catalogue. ' + invalidTags.join(' '); render(); return; }
+  if(gen.tagOptions.length===0){ state.scenarioBuilderError = 'Add at least one tag option from the approved tag catalogue.'; render(); return; }
+  if(!gen.correctTag && state.scenarioBuilderVisibility==='library'){ state.scenarioBuilderError = 'Choose the correct tag from the approved tag catalogue before submitting to the shared library.'; render(); return; }
+  if(state.scenarioBuilderVisibility==='library' && !(gen.processGrounding.requiredActions||[]).length){ state.scenarioBuilderError = 'Add at least one required action before submitting to the shared library - none are filled in automatically.'; render(); return; }
+  if(state.scenarioBuilderVisibility==='library' && uiTermReviewIssues(gen).length && !gen.uiTermsConfirmed){ state.scenarioBuilderError = 'Some screen/UI terms in this scenario are unsupported or on the watch-list. Confirm they match the real Betty screens (tick the box in the red panel) before submitting to the shared library.'; render(); return; }
+  gen.tagReviewNeeded = !gen.correctTag;
   state.scenarioBuilderError = null;
   setLastAssigningTL(tlName);
   const now = Date.now();
@@ -2220,6 +2611,7 @@ async function saveScenarioBuilderDraft(){
   state.scenarioBuilderEditingId = null;
   state.scenarioBuilderPendingReviewReset = false;
   state.scenarioBuilderIntake = emptyScenarioIntake();
+  resetScenarioBuilderFlow();
   render();
 }
 
@@ -2233,6 +2625,11 @@ async function submitReviewAction(id, reviewStatus){
   if((reviewStatus==='changes_requested' || reviewStatus==='rejected_archived') && !notes){
     alert('Please add review notes explaining what needs to change (or why this was rejected).');
     return;
+  }
+  if(reviewStatus==='approved'){
+    const target = state.customScenarios.find(x=>x.id===id);
+    const probs = target ? scenarioReviewBlockers(target) : [];
+    if(probs.length){ alert('This scenario cannot be approved yet - it has unresolved items:\n\n' + probs.join('\n') + '\n\nRequest changes so the creator can fix them.'); return; }
   }
   setLastAssigningTL(reviewerName);
   const patch = { reviewStatus, reviewedBy: reviewerName, reviewedDate: Date.now(), reviewNotes: notes || null };
@@ -2603,18 +3000,19 @@ function renderSide(){
   Object.keys(tabs).forEach(tab=>{
     caseHtml += `<div class="tab-group"><div class="tab-name">${escapeHtml(tab)}</div>`;
     tabs[tab].forEach(c=>{
+      if(!reviewItemVisible(c, state.investigated)) return;
       const revealed = !c.gated || state.investigated[c.id];
       if(revealed){
-        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(c.label)}</div><div class="cvalue">${escapeHtml(c.value)}</div></div>`;
+        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(c.label)}</div><div class="cvalue">${escapeHtml(c.value)}</div>${simulatedWorkflowNote(c)}</div>`;
       }else{
-        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(c.label)}</div><div class="gated-msg">Not yet investigated.</div><button class="small" data-investigate="${c.id}" style="margin-top:6px;">${escapeHtml(c.gateLabel||'Investigate')}</button></div>`;
+        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(c.label)}</div><div class="gated-msg">${c.reviewRole ? 'Not yet requested.' : 'Not yet investigated.'}</div><button class="small" data-investigate="${c.id}" style="margin-top:6px;">${escapeHtml(c.gateLabel||'Investigate')}</button>${simulatedWorkflowNote(c)}</div>`;
       }
     });
     caseHtml += `</div>`;
   });
 
   const initial = s.playerName.charAt(0).toUpperCase();
-  const availableCount = s.caseData.filter(c=>c.gated && !state.investigated[c.id]).length;
+  const availableCount = s.caseData.filter(c=>c.gated && !state.investigated[c.id] && reviewItemVisible(c, state.investigated)).length;
 
   return `<div class="side">
     <div class="side-icons">${icon('users',17)}${icon('flag',17)}${icon('check',17)}</div>
@@ -2778,7 +3176,7 @@ function wireEvents(){
       const cardId = e.target.getAttribute('data-challenge-investigate');
       slot.investigated[cardId] = true;
       const card = slot.scenario.caseData.find(c=>c.id===cardId);
-      if(card) slot.actionLog.push({label:card.label, tab:card.tab, atTurn: slot.turnCounter});
+      if(card) slot.actionLog.push({label:card.label, tab:card.tab, atTurn: slot.turnCounter, kind: card.reviewRole||null, gateLabel: card.gateLabel||null});
       render();
     });
   });
@@ -2798,7 +3196,8 @@ function wireEvents(){
         scenarioId: slot.scenario.id,
         attempt: {
           attemptNum:1, timestamp: slot.endedAt || Date.now(),
-          transcript: slot.transcript, actionLog: slot.actionLog, evaluation: slot.evaluation,
+          transcript: slot.transcript, actionLog: slot.actionLog,
+    reviewOutcome: (slot.scenario && slot.scenario.reviewOutcome)||null, evaluation: slot.evaluation,
           tlOverrides: slot.tlOverrides, docNote: slot.docNote, docTag: slot.docTag, docSecondaryTag: slot.docSecondaryTag,
           ahtElapsedMinutes: slot.endedAt && slot.chatStartedAt ? (slot.endedAt-slot.chatStartedAt)/60000 : null,
           ahtLateStart:false, ahtTargetMinutes: slot.scenario.ahtTargetMinutes,
@@ -2885,7 +3284,7 @@ function wireEvents(){
       state.investigated[cardId] = true;
       const card = state.activeScenario.caseData.find(c=>c.id===cardId);
       if(card){
-        state.actionLog.push({label:card.label, tab:card.tab, atTurn: state.turnCounter});
+        state.actionLog.push({label:card.label, tab:card.tab, atTurn: state.turnCounter, kind: card.reviewRole||null, gateLabel: card.gateLabel||null});
       }
       render();
     });
@@ -3097,18 +3496,32 @@ function wireEvents(){
   const scenarioBuilderTLNameInput=document.getElementById('scenarioBuilderTLName');
   if(scenarioBuilderTLNameInput) scenarioBuilderTLNameInput.addEventListener('input', e=>{ state.scenarioBuilderTLName = e.target.value; });
   document.querySelectorAll('[data-builder-mode]').forEach(el=>{
-    el.addEventListener('click', ()=>{ state.scenarioBuilderMode = el.getAttribute('data-builder-mode'); render(); });
+    el.addEventListener('click', ()=>{ state.scenarioBuilderMode = el.getAttribute('data-builder-mode'); resetScenarioBuilderFlow(); render(); });
   });
   // Intake form - plain text sync, no re-render needed (nothing else on screen derives from these live).
-  const intakeFieldMap = { intakeWhatHappened:'whatHappened', intakeStruggle:'struggle', intakeDesiredBehavior:'desiredBehavior', intakeCorrectProcess:'correctProcess', intakeKbInfo:'kbInfo', intakePlayerBehavior:'playerBehavior', intakeEscalationNotes:'escalationNotes', intakeTopic:'topic' };
+  const intakeFieldMap = { intakeWhatHappened:'whatHappened', intakeStruggle:'struggle', intakeEvidence:'evidence', intakeCorrectProcess:'correctProcess', intakeKbInfo:'kbInfo', intakePlayerBehavior:'playerBehavior', intakeEscalationNotes:'escalationNotes', intakeTopic:'topic' };
   Object.keys(intakeFieldMap).forEach(elId=>{
     const el = document.getElementById(elId);
     if(el) el.addEventListener('input', e=>{ state.scenarioBuilderIntake[intakeFieldMap[elId]] = e.target.value; });
   });
   const intakeDifficultySelect=document.getElementById('intakeDifficulty');
   if(intakeDifficultySelect) intakeDifficultySelect.addEventListener('change', e=>{ state.scenarioBuilderIntake.difficulty = e.target.value; });
-  const btnGenerateScenario=document.getElementById('btnGenerateScenario');
-  if(btnGenerateScenario) btnGenerateScenario.addEventListener('click', generateScenarioFromIntake);
+  const btnCheckUnderstanding=document.getElementById('btnCheckUnderstanding');
+  if(btnCheckUnderstanding) btnCheckUnderstanding.addEventListener('click', ()=>checkInterpretationFromIntake());
+  const btnConfirmInterpretation=document.getElementById('btnConfirmInterpretation');
+  if(btnConfirmInterpretation) btnConfirmInterpretation.addEventListener('click', generateScenarioFromIntake);
+  const btnInterpretationWrong=document.getElementById('btnInterpretationWrong');
+  if(btnInterpretationWrong) btnInterpretationWrong.addEventListener('click', ()=>{ state.scenarioBuilderCorrectionOpen = true; render(); const t=document.getElementById('interpretationCorrection'); if(t) t.focus(); });
+  const btnBackToIntake=document.getElementById('btnBackToIntake');
+  if(btnBackToIntake) btnBackToIntake.addEventListener('click', ()=>{ state.scenarioBuilderStep='intake'; state.scenarioBuilderInterpretation=null; state.scenarioBuilderCorrectionOpen=false; render(); });
+  const interpretationCorrection=document.getElementById('interpretationCorrection');
+  if(interpretationCorrection) interpretationCorrection.addEventListener('input', e=>{ state.scenarioBuilderCorrectionText = e.target.value; });
+  const btnSubmitCorrection=document.getElementById('btnSubmitCorrection');
+  if(btnSubmitCorrection) btnSubmitCorrection.addEventListener('click', ()=>{
+    const txt = (state.scenarioBuilderCorrectionText||'').trim();
+    if(!txt){ state.scenarioBuilderError = 'Tell me what is wrong first.'; render(); return; }
+    checkInterpretationFromIntake(txt);
+  });
   const btnUseDuplicateSource=document.getElementById('btnUseDuplicateSource');
   if(btnUseDuplicateSource) btnUseDuplicateSource.addEventListener('click', ()=>{
     const sel = document.getElementById('duplicateSourceSelect');
@@ -3143,6 +3556,13 @@ function wireEvents(){
     bindText('editEscalation', ['processGrounding','escalationCriteria']);
     bindText('editCriticalErrors', ['processGrounding','criticalErrors']);
     bindText('editAmbiguity', ['processGrounding','ambiguityNotes']);
+    bindText('editReconciliation', ['processGrounding','evidenceReconciliation']);
+    const advDetails=document.getElementById('builderAdvanced');
+    if(advDetails) advDetails.addEventListener('toggle', e=>{ state.scenarioBuilderAdvancedOpen = e.target.open; });
+    const editUiConfirm=document.getElementById('editUiTermsConfirmed');
+    if(editUiConfirm) editUiConfirm.addEventListener('change', e=>{ gen.uiTermsConfirmed = !!e.target.checked; });
+    const editUnvalidated=document.getElementById('editUnvalidated');
+    if(editUnvalidated) editUnvalidated.addEventListener('input', e=>{ gen.processGrounding.unvalidatedAssumptions = e.target.value.split('\n'); });
     bindText('editCorrectTag', ['correctTag']);
     bindText('editSecondaryTag', ['correctSecondaryTag']);
     const editDifficultySelect=document.getElementById('editDifficulty');
@@ -3195,6 +3615,7 @@ function wireEvents(){
       state.scenarioBuilderEditingId = null;
       state.scenarioBuilderPendingReviewReset = false;
       state.scenarioBuilderError = null;
+      resetScenarioBuilderFlow();
       render();
     });
   }
@@ -3478,6 +3899,7 @@ function archiveAttempt(attemptContext){
     timestamp: Date.now(),
     transcript: attemptContext.transcript,
     actionLog: attemptContext.actionLog,
+    reviewOutcome: attemptContext.scenario.reviewOutcome||null,
     evaluation: attemptContext.evaluation,
     tlOverrides: attemptContext.tlOverrides,   // starts equal to the AI letters; only a TL reviewing in Team Progress ever changes a review (never the agent)
     docNote: attemptContext.docNote,
@@ -3516,6 +3938,7 @@ function archiveAttempt(attemptContext){
     attemptNum,
     transcript: attemptContext.transcript,
     actionLog: attemptContext.actionLog,
+    reviewOutcome: attemptContext.scenario.reviewOutcome||null,
     evaluation: attemptContext.evaluation,
     tlOverrides: attemptContext.tlOverrides,
     docNote: attemptContext.docNote,
@@ -3537,7 +3960,7 @@ function startScenario(id, assignmentId){
     const a = state.assignments.find(x=>x.id===assignmentId);
     if(a && !a.startedAt && !a.completed){ patchAssignmentRemote(a.id, { startedAt: Date.now() }); }
   }
-  state.activeScenario=s;
+  state.activeScenario=resolveScenarioForAttempt(s, (state.attemptHistory[s.id]||[]).length);
   state.activePersonaTrait = pickPersonaTrait(s);
   state.transcript=[];
   state.turnCounter=0;
@@ -3943,12 +4366,16 @@ function formatTranscriptForEval(transcript, s){
 }
 
 function formatCaseDataForEval(s){
-  return s.caseData.map(c=>`- [${c.tab}] ${c.gated ? 'GATED (required a click to reveal - see Action Log for proof)' : 'NOT GATED (shown to the agent automatically from the start, no click needed)'} - ${c.label}: ${c.value}`).join('\n') || '(none defined for this scenario)';
+  return s.caseData.map(c=>`- [${c.tab}] ${c.gated ? 'GATED (required a click to reveal - see Action Log for proof)' : 'NOT GATED (shown to the agent automatically from the start, no click needed)'} - ${c.label}${c.reviewRole?' [SIMULATED WORKFLOW ACTION]':''}: ${c.value}`).join('\n') || '(none defined for this scenario)';
 }
 
 function formatActionLogForEval(actionLog){
   if(!actionLog || actionLog.length===0) return '(empty - either the agent never clicked an Investigate button on any gated Case Data item, OR this transcript was run as a scripted/diagnostic test rather than through the live UI, in which case the action log was never populated. If the transcript itself narrates specific investigation, e.g. citing exact values from Case Data, weigh that narration - do not treat an empty log alone as proof nothing was checked when the transcript content clearly reflects it.)';
-  return actionLog.map(a=>`- Investigated "${a.label}" (${a.tab}) - clicked after transcript turn ${a.atTurn}`).join('\n');
+  return actionLog.map(a=>{
+    if(a.kind==='request') return `- REVIEW REQUESTED via "${a.gateLabel||'Request Review'}" (simulated workflow action, ${a.tab} tab) - clicked after transcript turn ${a.atTurn}`;
+    if(a.kind==='decision') return `- REVIEW DECISION VIEWED via "${a.gateLabel||'View Review Decision'}" (simulated workflow action, ${a.tab} tab) - clicked after transcript turn ${a.atTurn}`;
+    return `- Investigated "${a.label}" (${a.tab}) - clicked after transcript turn ${a.atTurn}`;
+  }).join('\n');
 }
 
 function formatDocumentationForEval(docNote, docTag, docSecondaryTag){
@@ -3966,9 +4393,11 @@ function formatProcessGroundingForEval(s){
     ambiguous:'GENUINE KB GAP: real KB was checked and does not clearly resolve this case. Do not treat either direction as "correct" - evaluate whether the agent correctly recognized the ambiguity instead.',
     fictional:'FICTIONAL/PROTOTYPE-ONLY. Not real Betty KB - use only for testing engine behaviour, not as a real-world correctness standard.',
     coaching:'COACHING-GROUNDED, REAL. Based on documented real TL/QA coaching direction, not a formal written KB article - treat as a genuine, authoritative correctness standard for this scenario (this is real guidance an agent would actually be coached on), just not a KB citation. Do not treat it as fictional/prototype-only.',
-    tl_coaching_draft:'TL COACHING DRAFT - NOT INDEPENDENTLY VALIDATED. This process grounding was written by the creating Team Lead from their own description of a real coaching need, not a cited KB article, and has not been checked by QA. Still use it as this scenario’s own standard for judging the agent’s handling of THIS practice case - do not refuse to score or soften scoring because of this status - but do not treat it as confirmed official Betty policy.'
+    tl_coaching_draft:'TL COACHING DRAFT - NOT INDEPENDENTLY VALIDATED. This process grounding was written by the creating Team Lead from their own description of a real coaching need, not a cited KB article, and has not been checked by QA. The Required Actions below are the TL\u2019s own stated standard (or follow directly from confirmed Case Data) and may be scored per rules 6 and 13 - do not refuse to score or soften scoring because of this status, but do not treat them as confirmed official Betty policy. Anything under "Unvalidated Assumptions" is NOT a requirement: never deduct for not doing it and never describe it as policy. If a Required Action conflicts with Available Case Data, apply rule 16.'
   }[s.kbStatus] || 'FICTIONAL/PROTOTYPE-ONLY.';
-  let out = `KB STATUS: ${statusLabel}\n${s.kbSource?('Source: '+s.kbSource+'\n'):''}KB Topic: ${pg.kbTopic}\nKB Text: ${pg.kbText}\nRequired Actions: ${pg.requiredActions.join('; ')}\nOptional Actions: ${(pg.optionalActions||[]).join('; ')||'(none)'}\nEscalation Criteria: ${pg.escalationCriteria}\nCritical Errors: ${pg.criticalErrors}\nAmbiguity Notes: ${pg.ambiguityNotes||'(none)'}`;
+  let out = `KB STATUS: ${statusLabel}\n${s.kbSource?('Source: '+s.kbSource+'\n'):''}KB Topic: ${pg.kbTopic}\nKB Text: ${pg.kbText}\nRequired Actions: ${(pg.requiredActions||[]).filter(x=>x&&x.trim()).join('; ') || '(NONE DEFINED - this scenario was flagged for review without required actions. Judge only against Available Case Data, the transcript and the rules above; do not invent required actions.)'}\nOptional Actions: ${(pg.optionalActions||[]).join('; ')||'(none)'}\nEscalation Criteria: ${pg.escalationCriteria}\nCritical Errors: ${pg.criticalErrors}\nAmbiguity Notes: ${pg.ambiguityNotes||'(none)'}`;
+  if(pg.evidenceReconciliation) out += `\nEvidence Reconciliation (chronological, written when the scenario was created):\n${pg.evidenceReconciliation}`;
+  if(Array.isArray(pg.unvalidatedAssumptions) && pg.unvalidatedAssumptions.length) out += `\nUnvalidated Assumptions (NOT scoring requirements - never deduct for these): ${pg.unvalidatedAssumptions.join('; ')}`;
   if(pg.rgNote){
     out += `\n\n[ENGINE TEST RG CONTENT - NOT VALIDATED, regardless of the scenario's overall KB status above]\n${pg.rgNote}\nRG KB Text: ${pg.rgKbText}\nRG Critical Error: ${pg.rgCriticalError}`;
   }
@@ -4051,7 +4480,7 @@ ${formatActionLogForEval(actionLog)}
 
 POST-CHAT DOCUMENTATION (submitted by the agent after the chat ended - this is the ONLY basis for scoring Q3, do not infer documentation quality from the transcript):
 ${formatDocumentationForEval(docNote, docTag, docSecondaryTag)}
-For reference (evaluator only, not shown to the agent): the primary tag that best matches this case is "${s.correctTag}".${s.correctSecondaryTag ? ` This scenario also has a real, applicable secondary RG intervention flag: "${s.correctSecondaryTag}" - it should be applied ALONGSIDE the primary tag, not instead of it. If the agent applied a different but still-reasonable primary tag, don't penalize the primary-tag choice alone; but a completely missing or clearly wrong secondary RG flag on a scenario that has a real RG trigger is itself a documentation gap worth reflecting in Q3.` : ' This scenario has no applicable secondary RG flag - selecting one anyway would be a documentation accuracy issue.'} Score Q3=A only if the tag(s) reasonably match AND the note is accurate and would let a colleague pick up the case cold (issue, actions, outcome, key context). Score Q3=B if a required tag is missing/wrong, or the note is missing/inaccurate/too thin to be useful - per the real rubric, Q3=B never fails the chat on its own, it only caps the score at 95%.
+${primaryTagResolved(s) ? `For reference (evaluator only, not shown to the agent): the primary tag that best matches this case is "${s.correctTag}".` : 'For reference (evaluator only, not shown to the agent): the primary tag for this scenario is UNRESOLVED - it was never matched to the approved tag catalogue. Do NOT score the agent\u2019s primary tag choice at all: judge Q3 on the note only, and do not describe the tag as right or wrong.'}${s.correctSecondaryTag ? ` This scenario also has a real, applicable secondary RG intervention flag: "${s.correctSecondaryTag}" - it should be applied ALONGSIDE the primary tag, not instead of it. If the agent applied a different but still-reasonable primary tag, don't penalize the primary-tag choice alone; but a completely missing or clearly wrong secondary RG flag on a scenario that has a real RG trigger is itself a documentation gap worth reflecting in Q3.` : ' This scenario has no applicable secondary RG flag - selecting one anyway would be a documentation accuracy issue.'} Score Q3=A only if the tag(s) reasonably match AND the note is accurate and would let a colleague pick up the case cold (issue, actions, outcome, key context). Score Q3=B if a required tag is missing/wrong, or the note is missing/inaccurate/too thin to be useful - per the real rubric, Q3=B never fails the chat on its own, it only caps the score at 95%.
 
 PLAYER-FACING VS. INTERNAL TERMINOLOGY: Some Process Grounding below references internal team/system names (e.g. "PayTech," "Gigadat"). These are internal terms an agent should know and use in reasoning/escalation notes, but should generally NOT say verbatim to a player. Do NOT penalize the agent for using a reasonable player-facing equivalent when speaking TO the player (e.g. "our payments team" instead of "PayTech") - that is correct behavior, not an error. Only treat it as a Process Accuracy issue if the agent gets the underlying process wrong, not merely for using accessible language with the player.
 
@@ -4138,7 +4567,7 @@ function renderDocModal(){
     <div class="box title" style="margin:16px 0 6px;">Tag</div>
     <select id="docTagSelect" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
       <option value=""> - No tag selected - </option>
-      ${s.tagOptions.map(t=>`<option value="${escapeHtml(t)}" ${state.docTag===t?'selected':''}>${escapeHtml(t)}</option>`).join('')}
+      ${docTagOptionsFor(s).map(t=>`<option value="${escapeHtml(t)}" ${state.docTag===t?'selected':''}>${escapeHtml(t)}</option>`).join('')}
     </select>
     ${hasSecondary ? `<div class="box title" style="margin:16px 0 6px;">RG Intervention Flag <span style="color:var(--text3);font-weight:400;">(secondary - applies alongside the primary tag above, not instead of it)</span></div>
     <select id="docSecondaryTagSelect" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
@@ -5568,6 +5997,7 @@ function scheduleChallengeArrivals(count){
 }
 
 function makeChallengeSlot(scenario, arrivesAt){
+  scenario = resolveScenarioForAttempt(scenario, (state.attemptHistory[scenario.id]||[]).length);
   return {
     scenario,
     transcript:[],
@@ -5805,6 +6235,7 @@ function archiveChallengeSlotAttempt(slot){
     timestamp: Date.now(),
     transcript: slot.transcript,
     actionLog: slot.actionLog,
+    reviewOutcome: (slot.scenario && slot.scenario.reviewOutcome)||null,
     evaluation: slot.evaluation,
     tlOverrides: slot.tlOverrides,
     docNote: slot.docNote,
@@ -5828,7 +6259,8 @@ function archiveChallengeSlotAttempt(slot){
     ahtElapsedMinutes: record.ahtElapsedMinutes, ahtTargetMinutes: slot.scenario.ahtTargetMinutes,
     playerLeftEarly: slot.playerLeftEarly, playerLeftReason: slot.playerLeftReason,
     challengeTier: state.challenge.tier,
-    attemptNum, transcript: slot.transcript, actionLog: slot.actionLog, evaluation: slot.evaluation,
+    attemptNum, transcript: slot.transcript, actionLog: slot.actionLog,
+    reviewOutcome: (slot.scenario && slot.scenario.reviewOutcome)||null, evaluation: slot.evaluation,
     tlOverrides: slot.tlOverrides, docNote: slot.docNote, docTag: slot.docTag, docSecondaryTag: slot.docSecondaryTag,
   });
 }
@@ -5978,11 +6410,12 @@ function renderChallengeSide(){
   Object.keys(tabs).forEach(tab=>{
     caseHtml += `<div class="tab-group"><div class="tab-name">${escapeHtml(tab)}</div>`;
     tabs[tab].forEach(cd=>{
+      if(!reviewItemVisible(cd, slot.investigated)) return;
       const revealed = !cd.gated || slot.investigated[cd.id];
       if(revealed){
-        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(cd.label)}</div><div class="cvalue">${escapeHtml(cd.value)}</div></div>`;
+        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(cd.label)}</div><div class="cvalue">${escapeHtml(cd.value)}</div>${simulatedWorkflowNote(cd)}</div>`;
       }else{
-        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(cd.label)}</div><div class="gated-msg">Not yet investigated.</div><button class="small" data-challenge-investigate="${cd.id}" style="margin-top:6px;">${escapeHtml(cd.gateLabel||'Investigate')}</button></div>`;
+        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(cd.label)}</div><div class="gated-msg">${cd.reviewRole ? 'Not yet requested.' : 'Not yet investigated.'}</div><button class="small" data-challenge-investigate="${cd.id}" style="margin-top:6px;">${escapeHtml(cd.gateLabel||'Investigate')}</button>${simulatedWorkflowNote(cd)}</div>`;
       }
     });
     caseHtml += `</div>`;
@@ -6021,7 +6454,7 @@ function renderChallengeDocModal(slotIndex){
     <div class="box title" style="margin:16px 0 6px;">Tag</div>
     <select id="challengeDocTagSelect" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
       <option value=""> - No tag selected - </option>
-      ${s.tagOptions.map(t=>`<option value="${escapeHtml(t)}" ${slot.docTag===t?'selected':''}>${escapeHtml(t)}</option>`).join('')}
+      ${docTagOptionsFor(s).map(t=>`<option value="${escapeHtml(t)}" ${slot.docTag===t?'selected':''}>${escapeHtml(t)}</option>`).join('')}
     </select>
     ${hasSecondary ? `<div class="box title" style="margin:16px 0 6px;">RG Intervention Flag</div>
     <select id="challengeDocSecondaryTagSelect" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
@@ -6052,7 +6485,7 @@ function renderChallengeSessionReport(){
     const sc = computeQAScore(slot.evaluation.questions);
     return `<div class="box" style="margin-bottom:8px;cursor:pointer;" data-view-challenge-slot="${idx}">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <strong>${escapeHtml(slot.scenario.title)}</strong>
+        <strong>${escapeHtml(slot.scenario.title)}${isDraftStandard(slot.scenario) ? ' <span style="font-size:10px;font-weight:700;color:var(--warn);border:1px solid var(--warn-border);border-radius:10px;padding:1px 6px;white-space:nowrap;">DRAFT-STANDARD</span>' : ''}</strong>
         <span style="color:${sc.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${sc.af?`AF (${sc.afDuty})`:sc.pct+'%'} \u00b7 ${sc.pass?'PASS':'FAIL'}</span>
       </div>
       <div style="font-size:12px;color:var(--text3);margin-top:4px;">${slot.playerLeftEarly ? 'Player left early ('+escapeHtml(slot.playerLeftReason)+')' : 'Closed by agent'}</div>
@@ -6252,6 +6685,7 @@ function buildResultsText(){
   const attemptNum = (state.attemptHistory[s.id]||[]).length || 1;
   let out = `TEAM Z COACHING PILOT - SIMULATION RESULT (Betty Real QA Chat Scorecard)\n`;
   out += `Scenario: ${s.title} (${s.skill}, ${s.difficulty})\n`;
+  if(isDraftStandard(s)) out += `SCORING STANDARD: DRAFT-STANDARD - unvalidated TL Coaching Draft. This score reflects the creating TL's own stated standard, not verified Betty process; a FAIL is not a verified process finding.\n`;
   out += `Attempt: ${attemptNum}\n`;
   out += `AI Score: ${aiScore.af?`AF (${aiScore.afDuty}) \u2192 0%`:aiScore.pct+'%'} - ${aiScore.pass?'PASS \u{1F44D}':'FAIL \u{1F44E}'}\n`;
   if(state.ahtElapsedMinutes!==null && s.ahtTargetMinutes){
@@ -6699,7 +7133,8 @@ function renderReviewQueueSubsection(){
 function topicOptionsForBuilder(){ return [...new Set(SCENARIOS.map(s=>s.topic))].sort(); }
 
 function emptyScenarioIntake(){
-  return { whatHappened:'', struggle:'', desiredBehavior:'', correctProcess:'', kbInfo:'', playerBehavior:'', difficulty:'Applied', topic:'', escalationNotes:'' };
+  // Five core questions + two optional. Everything else (briefing, persona, Case Data, process grounding, tags...) is generated output, never input.
+  return { whatHappened:'', struggle:'', correctProcess:'', evidence:'', playerBehavior:'', kbInfo:'', escalationNotes:'', difficulty:'', topic:'', desiredBehavior:'' };
 }
 
 function renderCreateScenarioSectionBody(){
@@ -6714,7 +7149,7 @@ function renderCreateScenarioSectionBody(){
       <button class="small ${state.scenarioBuilderMode==='scratch'?'primary':''}" data-builder-mode="scratch">Create from scratch</button>
       <button class="small ${state.scenarioBuilderMode==='duplicate'?'primary':''}" data-builder-mode="duplicate">Duplicate existing</button>
     </div>
-    ${state.scenarioBuilderMode==='duplicate' ? renderScenarioDuplicatePicker(tlName) : renderScenarioIntakeForm()}
+    ${state.scenarioBuilderMode==='duplicate' ? renderScenarioDuplicatePicker(tlName) : (state.scenarioBuilderGenerated ? '' : (state.scenarioBuilderStep==='confirm' && state.scenarioBuilderInterpretation ? renderInterpretationCheck() : renderScenarioIntakeForm()))}
     ${state.scenarioBuilderError ? `<div class="box" style="border-color:var(--bad);color:var(--bad);margin-top:12px;font-size:12.5px;">${escapeHtml(state.scenarioBuilderError)}</div>` : ''}
     ${state.scenarioBuilderGenerated ? renderScenarioPreviewEditForm() : ''}
     ${state.scenarioBuilderSavedNotice ? `<div class="box" style="border-color:var(--ok);color:var(--ok);margin-top:12px;font-size:12.5px;">${escapeHtml(state.scenarioBuilderSavedNotice)}</div>` : ''}
@@ -6725,41 +7160,94 @@ function renderCreateScenarioSectionBody(){
 function renderScenarioIntakeForm(){
   const intake = state.scenarioBuilderIntake;
   const topics = topicOptionsForBuilder();
+  const busy = state.scenarioBuilderInterpreting;
   return `
     <div class="box" style="margin-bottom:14px;">
-      <div style="display:grid;gap:10px;">
-        <label style="font-size:12px;color:var(--text2);">What happened in the real chat?
-          <textarea id="intakeWhatHappened" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.whatHappened)}</textarea>
-        </label>
-        <label style="font-size:12px;color:var(--text2);">What did the agent struggle with?
-          <textarea id="intakeStruggle" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.struggle)}</textarea>
-        </label>
-        <label style="font-size:12px;color:var(--text2);">What behaviour do you want them to practise?
-          <textarea id="intakeDesiredBehavior" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.desiredBehavior)}</textarea>
-        </label>
-        <label style="font-size:12px;color:var(--text2);">What should the correct process/outcome be?
-          <textarea id="intakeCorrectProcess" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.correctProcess)}</textarea>
-        </label>
-        <label style="font-size:12px;color:var(--text2);">Relevant KB/process info (optional - paste as much as you have; this alone never makes the scenario "validated")
-          <textarea id="intakeKbInfo" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.kbInfo)}</textarea>
-        </label>
-        <label style="font-size:12px;color:var(--text2);">What player behaviour/persona do you want simulated?
-          <textarea id="intakePlayerBehavior" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.playerBehavior)}</textarea>
-        </label>
-        <label style="font-size:12px;color:var(--text2);">Escalation, tagging, or documentation requirements (optional)
-          <textarea id="intakeEscalationNotes" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.escalationNotes)}</textarea>
-        </label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <select id="intakeDifficulty" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
-            ${['Foundation','Applied','Advanced'].map(d=>`<option value="${d}" ${intake.difficulty===d?'selected':''}>${d}</option>`).join('')}
-          </select>
-          <input id="intakeTopic" list="scenarioBuilderTopicsList" placeholder="Topic (existing or new)" value="${escapeHtml(intake.topic)}" style="flex:1;min-width:200px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
-          <datalist id="scenarioBuilderTopicsList">${topics.map(t=>`<option value="${escapeHtml(t)}">`).join('')}</datalist>
+      <div style="font-size:13px;margin-bottom:12px;color:var(--text2);">Answer these five questions. Before anything is built you will see a short &ldquo;here is what I understood&rdquo; check, so you can correct it. You never fill in personas, Case Data, scoring rules or tags &mdash; those are generated.</div>
+      <div style="display:grid;gap:14px;">
+        <div>
+          <label for="intakeWhatHappened" style="font-size:13px;color:var(--text);font-weight:600;">1. What happened?</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;">Paste the real chat or describe it from start to finish. Include any account/system records that matter.</div>
+          <textarea id="intakeWhatHappened" placeholder="" style="width:100%;min-height:70px;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.whatHappened)}</textarea>
+        </div>
+        <div>
+          <label for="intakeStruggle" style="font-size:13px;color:var(--text);font-weight:600;">2. What was the coaching issue?</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;">What did the agent do wrong, miss, assume or handle poorly? Be specific about the moment you want to coach.</div><div style="font-size:11.5px;color:var(--text3);margin-top:3px;font-style:italic;">Example: "They stopped at the first reward status and told the player it expired without checking the replacement reward or game history."</div>
+          <textarea id="intakeStruggle" placeholder="" style="width:100%;min-height:50px;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.struggle)}</textarea>
+        </div>
+        <div>
+          <label for="intakeCorrectProcess" style="font-size:13px;color:var(--text);font-weight:600;">3. What should the correct handling have looked like?</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;">Describe the ideal agent behaviour and final outcome in plain language. Include any troubleshooting order or escalation rule that matters.</div><div style="font-size:11.5px;color:var(--text3);margin-top:3px;font-style:italic;">Example: "Check the full reward history, verify the replacement spins were used, explain that clearly, then troubleshoot the stale notification before raising it."</div>
+          <textarea id="intakeCorrectProcess" placeholder="" style="width:100%;min-height:60px;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.correctProcess)}</textarea>
+        </div>
+        <div>
+          <label for="intakeEvidence" style="font-size:13px;color:var(--text);font-weight:600;">4. What evidence should the agent be able to investigate?</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;">List or paste the exact screens/records the agent could realistically check: statuses, times, IDs, amounts, notes, game history, screenshots&rsquo; contents. This is the most important answer for accuracy.</div><div style="font-size:11.5px;color:var(--text3);margin-top:3px;font-style:italic;">Example: "Free Spin History: original 100 spins, ManualPromo, Cancelled. Replacement 100 spins, ManualAdjustment, Used, campaign ID 123. Game History: 100 rounds around 10 PM, same campaign ID. Notifications: old reward still shows as active."</div>
+          <textarea id="intakeEvidence" placeholder="" style="width:100%;min-height:80px;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.evidence)}</textarea>
+        </div>
+        <div>
+          <label for="intakePlayerBehavior" style="font-size:13px;color:var(--text);font-weight:600;">5. What should the player do during the simulation?</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;">Describe the player&rsquo;s tone, what they know, what they may dispute, and how they react to good vs poor handling.</div><div style="font-size:11.5px;color:var(--text3);margin-top:3px;font-style:italic;">Example: "Polite but persistent, says she does not remember using the spins, asks for the exact time, and only softens once the agent gives evidence."</div>
+          <textarea id="intakePlayerBehavior" placeholder="" style="width:100%;min-height:60px;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.playerBehavior)}</textarea>
         </div>
       </div>
-      <button id="btnGenerateScenario" class="primary" style="margin-top:12px;" ${state.scenarioBuilderGenerating?'disabled':''}>${state.scenarioBuilderGenerating?'Generating…':'Generate Scenario'}</button>
+      <details style="margin-top:14px;">
+        <summary style="cursor:pointer;font-size:12.5px;color:var(--text2);">Optional: KB / process source, tags / documentation / escalation, topic, difficulty</summary>
+        <div style="display:grid;gap:12px;margin-top:10px;">
+          <div>
+            <label for="intakeKbInfo" style="font-size:12.5px;color:var(--text);font-weight:600;">KB / process source</label>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px;">Paste the relevant KB text, Slack instruction or coaching note, or leave blank. This alone never makes a scenario &ldquo;validated&rdquo;.</div>
+            <textarea id="intakeKbInfo" placeholder="" style="width:100%;min-height:50px;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.kbInfo)}</textarea>
+          </div>
+          <div>
+            <label for="intakeEscalationNotes" style="font-size:12.5px;color:var(--text);font-weight:600;">Tags / documentation / escalation</label>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px;">Only fill this in if you know the exact requirement. Otherwise it is left unresolved and unscored &mdash; never guessed.</div>
+            <textarea id="intakeEscalationNotes" placeholder="" style="width:100%;min-height:40px;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(intake.escalationNotes)}</textarea>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <select id="intakeDifficulty" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+              <option value="" ${!intake.difficulty?'selected':''}>Difficulty: let the builder suggest</option>
+              ${['Foundation','Applied','Advanced'].map(d=>`<option value="${d}" ${intake.difficulty===d?'selected':''}>${d}</option>`).join('')}
+            </select>
+            <input id="intakeTopic" list="scenarioBuilderTopicsList" placeholder="Topic (optional - the builder will suggest one)" value="${escapeHtml(intake.topic)}" style="flex:1;min-width:200px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+            <datalist id="scenarioBuilderTopicsList">${topics.map(t=>`<option value="${escapeHtml(t)}">`).join('')}</datalist>
+          </div>
+        </div>
+      </details>
+      <button id="btnCheckUnderstanding" class="primary" style="margin-top:14px;" ${busy?'disabled':''}>${busy?'Checking\u2026':'Check my understanding \u2192'}</button>
     </div>
   `;
+}
+
+function renderInterpretationCheck(){
+  const i = state.scenarioBuilderInterpretation;
+  const row = (k,v,warn)=>`<div style="display:grid;grid-template-columns:150px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;"><div style="color:var(--text2);font-weight:600;">${k}</div><div style="${warn?'color:var(--warn);':''}">${escapeHtml(v||'(not stated)')}</div></div>`;
+  const gaps = (i.processGaps||[]).length ? `<ul style="margin:0;padding-left:18px;">${i.processGaps.map(g=>`<li>${escapeHtml(g)}</li>`).join('')}</ul>` : 'None';
+  const tagLine = i.tagResolved ? escapeHtml(i.tagResolved) : 'No approved tag confidently matched - needs tag review.' + (i.tagDiscarded ? ' (The builder suggested "' + escapeHtml(i.tagProposed) + '", which is not in the approved catalogue, so it was discarded.)' : '');
+  return `<div class="box" id="interpretationCheck" style="margin-bottom:14px;border-color:var(--accent);">
+    <h3 style="margin:0 0 4px;">Here is what I think this scenario is testing</h3>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Nothing has been built yet. If this is right, the scenario will be generated to match it exactly. If anything is off, tell me now &mdash; it is much cheaper to fix here than after the persona, Case Data and scoring are written.</div>
+    ${row('Player issue', i.playerIssue)}
+    ${row('Ground truth', i.groundTruth)}
+    ${row('Open issue', i.openIssue)}
+    ${row('Coaching skill', i.coachingSkill)}
+    ${row('Expected outcome', i.expectedOutcome)}
+    ${row('Player behaviour', i.playerBehaviour)}
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;"><div style="color:var(--text2);font-weight:600;">Process gaps</div><div style="color:var(--warn);">${gaps}</div></div>
+    ${(i.assumptions||[]).length ? `<div style="display:grid;grid-template-columns:150px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;"><div style="color:var(--text2);font-weight:600;">I assumed</div><div style="color:var(--warn);"><ul style="margin:0;padding-left:18px;">${i.assumptions.map(a=>`<li>${escapeHtml(a)}</li>`).join('')}</ul></div></div>` : ''}
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:10px;padding:7px 0;font-size:13px;"><div style="color:var(--text2);font-weight:600;">Tag</div><div style="${i.tagResolved?'':'color:var(--warn);'}">${tagLine}</div></div>
+    ${(i.corrections||[]).length ? `<div style="font-size:11.5px;color:var(--text3);margin-top:6px;">Corrections applied so far: ${i.corrections.length}</div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      <button id="btnConfirmInterpretation" class="primary" ${state.scenarioBuilderGenerating?'disabled':''}>${state.scenarioBuilderGenerating?'Building\u2026':'Yes, build this scenario'}</button>
+      <button id="btnInterpretationWrong" class="small" ${state.scenarioBuilderGenerating?'disabled':''}>Something\u2019s wrong</button>
+      <button id="btnBackToIntake" class="small" ${state.scenarioBuilderGenerating?'disabled':''}>\u2190 Edit my answers</button>
+    </div>
+    ${state.scenarioBuilderCorrectionOpen ? `<div style="margin-top:12px;">
+      <label for="interpretationCorrection" style="font-size:12.5px;font-weight:600;">What&rsquo;s wrong? Say it in plain words &mdash; I will fix only that.</label>
+      <textarea id="interpretationCorrection" style="width:100%;min-height:60px;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(state.scenarioBuilderCorrectionText)}</textarea>
+      <button id="btnSubmitCorrection" class="primary" style="margin-top:8px;" ${state.scenarioBuilderInterpreting?'disabled':''}>${state.scenarioBuilderInterpreting?'Updating\u2026':'Update my understanding'}</button>
+    </div>` : ''}
+  </div>`;
 }
 
 function renderScenarioDuplicatePicker(tlName){
@@ -6795,12 +7283,25 @@ function renderScenarioPreviewEditForm(){
     </div>
   `).join('');
   const hasSecondary = !!gen.correctSecondaryTag;
+  const editorTagProblems = scenarioTagProblems(gen);
+  const editorNoReq = (gen.processGrounding.requiredActions||[]).some(x=>x && x.trim()) ? [] : ['No required actions were generated. Add them from the TL-stated process - none are filled in automatically, and the scenario cannot enter the shared library without them.'];
+  const editorWarnings = [...(gen.generationWarnings||[]), ...editorTagProblems.filter(x=>!(gen.generationWarnings||[]).includes(x)), ...editorNoReq];
+  const uiIssues = uiTermReviewIssues(gen);
+  const uiTermsList = [...new Set([...(gen.caseData||[]).map(c=>c.tab).filter(Boolean), ...((gen.uiTermsUsed||[]))])];
+  const uiPanelHtml = (uiIssues.length || uiTermsList.length) ? `<div id="builderUiTermsPanel" style="margin-top:10px;border:2px solid ${uiIssues.length?'var(--bad)':'var(--border)'};border-radius:8px;padding:10px 12px;font-size:12px;">
+    <div style="font-weight:700;color:${uiIssues.length?'var(--bad)':'var(--text2)'};">${uiIssues.length ? '⚠ Screen/UI terms need your check' : 'Screen/UI terms used in this scenario'}</div>
+    <div style="margin-top:4px;color:var(--text2);">Case Data tabs and labels must match real Betty screens. Terms in use: ${uiTermsList.map(t=>`<code>${escapeHtml(t)}</code>`).join(', ') || '(none)'}</div>
+    ${uiIssues.length ? `<ul style="margin:6px 0 0 18px;padding:0;color:var(--bad);">${uiIssues.map(w=>`<li>${escapeHtml(w)}</li>`).join('')}</ul>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--text);"><input type="checkbox" id="editUiTermsConfirmed" ${gen.uiTermsConfirmed?'checked':''}> I checked these terms against the real Betty screens (required before submitting to the shared library)</label>` : ''}
+  </div>` : '';
+  const warnBoxHtml = editorWarnings.filter(w=>!/^(UI term|Case Data tab) /.test(w)).length ? `<div id="builderWarnings" style="margin-top:10px;border:2px solid var(--warn);background:var(--warn-bg);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--warn);"><strong>Check before saving:</strong><ul style="margin:6px 0 0 18px;padding:0;">${editorWarnings.filter(w=>!/^(UI term|Case Data tab) /.test(w)).map(w=>`<li>${escapeHtml(w)}</li>`).join('')}</ul>${gen.tagReviewNote?`<div style="margin-top:6px;">Tag note: ${escapeHtml(gen.tagReviewNote)}</div>`:''}</div>` : '';
   return `<div class="box" id="scenarioBuilderPreviewAnchor" style="margin-top:14px;border-color:var(--accent);">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
       <h3 style="margin:0;">${isEditing?'Edit Scenario':'Preview &amp; Edit Before Saving'}</h3>
       <span style="font-size:10px;font-weight:700;color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:2px 7px;">${escapeHtml(SCENARIO_KB_STATUS_LABELS[gen.kbStatus]||gen.kbStatus)}</span>
     </div>
     ${state.scenarioBuilderPendingReviewReset ? `<div style="color:var(--warn);font-size:12px;margin-top:8px;">This scenario was previously reviewed. Saving these edits returns it to "Pending QA Review" and clears its KB-validated/coaching-grounded status until it's reviewed again.</div>` : ''}
+    ${warnBoxHtml}${uiPanelHtml}
     <div style="display:grid;gap:10px;margin-top:12px;">
       <label style="font-size:12px;color:var(--text2);">Title
         <input id="editTitle" value="${escapeHtml(gen.title)}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
@@ -6809,14 +7310,8 @@ function renderScenarioPreviewEditForm(){
         <label style="font-size:12px;color:var(--text2);flex:1;min-width:140px;">Player name
           <input id="editPlayerName" value="${escapeHtml(gen.playerName)}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
         </label>
-        <label style="font-size:12px;color:var(--text2);">Difficulty
-          <select id="editDifficulty" style="margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
-            ${['Foundation','Applied','Advanced'].map(d=>`<option value="${d}" ${gen.difficulty===d?'selected':''}>${d}</option>`).join('')}
-          </select>
-        </label>
-        <label style="font-size:12px;color:var(--text2);">AHT target (min)
-          <input id="editAht" type="number" min="1" value="${gen.ahtTargetMinutes}" style="width:90px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
-        </label>
+        
+        
       </div>
       <label style="font-size:12px;color:var(--text2);">Agent briefing
         <textarea id="editBriefing" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.agentBriefing)}</textarea>
@@ -6824,51 +7319,85 @@ function renderScenarioPreviewEditForm(){
       <label style="font-size:12px;color:var(--text2);">Player behaviour / persona prompt
         <textarea id="editPersona" style="width:100%;min-height:90px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.personaPrompt)}</textarea>
       </label>
-      <label style="font-size:12px;color:var(--text2);">Player's own account of their situation
-        <textarea id="editPlayerSituation" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.playerKnowledge.situation)}</textarea>
-      </label>
+      
 
       <div>
         <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Case data (what the agent can see/investigate)</div>
         ${caseRows}
         <button class="small" id="btnAddCaseRow">+ Add case data item</button>
       </div>
-
-      <label style="font-size:12px;color:var(--text2);">Process grounding - KB topic
-        <input id="editKbTopic" value="${escapeHtml(gen.processGrounding.kbTopic)}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
-      </label>
-      <label style="font-size:12px;color:var(--text2);">Process grounding - correct-process explanation
-        <textarea id="editKbText" style="width:100%;min-height:60px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.kbText)}</textarea>
-      </label>
       <label style="font-size:12px;color:var(--text2);">Required actions (one per line)
         <textarea id="editRequiredActions" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml((gen.processGrounding.requiredActions||[]).join('\n'))}</textarea>
       </label>
-      <label style="font-size:12px;color:var(--text2);">Optional actions (one per line)
-        <textarea id="editOptionalActions" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml((gen.processGrounding.optionalActions||[]).join('\n'))}</textarea>
-      </label>
-      <label style="font-size:12px;color:var(--text2);">Escalation criteria
-        <textarea id="editEscalation" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.escalationCriteria)}</textarea>
-      </label>
-      <label style="font-size:12px;color:var(--text2);">Critical errors
-        <textarea id="editCriticalErrors" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.criticalErrors)}</textarea>
-      </label>
-      <label style="font-size:12px;color:var(--text2);">Ambiguity notes
-        <textarea id="editAmbiguity" style="width:100%;min-height:30px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.ambiguityNotes||'')}</textarea>
-      </label>
-
       <label style="font-size:12px;color:var(--text2);">Correct tag
         <input id="editCorrectTag" value="${escapeHtml(gen.correctTag)}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
       </label>
-      <label style="font-size:12px;color:var(--text2);">All tag options (one per line, include the correct one)
+      <details id="builderAdvanced" ${state.scenarioBuilderAdvancedOpen?'open':''} style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;">
+        <summary style="cursor:pointer;font-size:12.5px;color:var(--text2);">Advanced fields (process grounding, evidence reconciliation, tag options, difficulty, AHT, secondary RG tag) - generated for you; only open if you want to change them</summary>
+        <div style="display:grid;gap:10px;margin-top:10px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;"><label style="font-size:12px;color:var(--text2);">Difficulty
+          <select id="editDifficulty" style="margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+            ${['Foundation','Applied','Advanced'].map(d=>`<option value="${d}" ${gen.difficulty===d?'selected':''}>${d}</option>`).join('')}
+          </select>
+        </label><label style="font-size:12px;color:var(--text2);">AHT target (min)
+          <input id="editAht" type="number" min="1" value="${gen.ahtTargetMinutes}" style="width:90px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+        </label></div>
+          <label style="font-size:12px;color:var(--text2);">Player's own account of their situation
+        <textarea id="editPlayerSituation" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.playerKnowledge.situation)}</textarea>
+      </label>
+          <label style="font-size:12px;color:var(--text2);">Process grounding - KB topic
+        <input id="editKbTopic" value="${escapeHtml(gen.processGrounding.kbTopic)}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+      </label>
+          <label style="font-size:12px;color:var(--text2);">Process grounding - correct-process explanation
+        <textarea id="editKbText" style="width:100%;min-height:60px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.kbText)}</textarea>
+      </label>
+          <label style="font-size:12px;color:var(--text2);">Optional actions (one per line)
+        <textarea id="editOptionalActions" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml((gen.processGrounding.optionalActions||[]).join('\n'))}</textarea>
+      </label>
+          <label style="font-size:12px;color:var(--text2);">Escalation criteria
+        <textarea id="editEscalation" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.escalationCriteria)}</textarea>
+      </label>
+          <label style="font-size:12px;color:var(--text2);">Critical errors
+        <textarea id="editCriticalErrors" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.criticalErrors)}</textarea>
+      </label>
+          <label style="font-size:12px;color:var(--text2);">Evidence reconciliation (how the supplied records fit together, in order)
+        <textarea id="editReconciliation" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.evidenceReconciliation||'')}</textarea>
+      </label>
+          <label style="font-size:12px;color:var(--text2);">Unvalidated assumptions (one per line - shown to the evaluator but NEVER scored)
+        <textarea id="editUnvalidated" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml((gen.processGrounding.unvalidatedAssumptions||[]).join('\n'))}</textarea>
+      </label>
+          <label style="font-size:12px;color:var(--text2);">Ambiguity notes
+        <textarea id="editAmbiguity" style="width:100%;min-height:30px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml(gen.processGrounding.ambiguityNotes||'')}</textarea>
+      </label>
+          <label style="font-size:12px;color:var(--text2);">All tag options (one per line, include the correct one)
         <textarea id="editTagOptions" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml((gen.tagOptions||[]).join('\n'))}</textarea>
       </label>
-      <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;">
+          ${gen.confirmedInterpretation ? `<label style="font-size:12px;color:var(--text2);">Interpretation you confirmed (read-only)
+            <textarea readonly style="width:100%;min-height:90px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text3);padding:8px 10px;font-family:inherit;font-size:12px;">${escapeHtml(gen.confirmedInterpretation)}</textarea>
+          </label>` : ''}
+          <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;">
         <input type="checkbox" id="editHasSecondary" ${hasSecondary?'checked':''}> This scenario also needs a secondary RG intervention flag
       </label>
       ${hasSecondary ? `
       <label style="font-size:12px;color:var(--text2);">Correct secondary RG tag
         <input id="editSecondaryTag" value="${escapeHtml(gen.correctSecondaryTag||'')}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
       </label>` : ''}
+        </div>
+      </details>
+
+      
+      
+      
+      
+      
+      
+      
+      
+      
+
+      
+      
+      
     </div>
 
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
