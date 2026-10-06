@@ -50,6 +50,13 @@
   .aht-slider:before{position:absolute;content:"";height:14px;width:14px;left:3px;bottom:2.5px;background:#fff;border-radius:50%;transition:.15s;}
   .aht-switch input:checked + .aht-slider{background:var(--accent);}
   .aht-switch input:checked + .aht-slider:before{transform:translateX(15px);}
+  .aht-tab-timer{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--accent);border:1px solid var(--accent);border-radius:10px;padding:1px 7px;margin-left:6px;}
+  .aht-tab-timer.over{color:var(--bad);border-color:var(--bad);}
+  .aht-tab-timer.frozen{color:var(--text2);border-color:var(--border);}
+  .wait-badge{font-size:10px;color:var(--warn);margin-left:6px;}
+  .aht-main-timer{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent);display:flex;align-items:center;gap:6px;}
+  .aht-main-timer.over{color:var(--bad);}
+  .aht-main-timer.frozen{color:var(--text2);}
   .aht-live-timer{font-size:12.5px;color:var(--warn);font-weight:600;display:flex;align-items:center;gap:5px;}
   .aht-result-box{border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;}
   .aht-result-box.efficient{border-color:var(--ok-border);background:var(--ok-bg);}
@@ -1931,7 +1938,7 @@ let state = {
   toolkitExpanded:{}, // Coaching Toolkit category name -> bool, which accordion cards are open
   transcript:[],
   turnCounter:0,
-  simStatus:'idle',       // idle | active | documenting | ended
+  simStatus:'idle',       // idle | opening | active | documenting | ended   ('opening' = player connecting, agent cannot act yet)
   evaluation:null,
   tlOverrides:{},
   investigated:{},      // caseData id -> true, once revealed. Reset per scenario.
@@ -1946,6 +1953,7 @@ let state = {
   historicalView:null,    // {scenarioId, attempt} when viewing a past attempt read-only
   historyExpanded:false,
   historicalTranscriptExpanded:false,
+  openingToken:0,          // bumps on every startScenario so a stale opening-message response from a previous attempt is ignored
   ahtMode:false,           // global toggle: when on, any scenario run also tracks/scores handling time
   ahtStartTime:null,       // Date.now() when the current attempt started, only set if ahtMode was on
   ahtElapsedMinutes:null,  // captured once, at End Simulation, for this attempt
@@ -1967,6 +1975,7 @@ let state = {
   playerLeftReason:null,     // 'silence' | 'conversational' - which trigger fired, for the evaluator's context
   challenge:null,             // {active, tier, slots[], activeSlotIndex, sessionStartedAt, switchLog, sessionEvaluation, sessionEvalLoading} while a Challenge Mode session is running
   challengeSilenceInterval:null,
+  challengeAhtInterval:null,  // 1s display tick for the per-chat AHT clocks - display only; the clocks themselves are derived from slot timestamps
   challengeArrivalInterval:null,
   composerDraft:'', // preserves an unsent message in the single-chat composer across re-renders (e.g. a silence nudge arriving mid-sentence)
   historyDrilldownScenario:null, // scenario id when drilled into one scenario's attempts on the History page
@@ -3078,25 +3087,20 @@ function renderMain(){
     return `<div class="main"><div class="empty" style="margin:auto;">Select a scenario from the left to begin.</div></div>`;
   }
   const s=state.activeScenario;
-  let msgs=`<div class="prechat-card">
-      <div class="pctitle">Pre-chat form</div>
-      <div class="pcq">What is your preferred name?</div><div class="pca">${escapeHtml(s.playerName)}</div>
-      <div class="pcq">What brings you here?</div><div class="pca">${escapeHtml(s.preChatReason||(s.isCustom?'':s.title))}</div>
-      <div class="pcq">Anything else we should know?</div><div class="pca">${escapeHtml(s.preChatContext||'')}</div>
-    </div>
-    <div class="started-divider"><span>Started - Today, ${new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}</span></div>`;
+  let msgs=renderPreChatCardHtml(s);
   state.transcript.forEach(m=>{
     if(m.speaker==='system'){ msgs+=`<div class="msg system">${escapeHtml(m.text)}</div>`; return; }
     const who = m.speaker==='player' ? s.playerName : 'You (Agent)';
     msgs += `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${escapeHtml(m.text)}</div>`;
   });
+  if(state.simStatus==='opening') msgs += `<div class="typing">${escapeHtml(s.playerName)} is typing...</div>`;
   const composerDisabled = state.simStatus!=='active' ? 'disabled' : '';
   const hasCompletedEval = state.evaluation && !state.evaluation.loading && !state.evaluation.error;
   return `<div class="main">
     <div class="topbar">
       <div>
         <div class="who">${escapeHtml(s.playerName)}</div>
-        <div class="status">${s.title} \u00b7 ${state.simStatus==='active'?'In progress':state.simStatus==='documenting'?'Completing documentation\u2026':state.simStatus==='ended'?'Ended':'Not started'}</div>
+        <div class="status">${s.title} \u00b7 ${state.simStatus==='opening'?'Player connecting\u2026':state.simStatus==='active'?'In progress':state.simStatus==='documenting'?'Completing documentation\u2026':state.simStatus==='ended'?'Ended':'Not started'}</div>
       </div>
       <div class="btns">
         <div class="chrome-icons">${icon('flag',16)}${icon('link',16)}${icon('dots',16)}</div>
@@ -3149,7 +3153,7 @@ function renderSide(){
       <div class="savatar">${initial}</div>
       <div class="sname">${escapeHtml(s.playerName)}</div>
       <div class="ssub">${escapeHtml(s.difficulty)} \u00b7 Simulation</div>
-      ${state.ahtMode ? `<div class="aht-live-timer" style="justify-content:center;margin-top:8px;">${icon('clock',13)} Chatting time: <span id="ahtLiveTimer">${state.ahtStartTime ? formatElapsed(Date.now()-state.ahtStartTime) : '0m 00s'}</span></div>${state.ahtLateStart ? `<div style="font-size:10.5px;color:var(--text3);text-align:center;margin-top:2px;">Started late - timing from when AHT Mode was turned on, not chat start</div>` : ''}` : ''}
+      ${(state.ahtMode && state.simStatus!=='opening') ? `<div class="aht-live-timer" style="justify-content:center;margin-top:8px;">${icon('clock',13)} Chatting time: <span id="ahtLiveTimer">${state.ahtStartTime ? formatElapsed(Date.now()-state.ahtStartTime) : '0m 00s'}</span></div>${state.ahtLateStart ? `<div style="font-size:10.5px;color:var(--text3);text-align:center;margin-top:2px;">Started late - timing from when AHT Mode was turned on, not chat start</div>` : ''}` : ''}
     </div>
 
     <div class="side-section">
@@ -3235,7 +3239,7 @@ function wireEvents(){
   const railPractice=document.getElementById('railPractice');
   if(railPractice) railPractice.addEventListener('click', ()=>{
     // Resume an in-progress chat if one exists; otherwise land on the same picker Home shows
-    if(state.activeScenario && state.simStatus==='active'){ state.view='sim'; render(); }
+    if(state.activeScenario && (state.simStatus==='active' || state.simStatus==='opening')){ state.view='sim'; render(); }
     else{ state.categoryFilter=null; state.view='categories'; render(); }
   });
 
@@ -3293,7 +3297,7 @@ function wireEvents(){
   const btnEndChallengeSlot=document.getElementById('btnEndChallengeSlot');
   if(btnEndChallengeSlot) btnEndChallengeSlot.addEventListener('click', ()=>{
     const slot = state.challenge.slots[state.challenge.activeSlotIndex];
-    if(!slot || slot.transcript.filter(m=>m.speaker!=='system').length===0){
+    if(!slot || slot.transcript.filter(m=>m.speaker==='agent').length===0){
       alert('Send at least one message in this chat before ending it.');
       return;
     }
@@ -3313,6 +3317,7 @@ function wireEvents(){
   if(btnExitChallenge) btnExitChallenge.addEventListener('click', ()=>{
     if(state.challengeSilenceInterval){ clearInterval(state.challengeSilenceInterval); state.challengeSilenceInterval=null; }
     if(state.challengeArrivalInterval){ clearInterval(state.challengeArrivalInterval); state.challengeArrivalInterval=null; }
+    stopChallengeAhtTick();
     state.challenge = null;
     state.view = 'challenge-picker';
     render();
@@ -3328,7 +3333,7 @@ function wireEvents(){
           transcript: slot.transcript, actionLog: slot.actionLog,
     reviewOutcome: (slot.scenario && slot.scenario.reviewOutcome)||null, evaluation: slot.evaluation,
           tlOverrides: slot.tlOverrides, docNote: slot.docNote, docTag: slot.docTag, docSecondaryTag: slot.docSecondaryTag,
-          ahtElapsedMinutes: slot.endedAt && slot.chatStartedAt ? (slot.endedAt-slot.chatStartedAt)/60000 : null,
+          ahtElapsedMinutes: slot.finalHandlingMs!=null ? slot.finalHandlingMs/60000 : (slot.endedAt && slot.chatStartedAt ? (slot.endedAt-slot.chatStartedAt)/60000 : null),
           ahtLateStart:false, ahtTargetMinutes: slot.scenario.ahtTargetMinutes,
           playerLeftEarly: slot.playerLeftEarly, playerLeftReason: slot.playerLeftReason,
         },
@@ -3368,6 +3373,7 @@ function wireEvents(){
   const ahtCheckbox=document.getElementById('ahtModeCheckbox');
   if(ahtCheckbox) ahtCheckbox.addEventListener('change', e=>{
     state.ahtMode = e.target.checked;
+    if(state.view==='challenge'){ render(); return; } // Challenge/multi-chat: the toggle only shows/hides the per-chat clocks, which are derived from each chat's own timestamps
     if(state.ahtMode && state.simStatus==='active' && !state.ahtStartTime){
       // Turned on mid-chat: start timing from right now. This undercounts the true
       // elapsed time for this attempt since the chat itself started earlier - that's
@@ -4083,6 +4089,58 @@ function archiveAttempt(attemptContext){
   });
 }
 
+// ---------- PLAYER-FIRST OPENING (every mode: Practice, Assignments, Rookie..Platinum, custom/shared) ----------
+// The agent never enters an active chat with a blank transcript. Flow: pre-chat form shown -> chat connects ->
+// the simulated player sends the first live message -> only then can the agent reply, and only then do handling clocks start.
+function situationToFirstPerson(text){
+  const t = String(text||'').trim();
+  const first = (t.match(/^[\s\S]*?[.!?](?=\s|$)/)||[t])[0];
+  return first
+    .replace(/\bYou[’']re\b/g,"I'm").replace(/\bYou[’']ve\b/g,"I've").replace(/\bYou[’']d\b/g,"I'd").replace(/\bYou[’']ll\b/g,"I'll")
+    .replace(/\bYou are\b/g,'I am').replace(/\bYou were\b/g,'I was').replace(/\bYou have\b/g,'I have').replace(/\bYou had\b/g,'I had')
+    .replace(/\bYou\b/g,'I').replace(/\byourself\b/gi,'myself').replace(/\byours\b/gi,'mine').replace(/\byour\b/gi,'my')
+    // lowercase "you" is a subject before a verb ("you opted", "you are") but an object elsewhere ("asked you")
+    .replace(/\byou\b(?=\s+(?:\w+ed|are|were|have|had|can|could|will|would|do|did|don[\u2019']t|didn[\u2019']t|haven[\u2019']t|think|know|want|need|just|also|may|might|should|still|got|get|lead|leave|mention|bring|ask|made|made|went|saw|sent|tried|forgot)\b)/g,'I')
+    .replace(/\byou\b/g,'me').trim();
+}
+// Deterministic first live message used only when generation fails. Built ONLY from player-known content, in this order:
+// 1) the player's own pre-chat text, 2) a first-person line from playerKnowledge.situation, 3) a generic player message.
+function openingFallbackMessage(s){
+  const pre = sanitizePreChat(String((s && s.preChatContext)||'')).text;
+  if(pre) return pre;
+  const sit = situationToFirstPerson(s && s.playerKnowledge && s.playerKnowledge.situation);
+  if(sit && !preChatSentenceViolations(sit).length) return sit;
+  return 'Hi, I need some help with my account.';
+}
+function buildOpeningInstruction(s){
+  const pre = ((s && s.preChatContext)||'').trim();
+  return `\n\nSPECIAL INSTRUCTION FOR THIS TURN ONLY: you have just been connected to a live-chat agent - nobody has said anything yet and no agent has greeted you. Send the OPENING message yourself: get straight into why you're contacting support, in your own words, matching your persona. Real players very often start this way rather than waiting to be greeted first.`
+    + (pre ? ` Before connecting you typed this into the pre-chat form: "${pre}". Your first live message should sound like the same person naturally beginning the conversation - continue from it, but do NOT repeat it word for word.` : '')
+    + ` Only say what you (the player) know; do not mention records, systems or what the agent should do. One to three sentences.`;
+}
+// Returns {text, fallback}. Never throws and never returns an empty message.
+async function generatePlayerOpening(s, personaTrait){
+  try{
+    const sys = buildPlayerSystemPrompt(s, personaTrait);
+    const {text} = await callClaude(sys + buildOpeningInstruction(s), [{role:'user', content:'(the chat session has just started - send your opening message to the agent)'}], 'quick');
+    const clean = String(text||'').replace(/\[END_CHAT\]\s*$/,'').trim();
+    if(!clean) throw new Error('empty opening message');
+    return {text: clean, fallback:false};
+  }catch(err){
+    console.error('Player opening message failed (non-fatal, using a player-known fallback message):', err);
+    return {text: openingFallbackMessage(s), fallback:true};
+  }
+}
+function renderPreChatCardHtml(s){
+  return `<div class="prechat-card">
+      <div class="pctitle">Pre-chat form</div>
+      <div class="pcq">What is your preferred name?</div><div class="pca">${escapeHtml(s.playerName)}</div>
+      <div class="pcq">What brings you here?</div><div class="pca">${escapeHtml(s.preChatReason||(s.isCustom?'':s.title))}</div>
+      <div class="pcq">Anything else we should know?</div><div class="pca">${escapeHtml(s.preChatContext||'')}</div>
+    </div>
+    <div class="started-divider"><span>Started - Today, ${new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}</span></div>`;
+}
+
 function startScenario(id, assignmentId){
   if(state.ahtTimerInterval){ clearInterval(state.ahtTimerInterval); state.ahtTimerInterval=null; }
   if(state.silenceCheckInterval){ clearInterval(state.silenceCheckInterval); state.silenceCheckInterval=null; }
@@ -4099,7 +4157,7 @@ function startScenario(id, assignmentId){
   state.activePersonaTrait = pickPersonaTrait(s);
   state.transcript=[];
   state.turnCounter=0;
-  state.simStatus='active';
+  state.simStatus='opening';   // the player is connecting and writing their first message; the agent cannot act yet
   state.evaluation=null;
   state.tlOverrides={};
   state.investigated={};
@@ -4111,16 +4169,30 @@ function startScenario(id, assignmentId){
   state.currentAttemptArchived=false;
   state.resultsCopied=false;
   state.pendingResultsText=null;
-  state.ahtStartTime = state.ahtMode ? Date.now() : null;
+  state.ahtStartTime = null;   // set when the opening message is delivered, so generation latency is never counted as handling time
   state.ahtLateStart = false;
   state.ahtElapsedMinutes = null;
-  state.chatStartedAt = Date.now();
+  state.chatStartedAt = null;  // likewise set at delivery
   state.silenceNudgeCount = 0;
   state.silenceActionInFlight = false;
   state.playerLeftEarly = false;
   state.playerLeftReason = null;
   state.composerDraft = '';
   state.view='sim';
+  state.openingToken = (state.openingToken||0) + 1;
+  render();
+  deliverSingleChatOpening(state.openingToken);
+}
+
+async function deliverSingleChatOpening(token){
+  const r = await generatePlayerOpening(state.activeScenario, state.activePersonaTrait);
+  if(token !== state.openingToken || state.simStatus !== 'opening') return; // restarted or abandoned while generating
+  const joinedAt = Date.now();
+  state.turnCounter++;
+  state.transcript.push({speaker:'player', text:r.text, turn:state.turnCounter, ts:joinedAt});
+  state.chatStartedAt = joinedAt;
+  state.ahtStartTime = state.ahtMode ? joinedAt : null;
+  state.simStatus = 'active';
   render();
   if(state.ahtMode){
     state.ahtTimerInterval = setInterval(()=>{
@@ -4138,6 +4210,68 @@ function formatElapsed(ms){
   const s = totalSec % 60;
   return `${m}m ${s.toString().padStart(2,'0')}s`;
 }
+
+// ---------- PER-CHAT AHT CLOCKS (Challenge / multi-chat modes) ----------
+// A chat's handling time is NEVER stored as a counter. It is always derived from two immutable timestamps on the slot:
+// chatStartedAt (set once, when the player joins) and endedAt (set once, when the chat is closed). That makes it
+// independent of which chat is active, of message sends/receives, of re-renders and of the AHT Mode toggle (which only
+// shows or hides the clocks).
+function formatClock(ms){
+  const t = Math.floor(Math.max(0, ms)/1000);
+  const h = Math.floor(t/3600), m = Math.floor((t%3600)/60), sec = t%60;
+  const p = n=>String(n).padStart(2,'0');
+  return h>0 ? `${h}:${p(m)}:${p(sec)}` : `${p(m)}:${p(sec)}`;
+}
+function slotHandlingMs(slot, now){
+  if(!slot || !slot.chatStartedAt) return null;                       // player has not joined yet
+  const end = slot.endedAt || (now || Date.now());                    // frozen once the chat has ended
+  return Math.max(0, end - slot.chatStartedAt);
+}
+function slotAhtView(slot, now){
+  const ms = slotHandlingMs(slot, now);
+  if(ms===null) return null;
+  const targetMs = slot.scenario && slot.scenario.ahtTargetMinutes ? slot.scenario.ahtTargetMinutes*60000 : null;
+  const over = targetMs!==null && ms>targetMs;
+  return { ms, clock: formatClock(ms), frozen: !!slot.endedAt, over, targetClock: targetMs!==null ? formatClock(targetMs) : null, overClock: over ? formatClock(ms-targetMs) : null };
+}
+function ahtMainText(v){
+  if(!v) return '';
+  const tail = v.targetClock ? (v.over ? ` \u00b7 ${v.overClock} over target` : ` \u00b7 Target: ${v.targetClock}`) : '';
+  return `${v.frozen?'Handling time':'Elapsed'}: ${v.clock}${tail}`;
+}
+// "Player has been waiting on your reply" indicator - a different thing from AHT, kept separate.
+function slotWaitMins(slot, now){
+  if(!slot || slot.status!=='active') return 0;
+  let last=null;
+  for(let i=slot.transcript.length-1;i>=0;i--){ if(slot.transcript[i].speaker!=='system'){ last=slot.transcript[i]; break; } }
+  if(!last || last.speaker!=='player' || !last.ts) return 0;
+  return Math.floor(((now||Date.now())-last.ts)/60000);
+}
+// Display-only tick: rewrites the text of the timer elements that render() already placed, from the slot timestamps.
+function updateChallengeAhtTimers(){
+  if(!state.challenge || !state.challenge.active) return;
+  const now = Date.now();
+  document.querySelectorAll('[data-aht-slot]').forEach(el=>{
+    const slot = state.challenge.slots[Number(el.getAttribute('data-aht-slot'))];
+    const v = slotAhtView(slot, now);
+    if(!v) return;
+    el.textContent = '\u23f1 ' + v.clock;
+    el.classList.toggle('over', v.over); el.classList.toggle('frozen', v.frozen);
+  });
+  document.querySelectorAll('[data-aht-main]').forEach(el=>{
+    const slot = state.challenge.slots[Number(el.getAttribute('data-aht-main'))];
+    const v = slotAhtView(slot, now);
+    if(!v) return;
+    el.textContent = ahtMainText(v);
+    el.classList.toggle('over', v.over); el.classList.toggle('frozen', v.frozen);
+  });
+  document.querySelectorAll('[data-wait-slot]').forEach(el=>{
+    const mins = slotWaitMins(state.challenge.slots[Number(el.getAttribute('data-wait-slot'))], now);
+    el.textContent = mins>=1 ? `\u23f3 ${mins}m` : '';
+    el.style.display = mins>=1 ? '' : 'none';
+  });
+}
+function stopChallengeAhtTick(){ if(state.challengeAhtInterval){ clearInterval(state.challengeAhtInterval); state.challengeAhtInterval=null; } }
 
 // ---------- PLAYER SILENCE RESPONSE (always on, not gated to AHT Mode - real chat behavior) ----------
 // Absolute elapsed-silence thresholds per persona patience. "patience" is an optional per-scenario
@@ -4420,9 +4554,13 @@ function enforceAFDutyBoundary(result){
 }
 
 function transcriptToApiMessages(transcript){
-  return (transcript||state.transcript)
+  const msgs = (transcript||state.transcript)
     .filter(m=>m.speaker!=='system')
     .map(m=>({ role: m.speaker==='agent'?'user':'assistant', content:m.text }));
+  // The player always speaks first, so the transcript starts with the player's (assistant-role) opener. The API wants the
+  // list to start with a user turn, so a synthetic connect marker is placed first. It is never shown in the UI.
+  if(msgs.length && msgs[0].role==='assistant') msgs.unshift({role:'user', content:'(the chat has just connected)'});
+  return msgs;
 }
 
 // ---------- AHT / COACHING BEHAVIOUR SIGNALS (deterministic half) ----------
@@ -4703,7 +4841,7 @@ Return ONLY valid JSON (no markdown fences, no preamble), exactly this shape. Fo
 }
 
 async function endSimulation(){
-  if(state.transcript.filter(m=>m.speaker!=='system').length===0){
+  if(state.transcript.filter(m=>m.speaker==='agent').length===0){
     alert('Send at least one message before ending the simulation.');
     return;
   }
@@ -6169,20 +6307,23 @@ function makeChallengeSlot(scenario, arrivesAt){
     status:'incoming', // 'incoming' | 'active' | 'documenting' | 'scoring' | 'ended'
     draftText:'', // preserves an in-progress, unsent message across re-renders triggered by OTHER slots
     arrivesAt,
-    chatStartedAt: null, // set when the chat actually arrives (arriveChallengeSlot), not at session creation -
-                          // AHT should measure real handling time from when the player showed up, not queue wait.
+    chatStartedAt: null, // set once, when the player's opening message is delivered (or the fallback join notice is inserted) in
+                          // arriveChallengeSlot - not at session creation, not on 'arriving'. AHT must not count queue wait or
+                          // opening-message generation latency, when the agent cannot act yet.
     personaTrait: pickPersonaTrait(scenario),
     silenceNudgeCount:0,
     silenceActionInFlight:false,
     playerLeftEarly:false, playerLeftReason:null,
     attemptArchived:false,
     endedAt:null,
+    finalHandlingMs:null,
   };
 }
 
 function startChallengeMode(tier){
   if(state.challengeSilenceInterval){ clearInterval(state.challengeSilenceInterval); state.challengeSilenceInterval=null; }
   if(state.challengeArrivalInterval){ clearInterval(state.challengeArrivalInterval); state.challengeArrivalInterval=null; }
+  stopChallengeAhtTick();
   const scenarios = composeChallengeScenarios(tier);
   const now = Date.now();
   const delays = scheduleChallengeArrivals(scenarios.length);
@@ -6200,6 +6341,8 @@ function startChallengeMode(tier){
   render();
   state.challengeSilenceInterval = setInterval(checkChallengeSilence, 5000);
   state.challengeArrivalInterval = setInterval(checkChallengeArrivals, 1000);
+  stopChallengeAhtTick();
+  state.challengeAhtInterval = setInterval(updateChallengeAhtTimers, 500);
   checkChallengeArrivals(); // covers the (common) case where slot 0's short delay already elapsed by first render
 }
 
@@ -6228,21 +6371,15 @@ async function arriveChallengeSlot(slotIndex){
   // misleadingly blank log for however long the API call takes. The tab still reads/renders as
   // "waiting" throughout (see renderChallengeMain), it only becomes truly active once the player
   // has actually said something.
-  slot.status='arriving';
-  slot.chatStartedAt = Date.now();
+  slot.status='arriving'; // chatStartedAt is NOT set here: while the opening message is being generated the agent cannot act yet
   slot.silenceActionInFlight = true;
   render();
-  try{
-    const sys = buildPlayerSystemPrompt(slot.scenario, slot.personaTrait);
-    const openInstruction = `\n\nSPECIAL INSTRUCTION FOR THIS TURN ONLY: you are opening this chat - nobody has said anything yet and no agent has greeted you. Send the OPENING message yourself: get straight into why you're contacting support, in your own words, matching your persona. Real players very often start this way rather than waiting to be greeted first. One to three sentences.`;
-    const apiMsgs = [{role:'user', content:'(the chat session has just started - send your opening message to the agent)'}];
-    const {text:reply} = await callClaude(sys + openInstruction, apiMsgs, 'quick');
-    slot.turnCounter++;
-    slot.transcript.push({speaker:'player', text:reply, turn:slot.turnCounter, ts:Date.now()});
-  }catch(err){
-    console.error('Challenge slot opening message failed (non-fatal, chat still opens):', err);
-    slot.transcript.push({speaker:'system', text:'(Player has joined the chat.)', ts:Date.now()});
-  }
+  const r = await generatePlayerOpening(slot.scenario, slot.personaTrait);   // never throws; on failure returns a real player-known fallback message
+  if(!state.challenge || state.challenge.slots[slotIndex]!==slot) return;    // session was exited while the opener was generating
+  const joinedAt = Date.now();
+  slot.turnCounter++;
+  slot.transcript.push({speaker:'player', text:r.text, turn:slot.turnCounter, ts:joinedAt});   // always the first transcript turn, always speaker:'player'
+  if(!slot.chatStartedAt) slot.chatStartedAt = joinedAt;                                       // handling clock starts at delivery, exactly once
   slot.status='active';
   slot.silenceActionInFlight = false;
   render();
@@ -6356,7 +6493,10 @@ function finalizeChallengeSlotChat(slotIndex){
   const slot = state.challenge.slots[slotIndex];
   if(!slot) return;
   slot.status = 'documenting';
-  slot.endedAt = Date.now();
+  if(!slot.endedAt){                                       // freeze once: endedAt and the final handling duration never change afterwards
+    slot.endedAt = Date.now();
+    slot.finalHandlingMs = slot.chatStartedAt ? slot.endedAt - slot.chatStartedAt : null;
+  }
   render();
   renderChallengeDocModal(slotIndex);
 }
@@ -6400,7 +6540,7 @@ function archiveChallengeSlotAttempt(slot){
     docNote: slot.docNote,
     docSecondaryTag: slot.docSecondaryTag,
     docTag: slot.docTag,
-    ahtElapsedMinutes: slot.endedAt && slot.chatStartedAt ? (slot.endedAt-slot.chatStartedAt)/60000 : null,
+    ahtElapsedMinutes: slot.finalHandlingMs!=null ? slot.finalHandlingMs/60000 : null,
     ahtLateStart: false,
     ahtTargetMinutes: slot.scenario.ahtTargetMinutes,
     playerLeftEarly: slot.playerLeftEarly,
@@ -6428,6 +6568,7 @@ function checkChallengeSessionComplete(){
   if(!state.challenge.slots.every(s=>s.status==='ended')) return;
   if(state.challengeSilenceInterval){ clearInterval(state.challengeSilenceInterval); state.challengeSilenceInterval=null; }
   if(state.challengeArrivalInterval){ clearInterval(state.challengeArrivalInterval); state.challengeArrivalInterval=null; }
+  stopChallengeAhtTick();
   runChallengeSessionEvaluation();
 }
 
@@ -6508,22 +6649,17 @@ function renderChallengeMain(){
 
   const tabs = c.slots.map((slot, idx)=>{
     const isActive = idx===c.activeSlotIndex;
-    let waitBadge='';
-    if(slot.status==='active'){
-      let last=null;
-      for(let i=slot.transcript.length-1;i>=0;i--){ if(slot.transcript[i].speaker!=='system'){ last=slot.transcript[i]; break; } }
-      if(last && last.speaker==='player'){
-        const mins = Math.floor((Date.now()-last.ts)/60000);
-        if(mins>=1) waitBadge = `<span style="font-size:10px;color:var(--warn);margin-left:6px;">${mins}m</span>`;
-      }
-    }
+    const waitMins = slotWaitMins(slot);
+    const waitBadge = `<span class="wait-badge" data-wait-slot="${idx}" title="The player has been waiting on your reply for this long (not your handling time)" style="${waitMins>=1?'':'display:none;'}">${waitMins>=1?'\u23f3 '+waitMins+'m':''}</span>`;
+    const ahtV = slotAhtView(slot);
+    const ahtBadge = (state.ahtMode && ahtV) ? `<span class="aht-tab-timer ${ahtV.over?'over':''} ${ahtV.frozen?'frozen':''}" data-aht-slot="${idx}" title="Handling time (AHT) for this chat - counts from when the player joined, independent of which chat is open">\u23f1 ${ahtV.clock}</span>` : '';
     const isWaiting = slot.status==='incoming' || slot.status==='arriving';
     const statusDot = slot.status==='ended' ? 'var(--ok)' : isWaiting ? 'var(--text3)' : (slot.status==='documenting'||slot.status==='scoring' ? 'var(--text3)' : 'var(--accent)');
     const incomingBadge = isWaiting ? `<span style="font-size:10px;color:var(--accent);font-weight:700;margin-left:4px;">• arriving</span>` : '';
     return `<div class="challenge-tab ${isActive?'active':''}" data-challenge-tab="${idx}" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:2px solid ${isActive?'var(--accent)':'transparent'};white-space:nowrap;${isWaiting?'opacity:0.65;':''}">
       <span style="width:7px;height:7px;border-radius:50%;background:${statusDot};display:inline-block;flex-shrink:0;"></span>
       <span style="font-size:12.5px;font-weight:${isActive?700:500};">${isWaiting ? 'Chat '+(idx+1) : escapeHtml(slot.scenario.title)}</span>
-      ${incomingBadge}${waitBadge}
+      ${incomingBadge}${ahtBadge}${waitBadge}
     </div>`;
   }).join('');
 
@@ -6532,7 +6668,7 @@ function renderChallengeMain(){
   const composerDisabled = activeSlot.status!=='active' ? 'disabled' : '';
   const msgs = activeIsWaiting
     ? `<div class="empty" style="margin:auto;text-align:center;color:var(--text3);">Waiting for this player to join\u2026<br>Your other active chat${c.slots.length>2?'s':''} won\u2019t wait - keep working ${c.slots.length>2?'them':'it'} while this one arrives.</div>`
-    : activeSlot.transcript.map(m=>{
+    : renderPreChatCardHtml(activeSlot.scenario) + activeSlot.transcript.map(m=>{
         if(m.speaker==='system') return `<div class="msg system">${escapeHtml(m.text)}</div>`;
         const who = m.speaker==='player' ? activeSlot.scenario.playerName : 'You (Agent)';
         return `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${escapeHtml(m.text)}</div>`;
@@ -6546,6 +6682,7 @@ function renderChallengeMain(){
         <div class="status">${activeIsWaiting ? 'Waiting for player to join\u2026' : escapeHtml(activeSlot.scenario.title)} \u00b7 ${activeSlot.status==='active'?'In progress':activeIsWaiting?'Not started yet':activeSlot.status==='documenting'?'Completing documentation\u2026':activeSlot.status==='scoring'?'Scoring this chat\u2026 your other chats stay active':'Ended'}</div>
       </div>
       <div class="btns">
+        ${(state.ahtMode && slotAhtView(activeSlot)) ? `<span class="aht-main-timer ${slotAhtView(activeSlot).over?'over':''} ${slotAhtView(activeSlot).frozen?'frozen':''}" data-aht-main="${c.activeSlotIndex}" title="Elapsed handling time (AHT) for this chat">${ahtMainText(slotAhtView(activeSlot))}</span>` : ''}
         <button id="btnEndChallengeSlot" class="primary" ${activeSlot.status!=='active'?'disabled':''}>End This Chat</button>
       </div>
     </div>
@@ -6562,6 +6699,11 @@ function renderChallengeSide(){
   if(!c || !c.active) return `<div class="side"><div class="empty" style="padding:40px 16px;">No active session.</div></div>`;
   if(c.slots.every(s=>s.status==='ended')) return `<div class="side"><div class="empty" style="padding:40px 16px;">Session complete - see the report.</div></div>`;
   const slot = c.slots[c.activeSlotIndex];
+  // Until the player has joined and sent their opening message, nothing about this chat may be visible: no player name, skill,
+  // briefing, Case Data, investigation buttons or KB status. The agent discovers the case when it actually arrives.
+  if(slot.status==='incoming' || slot.status==='arriving'){
+    return `<div class="side" id="challengeWaitingPanel"><div class="side-identity"><div class="savatar">\u2026</div><div class="sname">Incoming chat</div><div class="ssub">Waiting for this player to join\u2026</div></div></div>`;
+  }
   const s = slot.scenario;
   const tabs={};
   s.caseData.forEach(cd=>{ (tabs[cd.tab]=tabs[cd.tab]||[]).push(cd); });
@@ -6647,7 +6789,7 @@ function renderChallengeSessionReport(){
         <strong>${escapeHtml(slot.scenario.title)}${isDraftStandard(slot.scenario) ? ' <span style="font-size:10px;font-weight:700;color:var(--warn);border:1px solid var(--warn-border);border-radius:10px;padding:1px 6px;white-space:nowrap;">DRAFT-STANDARD</span>' : ''}</strong>
         <span style="color:${sc.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${sc.af?`AF (${sc.afDuty})`:sc.pct+'%'} \u00b7 ${sc.pass?'PASS':'FAIL'}</span>
       </div>
-      <div style="font-size:12px;color:var(--text3);margin-top:4px;">${slot.playerLeftEarly ? 'Player left early ('+escapeHtml(slot.playerLeftReason)+')' : 'Closed by agent'}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px;">${slot.playerLeftEarly ? 'Player left early ('+escapeHtml(slot.playerLeftReason)+')' : 'Closed by agent'}${slot.finalHandlingMs!=null ? ' \u00b7 Handling time '+formatClock(slot.finalHandlingMs)+(slot.scenario.ahtTargetMinutes ? ' (target '+formatClock(slot.scenario.ahtTargetMinutes*60000)+')' : '') : ''}</div>
     </div>`;
   }).join('');
 
