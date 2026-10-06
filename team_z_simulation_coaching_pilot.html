@@ -3393,7 +3393,7 @@ function wireEvents(){
           transcript: slot.transcript, actionLog: slot.actionLog,
     reviewOutcome: (slot.scenario && slot.scenario.reviewOutcome)||null, evaluation: slot.evaluation,
           tlOverrides: slot.tlOverrides, docNote: slot.docNote, docTag: slot.docTag, docSecondaryTag: slot.docSecondaryTag,
-          ahtElapsedMinutes: slot.finalHandlingMs!=null ? slot.finalHandlingMs/60000 : (slot.endedAt && slot.chatStartedAt ? (slot.endedAt-slot.chatStartedAt)/60000 : null),
+          ahtElapsedMinutes: !slot.ahtModeUsed ? null : (slot.finalHandlingMs!=null ? slot.finalHandlingMs/60000 : (slot.endedAt && slot.chatStartedAt ? (slot.endedAt-slot.chatStartedAt)/60000 : null)),
           ahtLateStart:false, ahtTargetMinutes: slot.scenario.ahtTargetMinutes,
           playerLeftEarly: slot.playerLeftEarly, playerLeftReason: slot.playerLeftReason,
         },
@@ -4406,7 +4406,7 @@ function slotAhtView(slot, now){
   if(ms===null) return null;
   const targetMs = slot.scenario && slot.scenario.ahtTargetMinutes ? slot.scenario.ahtTargetMinutes*60000 : null;
   const over = targetMs!==null && ms>targetMs;
-  return { ms, clock: formatClock(ms), frozen: !!slot.endedAt, over, targetClock: targetMs!==null ? formatClock(targetMs) : null, overClock: over ? formatClock(ms-targetMs) : null };
+  return { ms, targetMs, clock: formatClock(ms), frozen: !!slot.endedAt, over, targetClock: targetMs!==null ? formatClock(targetMs) : null, overClock: over ? formatClock(ms-targetMs) : null };
 }
 // Elapsed vs target (never a countdown), e.g. "04:31 / 10:00 target"; frozen once the chat has ended; "+ over" once past target.
 function ahtMainText(v){
@@ -4419,6 +4419,19 @@ function ahtTabText(v){
   if(!v) return '';
   return `\u23f1 ${v.clock}${v.targetClock ? ' / '+v.targetClock : ''}`;
 }
+// Right-side panel text in Challenge Mode, same style as single-chat Practice: "2m 00s / 11m target".
+function ahtSideText(v){
+  if(!v) return '';
+  const tgt = v.targetMs ? ` / ${Math.round(v.targetMs/60000)}m target` : '';
+  const over = (v.over && v.targetMs) ? ` \u00b7 ${formatElapsed(v.ms - v.targetMs)} over` : '';
+  return `${formatElapsed(v.ms)}${tgt}${over}${v.frozen?' (final)':''}`;
+}
+// AHT Mode only decides whether a chat is treated as an AHT coaching exercise; timestamps are always recorded.
+// A chat counts as AHT-coached if the mode was ON at any point while that chat was live.
+function markChallengeAhtUse(){
+  if(!state.challenge || !state.challenge.active || !state.ahtMode) return;
+  state.challenge.slots.forEach(s=>{ if(s.chatStartedAt && !s.endedAt) s.ahtModeUsed = true; });
+}
 // "Player has been waiting on your reply" indicator - a different thing from AHT, kept separate.
 function slotWaitMins(slot, now){
   if(!slot || slot.status!=='active') return 0;
@@ -4430,7 +4443,12 @@ function slotWaitMins(slot, now){
 // Display-only tick: rewrites the text of the timer elements that render() already placed, from the slot timestamps.
 function updateChallengeAhtTimers(){
   if(!state.challenge || !state.challenge.active) return;
+  markChallengeAhtUse();
   const now = Date.now();
+  document.querySelectorAll('[data-aht-side]').forEach(el=>{
+    const v = slotAhtView(state.challenge.slots[Number(el.getAttribute('data-aht-side'))], now);
+    if(v) el.textContent = ahtSideText(v);
+  });
   document.querySelectorAll('[data-aht-slot]').forEach(el=>{
     const slot = state.challenge.slots[Number(el.getAttribute('data-aht-slot'))];
     const v = slotAhtView(slot, now);
@@ -4889,7 +4907,7 @@ function formatQAScorecardForEval(){
   }).join('\n\n');
 }
 
-function buildEvalPrompt(s, transcript, actionLog, docNote, docTag, docSecondaryTag, chatStartedAt, playerLeftEarly, playerLeftReason){
+function buildEvalPrompt(s, transcript, actionLog, docNote, docTag, docSecondaryTag, chatStartedAt, playerLeftEarly, playerLeftReason, ahtModeOn){
   actionLog = actionLog !== undefined ? actionLog : state.actionLog;
   docNote = docNote !== undefined ? docNote : state.docNote;
   docTag = docTag !== undefined ? docTag : state.docTag;
@@ -4910,7 +4928,7 @@ WORKED EXAMPLE PAIR (memorize the distinction, not just the rule):
 (a) AGENT-CAUSED: Agent investigates correctly, gives the right answer, then the player asks a reasonable follow-up and the agent goes silent for the rest of the transcript until the player leaves. Correct scoring: this is agent-caused - real silence with no response to a live question - score Q1/Q2 down accordingly, same as any other left-hanging case.
 (b) NOT AGENT-CAUSED: Agent investigates correctly, explains a real policy limit clearly and kindly, the player insists it should be waived anyway, the agent holds the correct line once more, and the player leaves saying it's ridiculous. Correct scoring: the agent did everything right - correct answer, clearly communicated, held the line appropriately. Score Q1/Q2 on that handling, not on the fact that the player was unhappy and left. The departure itself is not evidence of failure here.
 ` : '';
-  const ahtModeLabel = state.ahtMode
+  const ahtModeLabel = (ahtModeOn!==undefined ? ahtModeOn : state.ahtMode)
     ? `AHT Mode is ON for this attempt. You may evaluate handling time separately, against this scenario's target (${s.ahtTargetMinutes ? s.ahtTargetMinutes+' min' : 'no target set'}), in the efficiency narrative below. This is STILL never a QA scoring input - do not lower Q1 or Q2 "merely because the chat exceeds the target minutes." A slow but correct, well-communicated resolution is still A/A.`
     : `AHT Mode is OFF for this attempt. Handling-time behaviours (pace, filler, lingering, closing speed) are FYI coaching only in this run - report them in the efficiency narrative, never in the scorecard reasoning.`;
 
@@ -6508,6 +6526,7 @@ function makeChallengeSlot(scenario, arrivesAt){
   scenario = resolveScenarioForAttempt(scenario, (state.attemptHistory[scenario.id]||[]).length);
   return {
     scenario,
+    ahtModeUsed:false, // true once AHT Mode was ON while this chat was live - decides whether its assessment gets the AHT coaching layer
     transcript:[],
     turnCounter:0,
     actionLog:[],
@@ -6707,6 +6726,7 @@ function finalizeChallengeSlotChat(slotIndex){
   const slot = state.challenge.slots[slotIndex];
   if(!slot) return;
   slot.status = 'documenting';
+  markChallengeAhtUse();
   if(!slot.endedAt){                                       // freeze once: endedAt and the final handling duration never change afterwards
     slot.endedAt = Date.now();
     slot.finalHandlingMs = slot.chatStartedAt ? slot.endedAt - slot.chatStartedAt : null;
@@ -6722,7 +6742,7 @@ async function submitChallengeSlotDoc(slotIndex){
   slot.evaluation = {loading:true};
   render();
   try{
-    const prompt = buildEvalPrompt(slot.scenario, slot.transcript, slot.actionLog, slot.docNote, slot.docTag, slot.docSecondaryTag, slot.chatStartedAt, slot.playerLeftEarly, slot.playerLeftReason);
+    const prompt = buildEvalPrompt(slot.scenario, slot.transcript, slot.actionLog, slot.docNote, slot.docTag, slot.docSecondaryTag, slot.ahtModeUsed ? slot.chatStartedAt : null, slot.playerLeftEarly, slot.playerLeftReason, !!slot.ahtModeUsed);
     const result = enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex'));
     slot.evaluation = result;
     QA_SCORECARD.questions.forEach(q=>{ const aiQ=result.questions.find(x=>x.id===q.id); slot.tlOverrides[q.id] = {letter:aiQ.letter, afDuty:aiQ.afDuty||null, notes:''}; });
@@ -6754,7 +6774,9 @@ function archiveChallengeSlotAttempt(slot){
     docNote: slot.docNote,
     docSecondaryTag: slot.docSecondaryTag,
     docTag: slot.docTag,
-    ahtElapsedMinutes: slot.finalHandlingMs!=null ? slot.finalHandlingMs/60000 : null,
+    ahtElapsedMinutes: (slot.ahtModeUsed && slot.finalHandlingMs!=null) ? slot.finalHandlingMs/60000 : null,
+    handlingMinutes: slot.finalHandlingMs!=null ? slot.finalHandlingMs/60000 : null, // informational, recorded whether or not AHT Mode was on
+    ahtModeUsed: !!slot.ahtModeUsed,
     ahtLateStart: false,
     ahtTargetMinutes: slot.scenario.ahtTargetMinutes,
     playerLeftEarly: slot.playerLeftEarly,
@@ -6928,15 +6950,13 @@ function renderChallengeMain(){
     const isActive = idx===c.activeSlotIndex;
     const waitMins = slotWaitMins(slot);
     const waitBadge = `<span class="wait-badge" data-wait-slot="${idx}" title="The player has been waiting on your reply for this long (not your handling time)" style="${waitMins>=1?'':'display:none;'}">${waitMins>=1?'\u23f3 '+waitMins+'m':''}</span>`;
-    const ahtV = slotAhtView(slot);
-    const ahtBadge = ahtV ? `<span class="aht-tab-timer ${ahtV.over?'over':''} ${ahtV.frozen?'frozen':''}" data-aht-slot="${idx}" title="Handling time (AHT) for this chat: elapsed / target. Counts from when this player's opening message arrived, independent of which chat is open">${ahtTabText(ahtV)}</span>` : '';
     const isWaiting = slot.status==='incoming' || slot.status==='arriving';
     const statusDot = slot.status==='ended' ? 'var(--ok)' : isWaiting ? 'var(--text3)' : (slot.status==='documenting'||slot.status==='scoring' ? 'var(--text3)' : 'var(--accent)');
     const incomingBadge = isWaiting ? `<span style="font-size:10px;color:var(--accent);font-weight:700;margin-left:4px;">• arriving</span>` : '';
     return `<div class="challenge-tab ${isActive?'active':''}" data-challenge-tab="${idx}" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:2px solid ${isActive?'var(--accent)':'transparent'};white-space:nowrap;${isWaiting?'opacity:0.65;':''}">
       <span style="width:7px;height:7px;border-radius:50%;background:${statusDot};display:inline-block;flex-shrink:0;"></span>
       <span style="font-size:12.5px;font-weight:${isActive?700:500};">${isWaiting ? 'Chat '+(idx+1) : escapeHtml(slot.scenario.title)}</span>
-      ${incomingBadge}${ahtBadge}${waitBadge}
+      ${incomingBadge}${waitBadge}
     </div>`;
   }).join('');
 
@@ -6959,7 +6979,6 @@ function renderChallengeMain(){
         <div class="status">${activeIsWaiting ? 'Waiting for player to join\u2026' : escapeHtml(activeSlot.scenario.title)} \u00b7 ${activeSlot.status==='active'?'In progress':activeIsWaiting?'Not started yet':activeSlot.status==='documenting'?'Completing documentation\u2026':activeSlot.status==='scoring'?'Scoring this chat\u2026 your other chats stay active':'Ended'}</div>
       </div>
       <div class="btns">
-        ${slotAhtView(activeSlot) ? `<span class="aht-main-timer ${slotAhtView(activeSlot).over?'over':''} ${slotAhtView(activeSlot).frozen?'frozen':''}" data-aht-main="${c.activeSlotIndex}" title="Handling time (AHT) for this chat: elapsed vs target. Starts when the player's opening message arrives; stops when the chat ends.">${icon('clock',13)}<span data-aht-main-text>${ahtMainText(slotAhtView(activeSlot))}</span></span>` : ''}
         <button id="btnEndChallengeSlot" class="primary" ${activeSlot.status!=='active'?'disabled':''}>End This Chat</button>
       </div>
     </div>
@@ -7004,6 +7023,7 @@ function renderChallengeSide(){
       <div class="savatar">${s.playerName.charAt(0).toUpperCase()}</div>
       <div class="sname">${escapeHtml(s.playerName)}</div>
       <div class="ssub">${escapeHtml(s.skill)}</div>
+      ${(state.ahtMode && slotAhtView(slot)) ? `<div class="aht-live-timer" style="justify-content:center;margin-top:8px;" title="Handling time for this chat. Counts from this player's opening message and keeps running while you work other chats.">${icon('clock',13)} Chatting time: <span data-aht-side="${c.activeSlotIndex}">${ahtSideText(slotAhtView(slot))}</span></div>` : ''}
     </div>
     <div class="side-section">
       <div class="side-section-head"><h2>Scenario</h2></div>
