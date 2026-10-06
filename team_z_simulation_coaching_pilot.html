@@ -57,6 +57,9 @@
   .aht-main-timer{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent);display:flex;align-items:center;gap:6px;}
   .aht-main-timer.over{color:var(--bad);}
   .aht-main-timer.frozen{color:var(--text2);}
+  .spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:zspin 0.9s linear infinite;margin:0 auto 18px;}
+  @keyframes zspin{to{transform:rotate(360deg);}}
+  .src-chip{display:inline-block;font-size:10px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:10px;padding:1px 7px;margin-left:8px;white-space:nowrap;vertical-align:middle;}
   .aht-live-timer{font-size:12.5px;color:var(--warn);font-weight:600;display:flex;align-items:center;gap:5px;}
   .aht-result-box{border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;}
   .aht-result-box.efficient{border-color:var(--ok-border);background:var(--ok-bg);}
@@ -1977,6 +1980,10 @@ let state = {
   challengeSilenceInterval:null,
   challengeAhtInterval:null,  // 1s display tick for the per-chat AHT clocks - display only; the clocks themselves are derived from slot timestamps
   challengeArrivalInterval:null,
+  challengeRendered:null,     // {c, idx}: which Challenge slot's transcript is currently in the DOM (so its scroll position can be saved before the next rebuild)
+  challengeSessions:[],       // completed Challenge sessions (per device, localStorage CHALLENGE_SESSIONS_KEY) - written the moment all chats have results
+  sessionEvalRunning:{},      // sessionId -> true while that session's AI summary is being generated in THIS page
+  historySessionView:null,    // sessionId when a saved Challenge session report is open on the History page
   composerDraft:'', // preserves an unsent message in the single-chat composer across re-renders (e.g. a silence nudge arriving mid-sentence)
   historyDrilldownScenario:null, // scenario id when drilled into one scenario's attempts on the History page
   feedbackText:'',
@@ -2895,6 +2902,7 @@ function render(){
   const prevMainScrollTop = prevMainScroll ? prevMainScroll.scrollTop : null;
   const prevSideScroll = document.querySelector('.side');
   const prevSideScrollTop = prevSideScroll ? prevSideScroll.scrollTop : null;
+  captureChallengeScroll();
   app.innerHTML = renderTopbarGlobal() + `<div class="body-grid">${renderIconRail()}${renderScenarioList()}${renderMain()}${renderSide()}</div>`;
   wireEvents();
   if(activeId){
@@ -2914,7 +2922,36 @@ function render(){
     const newSide = document.querySelector('.side');
     if(newSide) newSide.scrollTop = prevSideScrollTop;
   }
+  restoreChallengeScroll();
   scrollChatToBottom();
+}
+
+// ---------- CHALLENGE TRANSCRIPT SCROLL (per slot) ----------
+// render() rebuilds the DOM, which resets every scrollTop to 0. For the Challenge transcript the position is therefore saved
+// on the slot whose transcript was on screen just before the rebuild, and restored for whichever slot is on screen after it:
+//  - at/near the bottom  -> stay pinned to the bottom (new messages are revealed)
+//  - scrolled up         -> exact position kept, however many unrelated renders happen
+//  - never-viewed chat   -> opens at the bottom
+// Nothing here jumps to the bottom unconditionally.
+const CHALLENGE_PIN_PX = 40;
+function captureChallengeScroll(){
+  const r = state.challengeRendered;
+  if(!r || state.challenge !== r.c) return;
+  const el = document.getElementById('challengeChatlog');
+  const slot = r.c.slots[r.idx];
+  if(!el || !slot) return;
+  slot.scroll = { top: el.scrollTop, atBottom: (el.scrollHeight - el.scrollTop - el.clientHeight) <= CHALLENGE_PIN_PX };
+}
+function restoreChallengeScroll(){
+  const c = state.challenge;
+  const el = document.getElementById('challengeChatlog');
+  if(!c || !el || state.view!=='challenge'){ state.challengeRendered = null; return; }
+  const slot = c.slots[c.activeSlotIndex];
+  state.challengeRendered = {c, idx: c.activeSlotIndex};
+  if(!slot) return;
+  const sc = slot.scroll;
+  if(!sc || sc.atBottom) el.scrollTop = el.scrollHeight;
+  else el.scrollTop = sc.top;
 }
 
 function renderTopbarGlobal(){
@@ -3222,7 +3259,7 @@ function wireEvents(){
   });
 
   const railHistory=document.getElementById('railHistory');
-  if(railHistory) railHistory.addEventListener('click', ()=>{ state.view='history'; render(); });
+  if(railHistory) railHistory.addEventListener('click', ()=>{ state.view='history'; state.historySessionView=null; state.historyDrilldownScenario=null; render(); });
 
   const railAvatar=document.getElementById('railAvatar');
   if(railAvatar) railAvatar.addEventListener('click', e=>{ e.stopPropagation(); renderIdentityCard(); });
@@ -3311,6 +3348,29 @@ function wireEvents(){
       const card = slot.scenario.caseData.find(c=>c.id===cardId);
       if(card) slot.actionLog.push({label:card.label, tab:card.tab, atTurn: slot.turnCounter, kind: card.reviewRole||null, gateLabel: card.gateLabel||null});
       render();
+    });
+  });
+  const btnResumeChallenge=document.getElementById('btnResumeChallenge');
+  if(btnResumeChallenge) btnResumeChallenge.addEventListener('click', ()=>{ state.view='challenge'; render(); });
+  const btnRetrySessionSummary=document.getElementById('btnRetrySessionSummary');
+  if(btnRetrySessionSummary) btnRetrySessionSummary.addEventListener('click', ()=> runSessionSummary(btnRetrySessionSummary.getAttribute('data-session-id')));
+  document.querySelectorAll('[data-open-saved-session]').forEach(el=>{
+    el.addEventListener('click', ()=>{ state.historySessionView = el.getAttribute('data-open-saved-session'); render(); });
+  });
+  const btnBackFromSavedSession=document.getElementById('btnBackFromSavedSession');
+  if(btnBackFromSavedSession) btnBackFromSavedSession.addEventListener('click', ()=>{ state.historySessionView=null; render(); });
+  document.querySelectorAll('[data-view-saved-chat]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const [sessionId, idxStr] = el.getAttribute('data-view-saved-chat').split('|');
+      const rec = sessionRecordById(sessionId);
+      const ch = rec && rec.chats[parseInt(idxStr,10)];
+      if(!ch) return;
+      const atts = state.attemptHistory[ch.scenarioId] || [];
+      const att = atts.find(a=> a.attemptNum===ch.attemptNum && a.timestamp===ch.attemptTimestamp) || atts.find(a=> a.attemptNum===ch.attemptNum);
+      if(!att) return;
+      state.historicalView = { scenarioId: ch.scenarioId, attempt: att, standalone: true };
+      state.historicalTranscriptExpanded = false;
+      renderEvalModal();
     });
   });
   const btnExitChallenge=document.getElementById('btnExitChallenge');
@@ -3910,6 +3970,116 @@ function loadPersistedAttemptHistory(){
   }
 }
 
+// ---------- SAVED CHALLENGE SESSIONS (per device, localStorage) ----------
+// Written the moment every chat in a Challenge session has its own result - NOT when the AI session summary returns - so
+// leaving the screen, a slow summary or a refresh can never lose a completed session. Chat details (transcript, scorecard) stay
+// in state.attemptHistory; a session record links to them by scenarioId + attemptNum and adds the session-level report.
+const CHALLENGE_SESSIONS_KEY = 'zteamz_challengeSessions_v1';
+function saveChallengeSessions(){
+  try{ localStorage.setItem(CHALLENGE_SESSIONS_KEY, JSON.stringify(state.challengeSessions)); }
+  catch(err){ console.error('Saving Challenge sessions failed (kept in-memory for this page):', err); }
+}
+function loadPersistedChallengeSessions(){
+  try{
+    const raw = localStorage.getItem(CHALLENGE_SESSIONS_KEY);
+    if(raw){ const d = JSON.parse(raw); if(Array.isArray(d)) state.challengeSessions = d.filter(r=>r && r.id && Array.isArray(r.chats)); }
+  }catch(err){ /* nothing saved yet */ }
+  // A summary that was still generating when the page went away can never complete on its own.
+  state.challengeSessions.forEach(r=>{ if(r.evalStatus==='pending') r.evalStatus = 'interrupted'; });
+}
+function sessionRecordById(id){ return state.challengeSessions.find(r=>r.id===id) || null; }
+function scenarioMetaOf(sc){
+  if(!sc) return null;
+  return { title: sc.title||null, internalTitle: sc.internalTitle||null, playerName: sc.playerName||null, difficulty: sc.difficulty||null,
+           skill: sc.skill||null, topic: sc.topic||null, kbStatus: sc.kbStatus||null, kbSource: sc.kbSource||null };
+}
+// History must not depend on the static SCENARIOS array: a scenario that is custom, shared, or gone from the library still has to show
+// up. Real scenario when it exists, otherwise a stub rebuilt from the snapshot stored on the attempt itself.
+function historyScenarioFor(sid){
+  const real = scenarioById(sid);
+  if(real) return real;
+  const atts = state.attemptHistory[sid] || [];
+  let meta = null;
+  for(let i=atts.length-1;i>=0;i--){ if(atts[i] && atts[i].scenarioMeta){ meta = atts[i].scenarioMeta; break; } }
+  meta = meta || {};
+  return { id: sid, title: meta.title || sid, internalTitle: meta.internalTitle || null, playerName: meta.playerName || 'Player',
+           difficulty: meta.difficulty || '', skill: meta.skill || '', topic: meta.topic || '', kbStatus: meta.kbStatus || undefined, kbSource: meta.kbSource || '', _stub: true };
+}
+function formatHistoryDate(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) + ' \u00b7 ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+}
+function formatHistoryDay(ts){ return ts ? new Date(ts).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : ''; }
+function challengeSessionLabel(tier){ return (CHALLENGE_TIERS[tier] ? CHALLENGE_TIERS[tier].label : 'Challenge') + ' session'; }
+
+function challengeChatSummary(slot, idx){
+  const sc = slot.scenario;
+  const failed = !slot.evaluation || !!slot.evaluation.error || !slot.evaluation.questions;
+  const score = failed ? null : computeQAScore(slot.evaluation.questions);
+  const hMs = slot.finalHandlingMs!=null ? slot.finalHandlingMs : slotHandlingMs(slot);
+  return {
+    idx, scenarioId: sc.id, title: sc.title, playerName: sc.playerName, skill: sc.skill, difficulty: sc.difficulty,
+    draft: isDraftStandard(sc),
+    attemptNum: slot.archivedAttemptNum || null, attemptTimestamp: slot.archivedAttemptTs || null,
+    scoringFailed: failed, scoringError: failed && slot.evaluation && slot.evaluation.error ? slot.evaluation.error : null,
+    pct: score ? (score.af ? 0 : score.pct) : null, af: score ? !!score.af : false, afDuty: score ? (score.afDuty||null) : null, pass: score ? !!score.pass : false,
+    handlingMs: hMs, targetMinutes: sc.ahtTargetMinutes || null,
+    playerLeftEarly: !!slot.playerLeftEarly, playerLeftReason: slot.playerLeftReason || null,
+  };
+}
+function persistChallengeSession(c){
+  const chats = c.slots.map((slot, idx)=> challengeChatSummary(slot, idx));
+  let rec = sessionRecordById(c.sessionId);
+  if(!rec){
+    rec = { id: c.sessionId, tier: c.tier, startedAt: c.sessionStartedAt, completedAt: Date.now(), chats,
+            switchCount: Math.max(0, c.switchLog.length-1), sessionEvaluation: null, evalStatus: 'pending', evalPrompt: null };
+    state.challengeSessions.push(rec);
+  }else{ rec.chats = chats; }
+  saveChallengeSessions();
+  return rec;
+}
+
+// Session-summary standard guard: the model must never criticise an agent for not announcing multitasking or for lacking holding phrases.
+function sessionEvalViolatesStandard(se){
+  if(!se || typeof se!=='object') return false;
+  const text = [se.keepsPlayersUpdated, se.overallJuggling, se.prioritization, se.avoidsNeglect].map(x=> x && x.note ? String(x.note) : '').join(' ') + ' ' + String(se.summary||'');
+  if(/never explicitly told/i.test(text)) return true;
+  if(/(never|not|n['\u2019]t|failed to|without|didn['\u2019]t)\s+(explicitly\s+)?(told|tell|telling|inform(ed|ing)?|let|letting|mention(ed|ing)?|notif(y|ied|ying)|communicat(e|ed|ing)|acknowledg(e|ed|ing))[^.]{0,80}(multiple|several|other|more than one|juggl)[^.]{0,30}(chat|player|contact|conversation)/i.test(text)) return true;
+  if(/(no|not|never|without|lack of|didn['\u2019]t use|failed to use|absence of)[^.]{0,40}(holding (phrase|message|statement)|bear with me|one moment|hold on)/i.test(text)) return true;
+  return false;
+}
+async function runSessionEvalPrompt(prompt){
+  let result = await callClaudeJson(prompt, 'complex');
+  if(sessionEvalViolatesStandard(result)){
+    try{
+      const second = await callClaudeJson(prompt + `\n\nCORRECTION: your previous answer criticised the agent for not telling players they were handling multiple chats, or for not using holding phrases. Neither is part of the standard. Re-judge keepsPlayersUpdated and everything else strictly from the wait evidence and context, and return the full JSON again.`, 'complex');
+      if(second) result = second;
+    }catch(err){ console.error('Session summary correction retry failed, keeping first result:', err); }
+  }
+  return result;
+}
+// Generates (or regenerates) the session-level summary for a SAVED session record, from the prompt stored on it. Works whether or not
+// that session is still the live one on screen, so it survives the agent leaving the screen.
+async function runSessionSummary(id){
+  const rec = sessionRecordById(id);
+  if(!rec || !rec.evalPrompt || state.sessionEvalRunning[id]) return;
+  const live = (state.challenge && state.challenge.sessionId===id) ? state.challenge : null;
+  state.sessionEvalRunning[id] = true;
+  rec.evalStatus = 'pending';
+  if(live){ live.sessionEvalLoading = true; live.sessionEvaluation = null; }
+  render();
+  let result = null, failed = null;
+  try{ result = await runSessionEvalPrompt(rec.evalPrompt); }
+  catch(err){ console.error(err); failed = (err && err.message) || String(err); }
+  delete state.sessionEvalRunning[id];
+  if(failed){ rec.evalStatus = 'failed'; rec.sessionEvaluation = {error: failed}; }
+  else{ rec.evalStatus = 'complete'; rec.sessionEvaluation = result; rec.evalPrompt = null; }
+  saveChallengeSessions();
+  if(live){ live.sessionEvalLoading = false; live.sessionEvaluation = rec.sessionEvaluation; }
+  render();
+}
+
 // ---------- TEAM PROGRESS LOG (shared via the backend server - see note above) ----------
 async function loadTeamProgressLog(){
   // Try the shared backend first - this is what makes it genuinely team-wide, not just this device.
@@ -4019,6 +4189,9 @@ function clearMyAttemptData(){
   // able to affect what their TL sees. See the confirm dialog's copy for the honest version of
   // what this does; don't let this drift back into looking like it clears shared data.
   state.attemptHistory = {};
+  state.challengeSessions = [];   // session reports reference the attempts above, so they go too
+  state.historySessionView = null;
+  try{ localStorage.removeItem(CHALLENGE_SESSIONS_KEY); }catch(err){}
   try{ localStorage.removeItem(ATTEMPT_HISTORY_KEY); }
   catch(err){ console.error('Clearing personal attempt history failed:', err); }
 }
@@ -4051,6 +4224,7 @@ function archiveAttempt(attemptContext){
     ahtTargetMinutes: attemptContext.scenario.ahtTargetMinutes,
     playerLeftEarly: attemptContext.playerLeftEarly,
     playerLeftReason: attemptContext.playerLeftReason,
+    scenarioMeta: scenarioMetaOf(attemptContext.scenario),
   });
   attemptContext.archived = true;
   saveAttemptHistoryNow();
@@ -4234,10 +4408,16 @@ function slotAhtView(slot, now){
   const over = targetMs!==null && ms>targetMs;
   return { ms, clock: formatClock(ms), frozen: !!slot.endedAt, over, targetClock: targetMs!==null ? formatClock(targetMs) : null, overClock: over ? formatClock(ms-targetMs) : null };
 }
+// Elapsed vs target (never a countdown), e.g. "04:31 / 10:00 target"; frozen once the chat has ended; "+ over" once past target.
 function ahtMainText(v){
   if(!v) return '';
-  const tail = v.targetClock ? (v.over ? ` \u00b7 ${v.overClock} over target` : ` \u00b7 Target: ${v.targetClock}`) : '';
-  return `${v.frozen?'Handling time':'Elapsed'}: ${v.clock}${tail}`;
+  const tgt = v.targetClock ? ` / ${v.targetClock} target` : '';
+  const over = (v.over && v.overClock) ? ` \u00b7 ${v.overClock} over` : '';
+  return `${v.frozen?'Final ':''}${v.clock}${tgt}${over}`;
+}
+function ahtTabText(v){
+  if(!v) return '';
+  return `\u23f1 ${v.clock}${v.targetClock ? ' / '+v.targetClock : ''}`;
 }
 // "Player has been waiting on your reply" indicator - a different thing from AHT, kept separate.
 function slotWaitMins(slot, now){
@@ -4255,14 +4435,15 @@ function updateChallengeAhtTimers(){
     const slot = state.challenge.slots[Number(el.getAttribute('data-aht-slot'))];
     const v = slotAhtView(slot, now);
     if(!v) return;
-    el.textContent = '\u23f1 ' + v.clock;
+    el.textContent = ahtTabText(v);
     el.classList.toggle('over', v.over); el.classList.toggle('frozen', v.frozen);
   });
   document.querySelectorAll('[data-aht-main]').forEach(el=>{
     const slot = state.challenge.slots[Number(el.getAttribute('data-aht-main'))];
     const v = slotAhtView(slot, now);
     if(!v) return;
-    el.textContent = ahtMainText(v);
+    const t = el.querySelector('[data-aht-main-text]');
+    if(t) t.textContent = ahtMainText(v); else el.textContent = ahtMainText(v);
     el.classList.toggle('over', v.over); el.classList.toggle('frozen', v.frozen);
   });
   document.querySelectorAll('[data-wait-slot]').forEach(el=>{
@@ -5134,7 +5315,7 @@ function openHistoryList(scenarioId){
 }
 
 function renderHistoryListModal(scenarioId){
-  const s = scenarioById(scenarioId);
+  const s = historyScenarioFor(scenarioId);
   const attempts = state.attemptHistory[scenarioId] || [];
   if(attempts.length===0){
     return `<div class="modal"><h2>Attempt History</h2><div class="empty">No completed attempts yet for ${escapeHtml(s.title)}.</div><button id="closeEvalModal" style="margin-top:16px;">Close</button></div>`;
@@ -5144,7 +5325,7 @@ function renderHistoryListModal(scenarioId){
     const sc = computeQAScore(att.evaluation.questions);
     return `<div class="box" style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <strong>Attempt ${att.attemptNum}</strong>
+        <strong>Attempt ${att.attemptNum}${att.challengeTier ? `<span class="src-chip">${escapeHtml(challengeSessionLabel(att.challengeTier))}</span>` : ''}</strong>
         <span style="color:${sc.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${sc.af?`AF (${sc.afDuty})`:sc.pct+'%'} \u00b7 ${sc.pass?'PASS \u{1F44D}':'FAIL \u{1F44E}'}</span>
       </div>
       <div style="color:var(--text3);font-size:11.5px;margin:4px 0 8px;">${new Date(att.timestamp).toLocaleString()}</div>
@@ -5444,37 +5625,67 @@ function renderCoachingToolkit(){
 
 // ---------- ATTEMPT HISTORY (standalone page) ----------
 function renderHistoryPage(){
+  if(state.historySessionView){
+    const rec = sessionRecordById(state.historySessionView);
+    if(rec) return renderSavedSessionReport(rec);
+    state.historySessionView = null;
+  }
   if(state.historyDrilldownScenario) return renderHistoryPageScenarioDetail(state.historyDrilldownScenario);
-  const scenariosWithHistory = SCENARIOS.filter(s => (state.attemptHistory[s.id]||[]).length > 0);
-  if(scenariosWithHistory.length===0){
+  // Built from the real records, never from the static SCENARIOS list: any scenario id that has a completed attempt gets a card.
+  const entries = Object.keys(state.attemptHistory).map(sid=>{
+    const atts = state.attemptHistory[sid];
+    if(!Array.isArray(atts) || !atts.length) return null;
+    const valid = atts.filter(a=> a && a.evaluation && a.evaluation.questions);
+    if(!valid.length) return null;
+    return {sid, count: atts.length, latest: valid[valid.length-1]};
+  }).filter(Boolean).sort((x,y)=> (y.latest.timestamp||0) - (x.latest.timestamp||0));
+  const sessions = [...state.challengeSessions].sort((x,y)=> (y.completedAt||0) - (x.completedAt||0));
+  if(!entries.length && !sessions.length){
     return `<div class="main" style="padding:32px;overflow-y:auto;">
       <h1 style="margin-top:0;">Attempt History</h1>
       <div class="empty">No completed attempts yet. Run a scenario through to End Simulation to start building history.</div>
     </div>`;
   }
-  const rows = scenariosWithHistory.map(s=>{
-    const attempts = state.attemptHistory[s.id];
-    const latest = attempts[attempts.length-1];
-    const sc = computeQAScore(latest.evaluation.questions);
-    return `<div class="box" style="margin-bottom:8px;cursor:pointer;" data-history-scenario="${s.id}">
+  const cards = entries.map(e=>{
+    const s = historyScenarioFor(e.sid);
+    const sc = computeQAScore(e.latest.evaluation.questions);
+    const chip = e.latest.challengeTier ? `<span class="src-chip">${escapeHtml(challengeSessionLabel(e.latest.challengeTier))}</span>` : '';
+    return `<div class="box" style="margin-bottom:8px;cursor:pointer;" data-history-scenario="${escapeHtml(e.sid)}">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <strong>${escapeHtml(s.title)}</strong>
-        <span style="color:var(--text3);font-size:12px;">${attempts.length} attempt${attempts.length===1?'':'s'}</span>
+        <strong>${escapeHtml(s.title)}${chip}</strong>
+        <span style="color:var(--text3);font-size:12px;">${e.count} attempt${e.count===1?'':'s'}${e.count>1 ? ' \u00b7 latest '+escapeHtml(formatHistoryDay(e.latest.timestamp)) : ''}</span>
       </div>
-      <div style="font-size:12px;color:var(--text3);margin-top:4px;">${escapeHtml(s.difficulty)}</div>
+      ${s.difficulty ? `<div style="font-size:12px;color:var(--text3);margin-top:4px;">${escapeHtml(s.difficulty)}</div>` : ''}
+      <div style="font-size:12px;color:var(--text3);margin-top:4px;">Latest attempt: ${escapeHtml(formatHistoryDate(e.latest.timestamp))}</div>
       <div style="margin-top:6px;font-size:12.5px;">Latest: <span style="color:${sc.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${sc.af?`AF (${sc.afDuty})`:sc.pct+'%'} \u00b7 ${sc.pass?'PASS \u{1F44D}':'FAIL \u{1F44E}'}</span></div>
+    </div>`;
+  }).join('');
+  const sessionCards = sessions.map(r=>{
+    const scored = r.chats.filter(ch=> !ch.scoringFailed);
+    const avg = scored.length ? Math.round(scored.reduce((t,ch)=> t+(ch.pct||0), 0)/scored.length) : null;
+    const passed = scored.filter(ch=> ch.pass).length;
+    const status = r.sessionEvaluation && !r.sessionEvaluation.error ? 'Session report saved'
+      : (state.sessionEvalRunning[r.id] ? 'Session summary generating\u2026' : 'Session summary not available');
+    return `<div class="box" style="margin-bottom:8px;cursor:pointer;" data-open-saved-session="${escapeHtml(r.id)}">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong>${escapeHtml(challengeSessionLabel(r.tier))}</strong>
+        <span style="color:var(--text3);font-size:12px;">${escapeHtml(formatHistoryDate(r.completedAt))}</span>
+      </div>
+      <div style="font-size:12.5px;margin-top:6px;">${r.chats.length} chat${r.chats.length===1?'':'s'}${avg!==null ? ' \u00b7 avg '+avg+'%' : ''}${scored.length ? ' \u00b7 '+passed+' of '+scored.length+' passed' : ''}</div>
+      <div style="font-size:11.5px;color:var(--text3);margin-top:4px;">${status} \u00b7 open to see the multitasking feedback</div>
     </div>`;
   }).join('');
   return `<div class="main" style="padding:32px;overflow-y:auto;">
     <h1 style="margin-top:0;">Attempt History</h1>
     <div style="color:var(--text2);font-size:13px;margin-bottom:6px;">Every scenario you\u2019ve completed at least once. Click any to see all your attempts, AHT and coaching signals included.</div>
     <div style="color:var(--text3);font-size:11.5px;margin-bottom:20px;">\u2713 Saved automatically - closing or refreshing won\u2019t lose these.</div>
-    ${rows}
+    ${sessions.length ? `<h2 style="font-size:14px;margin:0 0 8px;">Challenge sessions</h2><div id="historySessions">${sessionCards}</div><h2 style="font-size:14px;margin:20px 0 8px;">Scenarios</h2>` : ''}
+    <div id="historyScenarioCards">${cards}</div>
   </div>`;
 }
 
 function renderHistoryPageScenarioDetail(scenarioId){
-  const s = scenarioById(scenarioId);
+  const s = historyScenarioFor(scenarioId);
   const attempts = state.attemptHistory[scenarioId] || [];
   const listItems = [...attempts].reverse().map(att=>{
     const idx = attempts.indexOf(att);
@@ -5482,7 +5693,7 @@ function renderHistoryPageScenarioDetail(scenarioId){
     const ahtBit = (att.ahtElapsedMinutes!=null && att.ahtTargetMinutes) ? ` \u00b7 ${formatElapsed(att.ahtElapsedMinutes*60000)} / ${att.ahtTargetMinutes}m target` : '';
     return `<div class="box" style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <strong>Attempt ${att.attemptNum}</strong>
+        <strong>Attempt ${att.attemptNum}${att.challengeTier ? `<span class="src-chip">${escapeHtml(challengeSessionLabel(att.challengeTier))}</span>` : ''}</strong>
         <span style="color:${sc.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${sc.af?`AF (${sc.afDuty})`:sc.pct+'%'} \u00b7 ${sc.pass?'PASS \u{1F44D}':'FAIL \u{1F44E}'}</span>
       </div>
       <div style="color:var(--text3);font-size:11.5px;margin:4px 0 8px;">${new Date(att.timestamp).toLocaleString()}${ahtBit}${att.playerLeftEarly?' \u00b7 player left early ('+escapeHtml(att.playerLeftReason)+')':''}</div>
@@ -6336,7 +6547,9 @@ function startChallengeMode(tier){
     switchLog: [{toSlotIndex:0, ts:now}],
     sessionEvaluation:null,
     sessionEvalLoading:false,
+    sessionId: 'cs_'+now+'_'+Math.random().toString(36).slice(2,7),
   };
+  state.challengeRendered = null;
   state.view='challenge';
   render();
   state.challengeSilenceInterval = setInterval(checkChallengeSilence, 5000);
@@ -6402,6 +6615,7 @@ async function sendChallengeMessage(slotIndex){
   slot.transcript.push({speaker:'agent', text, turn:slot.turnCounter, ts:Date.now()});
   slot.silenceNudgeCount = 0;
   slot.silenceActionInFlight = true;
+  slot.scroll = {top:0, atBottom:true};   // the agent just sent a message themselves - show it (all OTHER renders preserve position)
   slot.draftText = '';
   if(inputEl) inputEl.value='';
   render();
@@ -6546,9 +6760,13 @@ function archiveChallengeSlotAttempt(slot){
     playerLeftEarly: slot.playerLeftEarly,
     playerLeftReason: slot.playerLeftReason,
     challengeTier: state.challenge.tier,
+    challengeSessionId: state.challenge.sessionId,
+    scenarioMeta: scenarioMetaOf(slot.scenario),
   };
   state.attemptHistory[sid].push(record);
   slot.attemptArchived = true;
+  slot.archivedAttemptNum = attemptNum;
+  slot.archivedAttemptTs = record.timestamp;
   saveAttemptHistoryNow();
   const score = computeQAScore(slot.evaluation.questions);
   pushTeamProgressEntry({
@@ -6565,11 +6783,44 @@ function archiveChallengeSlotAttempt(slot){
 }
 
 function checkChallengeSessionComplete(){
-  if(!state.challenge.slots.every(s=>s.status==='ended')) return;
+  const c = state.challenge;
+  if(!c || !c.slots.every(s=>s.status==='ended')) return;
   if(state.challengeSilenceInterval){ clearInterval(state.challengeSilenceInterval); state.challengeSilenceInterval=null; }
   if(state.challengeArrivalInterval){ clearInterval(state.challengeArrivalInterval); state.challengeArrivalInterval=null; }
   stopChallengeAhtTick();
-  runChallengeSessionEvaluation();
+  // Every chat has its own result now: save the session immediately, BEFORE the (slower) AI session summary - so the session exists
+  // in history even if the agent leaves the screen or the summary fails. The prompt is stored so the summary can be retried later.
+  const rec = persistChallengeSession(c);
+  rec.evalPrompt = buildChallengeSessionEvalPrompt();
+  saveChallengeSessions();
+  runSessionSummary(rec.id);
+}
+
+// Deterministic wait evidence for one chat, from message timestamps: every stretch where the player had spoken and no agent reply
+// had followed yet (>= 1 minute), how many player nudges landed inside it, and what the agent was doing in the OTHER chats meanwhile.
+function buildChatWaitEvidence(c, idx){
+  const slot = c.slots[idx];
+  if(!slot || !slot.chatStartedAt) return 'chat never started.';
+  const msgs = slot.transcript.filter(m=> m.speaker!=='system' && m.ts);
+  const gaps = [];
+  let pending = null;
+  msgs.forEach(m=>{
+    if(m.speaker==='player'){
+      if(!pending) pending = {from:m.ts, nudges:[]}; else pending.nudges.push(m);
+    }else if(pending){
+      gaps.push({from:pending.from, to:m.ts, nudges:pending.nudges, answered:true}); pending = null;
+    }
+  });
+  if(pending) gaps.push({from:pending.from, to:(slot.endedAt || Date.now()), nudges:pending.nudges, answered:false});
+  const long = gaps.filter(g=> (g.to-g.from) >= 60000);
+  if(!long.length) return 'no player wait reached 01:00 (every player message was answered in under a minute).';
+  const lines = long.map(g=>{
+    const others = c.slots.map((o,j)=> j===idx ? null : {j, n:o.transcript.filter(m=> m.speaker==='agent' && m.ts>=g.from && m.ts<=g.to).length}).filter(x=> x && x.n>0);
+    const otherTxt = others.length ? others.map(x=>`${x.n} message${x.n===1?'':'s'} in Chat ${x.j+1}`).join(', ') : 'no messages sent in other chats';
+    const nudgeTxt = g.nudges.length ? `${g.nudges.length} player nudge${g.nudges.length===1?'':'s'} during the wait (e.g. "${String(g.nudges[0].text).slice(0,70).replace(/\s+/g,' ')}")` : 'no player nudges during the wait';
+    return `  - A player message waited ${formatClock(g.to-g.from)} for an agent reply (${g.answered ? 'the agent did reply after that' : 'NO agent reply came before the chat ended'}); ${nudgeTxt}; agent activity elsewhere in that window: ${otherTxt}.`;
+  });
+  return `${long.length} wait${long.length===1?'':'s'} of 01:00 or more:\n${lines.join('\n')}`;
 }
 
 function buildChallengeSessionEvalPrompt(){
@@ -6581,6 +6832,7 @@ function buildChallengeSessionEvalPrompt(){
 Resolution score: ${score.af?`AF (${score.afDuty})`:score.pct+'%'} ${score.pass?'PASS':'FAIL'}
 Started: ${new Date(slot.chatStartedAt).toLocaleTimeString()} | Ended: ${slot.endedAt?new Date(slot.endedAt).toLocaleTimeString():'n/a'}
 Player left early: ${slot.playerLeftEarly ? `yes (${slot.playerLeftReason})` : 'no'}
+Wait evidence (computed from message timestamps): ${buildChatWaitEvidence(c, idx)}
 Transcript:
 ${formatTranscriptForEval(slot.transcript, slot.scenario)}`;
   }).join('\n\n');
@@ -6595,8 +6847,14 @@ SWITCHING LOG (when the agent moved between chats, in order): ${switchText}
 Judge these session-level behaviours, each independently, from the transcripts and switching pattern above:
 - prioritization: did the agent seem to work on the right chat first when several needed attention (e.g. a simple one that could close fast, vs. one already escalating)?
 - avoidsNeglect: did any chat sit ignored long enough to visibly frustrate the player or cause them to leave, when the agent could reasonably have gotten to it sooner?
-- keepsPlayersUpdated: when the agent WAS away from a chat, did they leave the player with any sense of what to expect (implicitly, through timely returns), or did players seem to just wait in the dark?
+- keepsPlayersUpdated: were the player waits handled appropriately FOR THE CONTEXT? Use the wait evidence. Weigh: how long each actual gap was; whether the agent was reasonably occupied with another active contact during it; whether the player became frustrated, nudged or left; and whether a short, meaningful update (a specific status, expected timing, or what is being checked) would realistically have helped in that moment.
 - overallJuggling: taken as a whole, does this look like competent multi-chat handling, or does it look like one chat got done well while others suffered?
+
+STANDARD FOR WAITS AND UPDATES - read carefully:
+- Agents are NOT expected to tell a player that they are handling multiple chats, and you must NOT reward or penalise that. Never write that an agent "did not tell the player they were juggling chats".
+- Agents are NOT required to use filler phrases ("bear with me", "one moment", "please hold"). Do not mark keepsPlayersUpdated "mixed" or "needs-work" merely because no holding phrase was used.
+- A player's "hello?" / "still there?" is evidence that a wait became noticeable to them - weigh it with the gap length and what the agent was doing; it is not automatic proof of a failure. Short waits while the agent is busy in another chat are normal and should be rated "good".
+- Rate keepsPlayersUpdated "mixed" or "needs-work" only when the evidence shows a wait that was long for the situation and went unaddressed (e.g. repeated nudges, a player who left, or a long gap with no activity anywhere else) where a brief meaningful update would realistically have helped.
 
 Rate each "good" | "mixed" | "needs-work", with a one-sentence note grounded in the specific chats/timing above - reference chat numbers, not generic praise.
 
@@ -6610,20 +6868,6 @@ Return ONLY valid JSON, no markdown fences:
 }`;
 }
 
-async function runChallengeSessionEvaluation(){
-  state.challenge.sessionEvalLoading = true;
-  render();
-  try{
-    const prompt = buildChallengeSessionEvalPrompt();
-    state.challenge.sessionEvaluation = await callClaudeJson(prompt, 'complex');
-  }catch(err){
-    console.error(err);
-    state.challenge.sessionEvaluation = {error: err.message};
-  }
-  state.challenge.sessionEvalLoading = false;
-  render();
-}
-
 // ---------- CHALLENGE MODE RENDERING ----------
 function renderChallengePicker(){
   const tiles = Object.keys(CHALLENGE_TIERS).map(key=>{
@@ -6635,16 +6879,49 @@ function renderChallengePicker(){
       <div style="font-size:12px;color:var(--text2);margin-top:6px;">${escapeHtml(t.desc)}</div>
     </div>`;
   }).join('');
+  const lc = state.challenge;
+  let resume = '';
+  if(lc && lc.active){
+    const done = lc.slots.every(s=>s.status==='ended') && lc.sessionEvaluation!=null;
+    resume = `<div class="box" style="margin-bottom:16px;max-width:640px;border-color:var(--accent);display:flex;justify-content:space-between;align-items:center;gap:12px;">
+      <div><strong>${escapeHtml(CHALLENGE_TIERS[lc.tier].label)} session ${done?'complete':'in progress'}</strong><div style="font-size:12px;color:var(--text3);margin-top:2px;">${done?'Your session report is ready.':'Your chats keep running while you are away from them.'}</div></div>
+      <button id="btnResumeChallenge" class="primary">${done?'View session report':'Resume session'}</button>
+    </div>`;
+  }
   return `<div class="main" style="padding:32px;overflow-y:auto;">
     <h1 style="margin-top:0;">Training Modes</h1>
+    ${resume}
     <div style="color:var(--text2);font-size:13px;max-width:640px;line-height:1.6;margin-bottom:8px;">Levels represent how many chats you\u2019re juggling at once - NOT how hard the players are. A Rookie session can still hand you a frustrated or complex player; scenario difficulty is picked independently of the tier.</div>
     <div class="category-grid" style="margin-top:20px;">${tiles}</div>
+  </div>`;
+}
+
+// "Processing" = nothing left for the agent to do (no chat incoming/active/documenting) but results are still being produced:
+// either the last chat is still being scored, or every chat is scored and the session-level summary has not come back yet.
+function challengeIsProcessing(c){
+  if(!c || !c.slots.length) return false;
+  if(!c.slots.every(s=>s.status==='ended' || s.status==='scoring')) return false;
+  if(c.slots.some(s=>s.status==='scoring')) return true;
+  return c.sessionEvaluation==null;
+}
+function renderChallengeProcessing(c){
+  const n = c.slots.length;
+  const saved = c.slots.every(s=>s.status==='ended');
+  return `<div class="main" id="challengeProcessing" style="display:flex;align-items:center;justify-content:center;padding:32px;">
+    <div style="text-align:center;max-width:460px;">
+      <div class="spinner" role="status" aria-label="Calculating results"></div>
+      <h1 style="margin:0 0 8px;" id="challengeProcessingTitle">All ${n} chat${n===1?'':'s'} complete</h1>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Calculating your session results\u2026</div>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">Reviewing individual chat scores, handling time and multitasking performance.</div>
+      ${saved ? `<div style="color:var(--text3);font-size:11.5px;margin-top:16px;line-height:1.5;">Your chats are already saved to Attempt History. You can leave this screen; the session report will be saved there too.</div>` : ''}
+    </div>
   </div>`;
 }
 
 function renderChallengeMain(){
   const c = state.challenge;
   if(!c || !c.active) return `<div class="main"><div class="empty" style="margin:auto;">No active Challenge Mode session.</div></div>`;
+  if(challengeIsProcessing(c)) return renderChallengeProcessing(c);
   if(c.slots.every(s=>s.status==='ended')) return renderChallengeSessionReport();
 
   const tabs = c.slots.map((slot, idx)=>{
@@ -6652,7 +6929,7 @@ function renderChallengeMain(){
     const waitMins = slotWaitMins(slot);
     const waitBadge = `<span class="wait-badge" data-wait-slot="${idx}" title="The player has been waiting on your reply for this long (not your handling time)" style="${waitMins>=1?'':'display:none;'}">${waitMins>=1?'\u23f3 '+waitMins+'m':''}</span>`;
     const ahtV = slotAhtView(slot);
-    const ahtBadge = (state.ahtMode && ahtV) ? `<span class="aht-tab-timer ${ahtV.over?'over':''} ${ahtV.frozen?'frozen':''}" data-aht-slot="${idx}" title="Handling time (AHT) for this chat - counts from when the player joined, independent of which chat is open">\u23f1 ${ahtV.clock}</span>` : '';
+    const ahtBadge = ahtV ? `<span class="aht-tab-timer ${ahtV.over?'over':''} ${ahtV.frozen?'frozen':''}" data-aht-slot="${idx}" title="Handling time (AHT) for this chat: elapsed / target. Counts from when this player's opening message arrived, independent of which chat is open">${ahtTabText(ahtV)}</span>` : '';
     const isWaiting = slot.status==='incoming' || slot.status==='arriving';
     const statusDot = slot.status==='ended' ? 'var(--ok)' : isWaiting ? 'var(--text3)' : (slot.status==='documenting'||slot.status==='scoring' ? 'var(--text3)' : 'var(--accent)');
     const incomingBadge = isWaiting ? `<span style="font-size:10px;color:var(--accent);font-weight:700;margin-left:4px;">• arriving</span>` : '';
@@ -6682,7 +6959,7 @@ function renderChallengeMain(){
         <div class="status">${activeIsWaiting ? 'Waiting for player to join\u2026' : escapeHtml(activeSlot.scenario.title)} \u00b7 ${activeSlot.status==='active'?'In progress':activeIsWaiting?'Not started yet':activeSlot.status==='documenting'?'Completing documentation\u2026':activeSlot.status==='scoring'?'Scoring this chat\u2026 your other chats stay active':'Ended'}</div>
       </div>
       <div class="btns">
-        ${(state.ahtMode && slotAhtView(activeSlot)) ? `<span class="aht-main-timer ${slotAhtView(activeSlot).over?'over':''} ${slotAhtView(activeSlot).frozen?'frozen':''}" data-aht-main="${c.activeSlotIndex}" title="Elapsed handling time (AHT) for this chat">${ahtMainText(slotAhtView(activeSlot))}</span>` : ''}
+        ${slotAhtView(activeSlot) ? `<span class="aht-main-timer ${slotAhtView(activeSlot).over?'over':''} ${slotAhtView(activeSlot).frozen?'frozen':''}" data-aht-main="${c.activeSlotIndex}" title="Handling time (AHT) for this chat: elapsed vs target. Starts when the player's opening message arrives; stops when the chat ends.">${icon('clock',13)}<span data-aht-main-text>${ahtMainText(slotAhtView(activeSlot))}</span></span>` : ''}
         <button id="btnEndChallengeSlot" class="primary" ${activeSlot.status!=='active'?'disabled':''}>End This Chat</button>
       </div>
     </div>
@@ -6697,6 +6974,7 @@ function renderChallengeMain(){
 function renderChallengeSide(){
   const c = state.challenge;
   if(!c || !c.active) return `<div class="side"><div class="empty" style="padding:40px 16px;">No active session.</div></div>`;
+  if(challengeIsProcessing(c)) return `<div class="side" id="challengeProcessingSide"><div class="empty" style="padding:40px 16px;">Calculating session results\u2026</div></div>`;
   if(c.slots.every(s=>s.status==='ended')) return `<div class="side"><div class="empty" style="padding:40px 16px;">Session complete - see the report.</div></div>`;
   const slot = c.slots[c.activeSlotIndex];
   // Until the player has joined and sent their opening message, nothing about this chat may be visible: no player name, skill,
@@ -6776,46 +7054,72 @@ function renderChallengeDocModal(slotIndex){
 
 function renderChallengeSessionReport(){
   const c = state.challenge;
-  const rows = c.slots.map((slot, idx)=>{
-    if(!slot.evaluation || slot.evaluation.error){
+  const rec = sessionRecordById(c.sessionId);
+  return renderSessionReportHtml({
+    mode:'live', sessionId:c.sessionId, tier:c.tier, completedAt: rec ? rec.completedAt : null,
+    chats: c.slots.map((slot, idx)=> challengeChatSummary(slot, idx)),
+    sessionEvaluation: c.sessionEvaluation, running: !!state.sessionEvalRunning[c.sessionId], interrupted:false,
+    canRetry: !!(rec && rec.evalPrompt),
+  });
+}
+function renderSavedSessionReport(rec){
+  return renderSessionReportHtml({
+    mode:'saved', sessionId:rec.id, tier:rec.tier, completedAt:rec.completedAt, chats:rec.chats,
+    sessionEvaluation: rec.sessionEvaluation, running: !!state.sessionEvalRunning[rec.id],
+    interrupted: !state.sessionEvalRunning[rec.id] && (rec.evalStatus==='interrupted' || (rec.evalStatus==='pending' && !rec.sessionEvaluation)),
+    canRetry: !!rec.evalPrompt,
+  });
+}
+function renderSessionReportHtml(m){
+  const live = m.mode==='live';
+  const rows = m.chats.map(ch=>{
+    if(ch.scoringFailed){
       return `<div class="box" style="margin-bottom:8px;border-color:var(--bad);">
-        <strong>${escapeHtml(slot.scenario.title)}</strong>
-        <div style="color:var(--bad);font-size:12px;margin-top:4px;">Scoring failed for this chat${slot.evaluation && slot.evaluation.error ? ': '+escapeHtml(slot.evaluation.error) : ''}</div>
+        <strong>${escapeHtml(ch.title)}</strong>
+        <div style="color:var(--bad);font-size:12px;margin-top:4px;">Scoring failed for this chat${ch.scoringError ? ': '+escapeHtml(ch.scoringError) : ''}</div>
       </div>`;
     }
-    const sc = computeQAScore(slot.evaluation.questions);
-    return `<div class="box" style="margin-bottom:8px;cursor:pointer;" data-view-challenge-slot="${idx}">
+    const attr = live ? `data-view-challenge-slot="${ch.idx}"` : `data-view-saved-chat="${escapeHtml(m.sessionId)}|${ch.idx}"`;
+    const handling = ch.handlingMs!=null ? ' \u00b7 Handling time '+formatClock(ch.handlingMs)+(ch.targetMinutes ? ' / '+formatClock(ch.targetMinutes*60000)+' target' : '') : '';
+    return `<div class="box" style="margin-bottom:8px;cursor:pointer;" ${attr}>
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <strong>${escapeHtml(slot.scenario.title)}${isDraftStandard(slot.scenario) ? ' <span style="font-size:10px;font-weight:700;color:var(--warn);border:1px solid var(--warn-border);border-radius:10px;padding:1px 6px;white-space:nowrap;">DRAFT-STANDARD</span>' : ''}</strong>
-        <span style="color:${sc.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${sc.af?`AF (${sc.afDuty})`:sc.pct+'%'} \u00b7 ${sc.pass?'PASS':'FAIL'}</span>
+        <strong>${escapeHtml(ch.title)}${ch.draft ? ' <span style="font-size:10px;font-weight:700;color:var(--warn);border:1px solid var(--warn-border);border-radius:10px;padding:1px 6px;white-space:nowrap;">DRAFT-STANDARD</span>' : ''}</strong>
+        <span style="color:${ch.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${ch.af?`AF (${escapeHtml(ch.afDuty)})`:ch.pct+'%'} \u00b7 ${ch.pass?'PASS':'FAIL'}</span>
       </div>
-      <div style="font-size:12px;color:var(--text3);margin-top:4px;">${slot.playerLeftEarly ? 'Player left early ('+escapeHtml(slot.playerLeftReason)+')' : 'Closed by agent'}${slot.finalHandlingMs!=null ? ' \u00b7 Handling time '+formatClock(slot.finalHandlingMs)+(slot.scenario.ahtTargetMinutes ? ' (target '+formatClock(slot.scenario.ahtTargetMinutes*60000)+')' : '') : ''}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px;">${ch.playerLeftEarly ? 'Player left early ('+escapeHtml(ch.playerLeftReason)+')' : 'Closed by agent'}${handling}</div>
     </div>`;
   }).join('');
 
+  const retryBtn = m.canRetry ? `<div style="margin-top:10px;"><button class="small" id="btnRetrySessionSummary" data-session-id="${escapeHtml(m.sessionId)}">Retry session summary</button></div>` : '';
   let sessionBox = '';
-  if(c.sessionEvalLoading){
+  if(m.running){
     sessionBox = `<div class="box"><div class="empty">Scoring the session as a whole\u2026</div></div>`;
-  }else if(c.sessionEvaluation && c.sessionEvaluation.error){
-    sessionBox = `<div class="box" style="border-color:var(--bad);color:var(--bad);">Session evaluation failed: ${escapeHtml(c.sessionEvaluation.error)}</div>`;
-  }else if(c.sessionEvaluation){
-    const se = c.sessionEvaluation;
-    const labels = {prioritization:'Prioritization', avoidsNeglect:'Avoided neglecting a chat', keepsPlayersUpdated:'Kept players updated', overallJuggling:'Overall juggling'};
+  }else if(m.sessionEvaluation && m.sessionEvaluation.error){
+    sessionBox = `<div class="box" style="border-color:var(--bad);color:var(--bad);">Session evaluation failed: ${escapeHtml(m.sessionEvaluation.error)}${retryBtn}</div>`;
+  }else if(m.sessionEvaluation){
+    const se = m.sessionEvaluation;
+    const labels = {prioritization:'Prioritization', avoidsNeglect:'Avoided neglecting a chat', keepsPlayersUpdated:'Handled waits appropriately', overallJuggling:'Overall juggling'};
     const sessionRows = Object.keys(labels).map(key=>{
       const sig = se[key]; if(!sig) return '';
       const color = COACHING_RATING_COLOR[sig.rating] || 'var(--text3)';
       return `<div class="info-row"><span class="ilabel">${labels[key]}<br><span style="font-size:11px;color:var(--text3);">${escapeHtml(sig.note||'')}</span></span><span class="ival" style="color:${color};font-weight:700;">${escapeHtml(COACHING_RATING_LABEL[sig.rating]||sig.rating)}</span></div>`;
     }).join('');
     sessionBox = `<div class="box"><div style="font-weight:700;margin-bottom:8px;">Session Performance</div><div style="font-size:13px;color:var(--text2);margin-bottom:10px;">${escapeHtml(se.summary||'')}</div>${sessionRows}</div>`;
+  }else if(m.interrupted){
+    sessionBox = `<div class="box" style="border-color:var(--warn-border);"><div style="font-weight:700;margin-bottom:4px;">Session summary not available</div><div style="font-size:12.5px;color:var(--text2);">The multitasking summary did not finish before this page was closed or reloaded. Your individual chat results above are saved.</div>${retryBtn}</div>`;
   }
 
-  return `<div class="main" style="padding:32px;overflow-y:auto;">
-    <h1 style="margin-top:0;">Session Report - ${escapeHtml(CHALLENGE_TIERS[c.tier].label)}</h1>
+  const back = live
+    ? `<button id="btnExitChallenge">Back to Training Modes</button>`
+    : `<button id="btnBackFromSavedSession">\u2190 All Attempt History</button>`;
+  return `<div class="main" style="padding:32px;overflow-y:auto;" id="${live?'challengeSessionReport':'savedSessionReport'}">
+    <h1 style="margin-top:0;">Session Report - ${escapeHtml(CHALLENGE_TIERS[m.tier] ? CHALLENGE_TIERS[m.tier].label : m.tier)}</h1>
+    ${m.completedAt ? `<div style="color:var(--text3);font-size:12px;margin-bottom:6px;">Completed ${escapeHtml(formatHistoryDate(m.completedAt))}</div>` : ''}
     <div style="color:var(--text2);font-size:13px;margin-bottom:4px;">Each chat is scored on the real scorecard, same as always. The session performance below is separate - it judges the juggling, not any individual chat\u2019s correctness.</div>
     <div style="color:var(--text3);font-size:11.5px;margin-bottom:20px;">This is AI practice feedback, not an official QA review - your TL remains your coach.</div>
     <div style="max-width:640px;">${rows}</div>
     <div style="max-width:640px;margin-top:16px;">${sessionBox}</div>
-    <div style="margin-top:20px;"><button id="btnExitChallenge">Back to Training Modes</button></div>
+    <div style="margin-top:20px;">${back}</div>
   </div>`;
 }
 
@@ -6862,7 +7166,7 @@ function scoreHeaderHtml(ev, tlOverrides, ahtElapsedMinutes, ahtTargetMinutes, a
 function evalModalContent(){
   // ---- Historical read-only view (works whether opened from a live attempt or straight from the scenario list) ----
   if(state.historicalView){
-    const s = scenarioById(state.historicalView.scenarioId);
+    const s = historyScenarioFor(state.historicalView.scenarioId);
     const att = state.historicalView.attempt;
     const ev = att.evaluation;
     const standalone = !!state.historicalView.standalone;
@@ -8051,7 +8355,7 @@ function renderClearDataConfirm(){
   overlay.className='modal-overlay';
   overlay.innerHTML = `<div class="modal" style="max-width:420px;">
     <h2>Clear your local history?</h2>
-    <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">This clears the ${count} attempt${count===1?'':'s'} saved on this device only - the personal practice list you see here. It does not touch anything your TL sees in Team Progress; those records stay exactly as they are. This cannot be undone on this device.</div>
+    <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">This clears the ${count} attempt${count===1?'':'s'} (and any saved Challenge session reports) on this device only - the personal practice list you see here. It does not touch anything your TL sees in Team Progress; those records stay exactly as they are. This cannot be undone on this device.</div>
     <div style="display:flex;gap:10px;">
       <button id="btnCancelClearData">Cancel</button>
       <button id="btnConfirmClearData" class="primary" style="background:var(--bad);border-color:var(--bad);">Clear my local history</button>
@@ -8151,6 +8455,7 @@ async function init(){
   deviceId = getOrCreateDeviceId();
   loadAgentName();
   loadPersistedAttemptHistory();
+  loadPersistedChallengeSessions();
   await loadTeamProgressLog();
   await loadAssignments();
   await loadAgentDirectory();
