@@ -96,6 +96,20 @@
   .diff-Foundation{background:var(--ok-bg);color:var(--ok);}
   .diff-Applied{background:var(--warn-bg);color:var(--warn);}
   .diff-Advanced{background:var(--bad-bg2);color:var(--bad);}
+  .tag-chip{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:20px;border:1px solid var(--border);background:var(--chip-tint);color:var(--text2);white-space:nowrap;}
+  .tag-chip.skill{border-color:var(--accent);color:var(--accent2);font-weight:700;}
+  .tag-chip.rg-direct,.tag-chip.rg-embedded{border-color:var(--bad-border2);background:var(--bad-bg);color:var(--bad);font-weight:700;}
+  .tag-chip.rg-indirect{border-color:var(--warn-border);background:var(--warn-bg);color:var(--warn);font-weight:700;}
+  .tag-chip.kb{display:inline-flex;align-items:center;gap:5px;}
+  .kb-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
+  .tag-chip.rg-concerning{border-color:var(--warn-border);color:var(--warn);}
+  .tag-chip.cx-single{border-color:var(--ok-border);background:var(--ok-bg);color:var(--ok);font-weight:700;}
+  .tag-chip.cx-layered{border-color:var(--warn-border);background:var(--warn-bg);color:var(--warn);font-weight:700;}
+  .tag-chip.cx-high{border-color:var(--bad-border2);background:var(--bad-bg2);color:var(--bad);font-weight:700;}
+  .tag-chip.rg-unset{border-style:dashed;color:var(--text3);}
+  .assign-row{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;background:var(--panel);}
+  .assign-row:hover{border-color:var(--accent);}
+  .assign-row.selected{border-color:var(--accent);background:var(--active-bg);box-shadow:0 0 0 1px var(--accent) inset;}
   .rg-pill{display:inline-block;font-size:9.5px;padding:2px 6px;border-radius:20px;font-weight:700;letter-spacing:.02em;background:var(--bad-bg2);color:var(--bad);margin-left:5px;}
   .diag-link-wrap{padding:12px 16px;border-top:1px solid var(--border);margin-top:auto;}
 
@@ -371,6 +385,7 @@ const SCENARIOS = [
     preChatContext:'submitted an interac withdrawal for $180 about 3 hours ago and its still not in my bank, can u check where it is',
     endConditionsGuide:'End once you\u2019ve given a clear, KB-supported answer and next step, or after a reasonable back-and-forth.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Payments'], kbArticles:['Withdrawals via E-Transfer (Interac)'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:["Withdrawals via E-Transfer (Interac)"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Payments', policyVersionRef:null},
     kbSource:'Real KB: "Withdrawals via E-Transfer (Interac)" - In Progress status behaviour and Auto-Deposit timelines.',
@@ -407,6 +422,7 @@ const SCENARIOS = [
     preChatContext:'i wanted to claim the weekend reload free spins but forgot, can i still get them',
     endConditionsGuide:'End once the case has actually reached a real close - not left hanging without a clear next step.',
     kbStatus:'ambiguous', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Promotions & Bonuses'], kbArticles:['Promotions: Key Information, Player Eligibility, Troubleshooting', 'Manual Adjustments & Goodwill Compensation Policy'], rgStatementType:'None', rgEmbedded:false, complexity:'Layered',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:["Promotions: Key Information, Player Eligibility, Troubleshooting", "Manual Adjustments & Goodwill Compensation Policy"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Promotions', policyVersionRef:null},
     kbSource:'Checked against real KB: "Promotions: Key Information, Player Eligibility, Troubleshooting" and the "Manual Adjustments & Goodwill Compensation Policy" table. Neither clearly covers this exact case - see ambiguityNotes. This grounding is evaluator-only and is not shown to the agent during play, so the exercise actually tests live recognition rather than announcing the answer.',
@@ -474,6 +490,7 @@ const SCENARIOS = [
     preChatContext:'i think one of the rounds on golden reef slots paid out wrong, ive lost about $340 in the last 40 min',
     endConditionsGuide:'End once the round has been addressed and the conversation reaches a natural, complete close.',
     kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:true,
+    kbCategories:['Game Tech Temple', 'Compliance & Responsible Gaming'], kbArticles:['RG Triggers: Recognition & Response', 'Casino'], rgStatementType:'Direct', rgEmbedded:true, complexity:'High stakes',
     readiness:'ENGINE_TEST_ONLY',
     metadata:{kbSources:["RG Triggers: Recognition & Response", "Casino (round lookup)"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Gameplay', policyVersionRef:null},
     kbSource:'Round-dispute compensation logic and the specific "Integrity Check: Passed" mechanism remain fictional - no real KB describes what CS actually sees when verifying a slot round\u2019s correctness. HOWEVER, the ability to look up a specific gameplay round in Midnight for standard slots is now confirmed real ("Casino" article: "Gameplay Rounds can be found on the player\u2019s profile as well as in our Midnight back office"). Important boundary, confirmed real and current: for Evolution Live Game Shows specifically (Crazy Time, Monopoly Live, etc. - NOT standard slots like this scenario\u2019s Golden Reef Slots), "Midnight currently does not provide round history details to Support agents due to an ongoing issue" - this scenario\u2019s round-lookup premise would NOT hold if reused for a Live Game Show. RG portion is real KB: "RG Triggers: Recognition & Response." The player\u2019s statement closely matches a listed Direct Statement (Confirmed Harm) example ("I\u2019m spending money I can\u2019t afford"), which carries a specific, mandatory chat procedure - not optional acknowledgment.',
@@ -513,6 +530,7 @@ const SCENARIOS = [
     preChatContext:'deposited $50 yesterday and the bonus never showed up, i thought it applied automatically',
     endConditionsGuide:'End once the case is fully resolved for the player.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Promotions & Bonuses'], kbArticles:['Manual Adjustments & Goodwill Compensation Policy', 'Promotions: Key Information, Player Eligibility, Troubleshooting'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:["Manual Adjustments & Goodwill Compensation Policy", "Promotions: Key Information, Player Eligibility, Troubleshooting"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Promotions', policyVersionRef:null},
     kbSource:'Real KB: "Manual Adjustments & Goodwill Compensation Policy" (Promotion Issues \u2192 No Opt-in row) and "Promotions: Key Information, Player Eligibility, Troubleshooting" (Resolution Logic \u2192 "Not Opted In, but All Other Requirements Met"). Both independently confirm the same resolution.',
@@ -548,6 +566,7 @@ const SCENARIOS = [
     preChatContext:'diamond cascade froze on an $8 spin and i lost the credits',
     endConditionsGuide:'End once you’ve reached and communicated a clear conclusion to the player.',
     kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Game Tech Temple'], kbArticles:['Tech Escalations', 'Casino'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'ENGINE_TEST_ONLY',
     metadata:{kbSources:["Tech Escalations", "Casino (round lookup)"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Gameplay', policyVersionRef:null},
     kbSource:'Escalation destination/format is real KB ("Tech Escalations" - Outcome Disputes/Open Rounds route to Tech via HelpDesk with specific required fields). The specific round-diagnosis content (what the detailed log actually shows, e.g. the client-side-glitch explanation) remains fictional - no "Game Tech Temple" troubleshooting content has been supplied. The ability to look up a specific round in Midnight is confirmed real for standard slots ("Casino" article) - this scenario\u2019s game (Diamond Cascade) is a slot, so that premise holds. Important boundary: this would NOT hold for an Evolution Live Game Show, where round history is currently unavailable to Support due to an ongoing issue.',
@@ -584,6 +603,7 @@ const SCENARIOS = [
     preChatContext:'just submitted my id for verification, the name on it is a bit different from what i signed up with',
     endConditionsGuide:'End once you’ve reached a clear next step with the player.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['KYC & Verification'], kbArticles:['KYC: Onfido Handling'], rgStatementType:'None', rgEmbedded:false, complexity:'High stakes',
     readiness:'PILOT_READY',
     metadata:{kbSources:["KYC: Onfido Handling"], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'KYC/Verification', policyVersionRef:null},
     kbSource:'Real KB: "KYC: Onfido Handling" - Bigger Name/DoB Mismatch flow. Note: this scenario replaces a prior fictional version that wrongly assumed Tier 1 has no visibility into KYC and must always escalate - real KB is explicit that CS agents handle verification themselves, including dual process, and should not defer to a separate "verification team."',
@@ -622,6 +642,7 @@ const SCENARIOS = [
     preChatContext:'my withdrawal from about 3 hours ago still hasnt come through',
     endConditionsGuide:'End once every topic the player raised has been addressed.',
     kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:true,
+    kbCategories:['Payments', 'Promotions & Bonuses', 'Compliance & Responsible Gaming'], kbArticles:['Withdrawals via E-Transfer (Interac)', 'Promotions: Key Information, Player Eligibility, Troubleshooting', 'RG Triggers: Recognition & Response'], rgStatementType:'Indirect', rgEmbedded:true, complexity:'High stakes',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:["Withdrawals via E-Transfer (Interac)", "RG Triggers: Recognition & Response"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'RG/Compliance', policyVersionRef:null},
     kbSource:'Withdrawal portion: real KB ("Withdrawals via E-Transfer (Interac)", same as NOC-1). Promo portion: real KB ("Promotions: Key Information" - Opted In / Not Awarded \u2192 manually award). RG portion: real KB ("RG Triggers: Recognition & Response") - this statement matches the Indirect Statement (Emotional/Concerning) category, which requires actively initiating a soft RG check-in with open-ended questions, not just acknowledging and pointing to resources. One genuine gap remains - see ambiguityNotes.',
@@ -660,6 +681,7 @@ const SCENARIOS = [
     preChatContext:'someone told me yesterday my withdrawal would be fixed by end of day and its still not sorted',
     endConditionsGuide:'End once a clear, real commitment has been made to the player.',
     kbStatus:'fictional', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Payments', 'Escalations'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:[], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Payments', policyVersionRef:null},
 
@@ -698,6 +720,7 @@ const SCENARIOS = [
     preChatContext:'my daily wheel spin isnt showing as claimed today',
     endConditionsGuide:'End once the original question is resolved and the conversation reaches a natural close.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:true,
+    kbCategories:['Compliance & Responsible Gaming', 'Promotions & Bonuses'], kbArticles:['RG Triggers: Recognition & Response'], rgStatementType:'Direct', rgEmbedded:false, complexity:'High stakes',
     readiness:'PILOT_READY',
     metadata:{kbSources:["RG Triggers: Recognition & Response"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'RG/Compliance', policyVersionRef:null},
     kbSource:'Real KB: "RG Triggers: Recognition & Response" - the player\u2019s line closely matches a listed Direct Statement (Confirmed Harm) example ("I keep trying to win my money back" / chasing losses), which triggers the same mandatory chat procedure validated in NOC-3. This scenario is built specifically to test LIVE recognition of an unannounced, casually-delivered trigger inside an otherwise low-stakes conversation - not policy recall.',
@@ -739,6 +762,7 @@ const SCENARIOS = [
     preChatContext:'i keep getting blocked from games, never had this problem before',
     endConditionsGuide:'This case should close quickly once the situation is clear to both sides.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Account Management', 'Game Tech Temple'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:[], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Account/Location', policyVersionRef:null},
     kbSource:'Real KB: "Location: Game Provider" / jurisdiction restriction handling, cross-checked against real August chat data for the tag "Location: Outside Jurisdiction" (251 real chats, median handling time 9.0 minutes, mean 10.9 - both well under the platform-wide 12-minute average, because this case type is genuinely simple once the location is confirmed).',
@@ -782,6 +806,7 @@ const SCENARIOS = [
     preChatContext:'i want to delete my account',
     endConditionsGuide:'End once the account matter is fully resolved and confirmed with the player.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Account Management'], kbArticles:['Account Closure Requests'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:['Account Closure Requests'], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Account Management', policyVersionRef:null},
     kbSource:'CORRECTED per current supplied KB (Account Closure Requests): real KB requires always asking the player why they want to close, if not already shared, and attempting retention when the reason is neutral (dislikes the site/games, wants better bonuses elsewhere, unhappy with a resolution, bad luck with wins) before closing. This scenario also still tests the earlier real Compliance finding: "delete my account" should be treated as a closure request, not an automatic trigger for the separate, more involved data deletion process.',
@@ -818,6 +843,7 @@ const SCENARIOS = [
     preChatContext:'i think i should have gotten a promo and i didnt, can you look into it',
     endConditionsGuide:'End once the original question is resolved and you’ve genuinely engaged with everything the player raised.',
     kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:true,
+    kbCategories:['Compliance & Responsible Gaming', 'Promotions & Bonuses'], kbArticles:['RG Triggers: Recognition & Response'], rgStatementType:'Indirect', rgEmbedded:false, complexity:'High stakes',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:["RG Triggers: Recognition & Response"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'RG/Compliance', policyVersionRef:null},
     kbSource:'Grounded in a real Compliance QA escalation (August): a player told the agent "they\u2019re just an addict," which the agent likely read as a joke and didn\u2019t act on. Per Compliance: "while it seems they might have been joking, such a statement requires at least an RG interaction." This scenario applies that finding using the real Indirect Statement check-in pattern already validated elsewhere in this project (RG Triggers: Recognition & Response) - the humor framing does not cancel the requirement to genuinely check in.',
@@ -855,6 +881,7 @@ const SCENARIOS = [
     preChatContext:'my withdrawal is taking longer than it should, when will it arrive',
     endConditionsGuide:'End once the situation has been fully addressed and any necessary account action has been taken.',
     kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:true,
+    kbCategories:['Compliance & Responsible Gaming', 'Payments'], kbArticles:[], rgStatementType:'Indirect', rgEmbedded:false, complexity:'High stakes',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:[], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'RG/Compliance', policyVersionRef:null},
     kbSource:'Grounded directly in a real Compliance QA escalation (August): a player said "I just need the money to buy my kids clothes for school," which Compliance explicitly classified as an indirect statement ("more close to \u2018I need this to pay rent / buy food / cover essentials\u2019") - and stated the account should have been SUSPENDED, not self-excluded, which is the real mistake the agent made. This is a precise, documented distinction: this project\u2019s existing Direct Statement scenarios (restrict + self-exclude) are a DIFFERENT, more severe trigger category than this one.',
@@ -893,6 +920,7 @@ const SCENARIOS = [
     preChatContext:'had a really bad session earlier, just have a quick question about my account',
     endConditionsGuide:'End once the situation has been addressed appropriately.',
     kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:true,
+    kbCategories:['Compliance & Responsible Gaming'], kbArticles:[], rgStatementType:'Concerning', rgEmbedded:false, complexity:'High stakes',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:[], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'RG/Compliance', policyVersionRef:null},
     kbSource:'Grounded in a real Compliance QA escalation (August): "when agents are escalating concerning statements, they block all deposits, gameplay, AND withdrawals. Please issue a reminder that for concerning statements, they should be restricting deposits and gameplay unless they have identified any other issue related to PM." This is the mirror-image failure mode to this project\u2019s other RG scenarios, which mostly test under-restriction - this one tests OVER-restriction.',
@@ -929,6 +957,7 @@ const SCENARIOS = [
     preChatContext:'i made a complaint about a refund days ago and nobody has got back to me, i need an answer now',
     endConditionsGuide:'End once the player has a clear status update and a real next step.',
     kbStatus:'fictional', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Escalations', 'Payments'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'High stakes',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:[], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Complaints/Escalations', policyVersionRef:null},
 
@@ -964,6 +993,7 @@ const SCENARIOS = [
     preChatContext:'i opted in to the quest but never got the reward',
     endConditionsGuide:'End once the player has a clear answer and the case has been handled correctly.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Promotions & Bonuses'], kbArticles:['Quests: What They Are and How to Support Players'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:["Quests: What They Are and How to Support Players (current version)"], lastValidatedDate:'2026-09-14', validatedBy:null, reviewTriggerCategory:'Promotions', policyVersionRef:null},
     kbSource:'CORRECTED per current supplied Quest KB (superseding an earlier version of this scenario that was backwards): where there are no previous Quest reward exceptions, qualifying cases may be awarded; where there are previous exceptions, escalate via the CS Manager Review flow for a possible exception. The account fact of a prior exception (Priority Note, March 14) is real case data; the auto-decline conclusion previously attached to it was incorrect and has been removed - that was a process conclusion baked into case data, which case data must never contain.',
@@ -1036,6 +1066,7 @@ const SCENARIOS = [
     preChatContext:'my cards are gone and i want them back',
     endConditionsGuide:'End once you’ve confirmed what the player actually needs and resolved it.',
     kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Betty Platform Guide'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:["Betty tagging guide - Bingo \"cards\" ambiguity note"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Gameplay', policyVersionRef:null},
     kbSource:'The ambiguity itself is real, documented guidance from Betty\u2019s own tagging guide: "\'Cards\' is ambiguous in Bingo. Could mean bingo game cards (Bingo: Free Cards) or Crack the Code side-game cards (Bingo: Crack the Code). Always clarify with the player first." A real August chat shows exactly this ambiguity in the wild - a player asking about "cards" tied to a side-game feature they\u2019d only heard about secondhand, not sure what it was actually called. Game-mechanic specifics for Crack the Code beyond what that real chat shows are fictional/prototype-only.',
@@ -1073,6 +1104,7 @@ const SCENARIOS = [
     preChatContext:'got kicked out of a live bingo round halfway through, did i lose my card and my progress',
     endConditionsGuide:'End once the player knows for certain whether their card and progress are intact - not once they\u2019ve simply been reassured in general terms.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Betty Platform Guide'], kbArticles:['Betty Bingo'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:['Betty Bingo'], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Gameplay', policyVersionRef:null},
     kbSource:'CORRECTED per real Betty Bingo KB, now supplied: the previous version was fictional/prototype-only (no real Bingo KB existed at the time). Real KB directly confirms cards and Crack the Code progress are saved through a disconnect or refresh, and gives the real canned response and escalation channel for this exact situation.',
@@ -1109,6 +1141,7 @@ const SCENARIOS = [
     preChatContext:'i tapped every vault number in crack the code before the game ended and the vault never opened, no reward',
     endConditionsGuide:'This case may take some real investigation - end once you\u2019ve reached a clear, evidence-based answer.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Betty Platform Guide'], kbArticles:['Betty Bingo'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:['Betty Bingo'], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Gameplay', policyVersionRef:null},
     kbSource:'CORRECTED per real Betty Bingo KB, now supplied: the previous version used a fabricated "caching delay" explanation with no real basis. Real KB gives the exact backoffice verification path (Feature Rewards, filterable by Player ID), the real canned response for this exact complaint, and the real escalation channel.',
@@ -1145,6 +1178,7 @@ const SCENARIOS = [
     preChatContext:'hi, i have a question about my account',
     endConditionsGuide:'End once the situation has been fully and appropriately addressed.',
     kbStatus:'fictional', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Escalations'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'High stakes',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:[], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Crisis/Safety', policyVersionRef:null},
     kbSource:'The core scenario remains fictional/prototype - no real Betty crisis-escalation KB was supplied for this exact case type. One real, generalizable point has been added from an actual TL coaching call (Cassidy, September): a crisis-adjacent situation must always be escalated publicly (the team\u2019s main channel), never resolved by privately DMing a peer for advice - private guidance can be denied later and creates no accountability trail. That specific lesson is real; the scenario\u2019s content around it is still illustrative, not KB-sourced.',
@@ -1181,6 +1215,7 @@ const SCENARIOS = [
     preChatContext:'my withdrawal has been pending for 3 hours now, this is ridiculous',
     endConditionsGuide:'End once the underlying issue is actually resolved.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Payments'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'High stakes',
     readiness:'PILOT_READY',
     metadata:{kbSources:["Betty Chat Scorecard - Player Experience F/AF definitions"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Payments', policyVersionRef:null},
     kbSource:'Real KB: this scenario tests the exact Player Experience F-vs-AF distinction defined in Betty\u2019s real QA Chat Scorecard: "F: The agent turned adversarial ABOUT THE ISSUE while still working it... Severe and coachable, not a conduct violation" versus "AF: The agent turned ON THE PLAYER, or stopped serving them." Here the player opens hostile, not the agent - the test is whether the agent stays professional and keeps serving despite that, which is what separates a good outcome from an F on this scorecard. The underlying withdrawal issue reuses the same real KB validated in the Delayed Withdrawal scenario.',
@@ -1218,6 +1253,7 @@ const SCENARIOS = [
     preChatContext:'logged in and my account is restricted and i have no idea why, please fix it',
     endConditionsGuide:'End once the player has a clear answer about next steps.',
     kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Fraud', 'KYC & Verification'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:[], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Fraud/Risk', policyVersionRef:null},
     kbSource:'Grounded in real August chat data: this is the single most common Risk-related contact type by far (154 real chats, real median 11.8 minutes) - far more common than a dramatic fraud-report scenario. A real chat shows the actual pattern clearly: player asks why they\u2019re restricted, agent verifies identity, then guides them to submit the specific document Risk requested (in the real example, a photo already requested earlier).',
@@ -1255,6 +1291,7 @@ const SCENARIOS = [
     preChatContext:'sent an interac deposit about 20 mins ago and its not in my balance',
     endConditionsGuide:'End once you’ve confirmed the actual status and given the player a clear answer.',
     kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Payments'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:["Withdrawals via E-Transfer (Interac) (deposit-side inference)"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Payments', policyVersionRef:null},
     kbSource:'Grounded in real August chat data: "Deposit: Interac: Started" is the single highest-volume tag surveyed anywhere in this project (310 real chats, median 10.8 minutes). A real chat shows the exact pattern - player says money left their bank but isn\u2019t showing in their Betty account, and uploads proof. The Deposits via E-Transfer (Interac) KB topic area was reviewed earlier in this project, though the literal KB text isn\u2019t reproduced in this session.',
@@ -1291,6 +1328,7 @@ const SCENARIOS = [
     preChatContext:'cant log in, i dont have access to my old email anymore and need to change it to my new one',
     endConditionsGuide:'End once the player knows exactly what to send and where - not once they\u2019ve simply been verified in chat.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Account Management', 'KYC & Verification'], kbArticles:['Email Change'], rgStatementType:'None', rgEmbedded:false, complexity:'High stakes',
     readiness:'PILOT_READY',
     metadata:{kbSources:['Email Change'], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Account Management', policyVersionRef:null},
     kbSource:'CORRECTED per current supplied KB (Email Change): this scenario previously assumed live-chat identity verification (name/DOB questions) was the correct path - it was backwards. Real KB is explicit that email changes are handled entirely via email, not chat: the player must send photo ID front and back, a selfie holding the same ID, and the new (and old, if remembered) email address to support@betty.ca. Chat-based Q&A verification does not apply here.',
@@ -1327,6 +1365,7 @@ const SCENARIOS = [
     preChatContext:'can you remove or raise my deposit limit, i want to deposit more now',
     endConditionsGuide:'End once the player understands what to expect next.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Compliance & Responsible Gaming'], kbArticles:['RG Limits'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:['RG Limits (current)'], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'RG/Compliance', policyVersionRef:null},
     kbSource:'CORRECTED per current supplied RG Limits KB (superseding an earlier version of this scenario that had the process backwards): "If they make a request for a change in their RG limits, guide the player step by step to complete the change on their own. Self-service should always be the first approach." Only if the player is unable to complete it themselves, or disconnects before finishing, does agent/escalation handling apply - and even then, an increase or removal (unlike a first-time set or decrease) is not something the agent processes directly: escalate to the Senior/TL on shift if there are no RG concerns, or to Player Care if there are.',
@@ -1363,6 +1402,7 @@ const SCENARIOS = [
     preChatContext:'got asked for photo id for a check but i dont have it on me right now',
     endConditionsGuide:'End once the player knows what to do next.',
     kbStatus:'fictional', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['KYC & Verification'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:[], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'KYC/Verification', policyVersionRef:null},
     kbSource:'Grounded directly in a real, specific coaching observation from the TL who commissioned this project, not a KB document or chat export: agents were observed sitting idle in live chat for 20-30 minutes while players went to locate or photograph a requested document, when the same document could be submitted asynchronously by email - inflating handling time for no operational benefit.',
@@ -1404,6 +1444,7 @@ const SCENARIOS = [
     preChatContext:'i thought i qualified for a promo, can you check for me',
     endConditionsGuide:'End once the conversation reaches a natural, complete close.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Promotions & Bonuses'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:["Betty Chat Scorecard - Player Experience A-F definitions"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Communication', policyVersionRef:null},
     kbSource:'No specific KB article applies here on purpose - this tests general tone-reading, not KB knowledge. The scoring standard is real: Betty\u2019s QA Chat Scorecard defines Player Experience A as "warm, natural, engaged - the player was heard, understood, and never left wondering," versus C as a player who "noticed... tone that cooled under pressure." This scenario is built to test exactly that gap.',
@@ -1440,6 +1481,7 @@ const SCENARIOS = [
     preChatContext:'quick question about my withdrawal status',
     endConditionsGuide:'End once the account matter is resolved and the conversation reaches a natural close.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Payments'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'Layered',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:["Betty Chat Scorecard - Player Experience A-F definitions"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Communication', policyVersionRef:null},
     kbSource:'No specific KB article applies - this is not an RG or crisis scenario, just a normal moment of a player sharing something human. Scored against the same real Player Experience standard as the rest of this batch.',
@@ -1476,6 +1518,7 @@ const SCENARIOS = [
     preChatContext:'my grandson set up a promo for me and i cant figure out how to claim it, its not working',
     endConditionsGuide:'End once the actual issue is correctly identified and resolved.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Promotions & Bonuses'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:["Betty Chat Scorecard - Player Experience A-F definitions"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Communication', policyVersionRef:null},
     kbSource:'No specific KB article applies - the underlying issue is simple once identified; the entire test is patience and plain-language communication with a non-technical player. Scored against the same real Player Experience standard as the rest of this batch.',
@@ -1512,6 +1555,7 @@ const SCENARIOS = [
     preChatContext:'can i get a free bonus or some free spins, i feel like i deserve something',
     endConditionsGuide:'End once the player has either accepted the redirect, or - if they threaten to close their account - received the required retention-adjacent-but-non-negotiable response and the chat reaches a natural close either way.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Promotions & Bonuses'], kbArticles:['Free Bonus Requests (GWGs)'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:["Free Bonus Requests (GWGs) KB article", "Hristo Palhutev - #cs-main-channel Slack announcement, policy effective immediately"], lastValidatedDate:'2026-10-02', validatedBy:null, reviewTriggerCategory:'Communication', policyVersionRef:null},
     kbSource:'Grounded directly in the current real "Free Bonus Requests (GWGs)" KB article and Hristo Palhutev\u2019s team-wide Slack announcement rolling it out. Two real policy changes replace the older approach this scenario used to test: (1) there is no longer any GWG escalation path for a one-time ad-hoc request - the agent handles it themselves, every single time, with a consistent decline; (2) the required TECHNIQUE is now specific and sequenced - check the Daily Wheel/Scratch Card, then Betty Coins balance, then any unused promotions, and lead with whichever of those the player can actually use right now, in warm positive language, before ever landing on a plain no. If truly nothing applies, the fallback is the player\u2019s Lifetime stats (total cash + free spins received), framed as proof the system already gives generously and automatically. Also real, from the same source: Portfolio VIPs route to the VIP team, and an account-closure threat gets an exact scripted response (never "I\u2019ll check" or "let me escalate that") plus a log via the CS Manager Review workflow in #cs-main-channel for tracking only, never as a live request for an exception.',
@@ -1551,6 +1595,7 @@ const SCENARIOS = [
     preChatContext:'the bonus round paid way less than it should have, this is not ok',
     endConditionsGuide:'End once the situation has been fully and appropriately addressed.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:true,
+    kbCategories:['Compliance & Responsible Gaming', 'Agent Operations', 'Game Tech Temple'], kbArticles:['Chat Guidelines', 'RG Triggers: Recognition & Response'], rgStatementType:'Direct', rgEmbedded:true, complexity:'High stakes',
     readiness:'PILOT_READY',
     metadata:{kbSources:["Chat Guidelines (Offensive Chat Behavior, RG carve-out)", "RG Triggers: Recognition & Response"], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'RG/Compliance', policyVersionRef:null},
     kbSource:'Grounded directly in Betty\u2019s real Chat Guidelines: the RG carve-out ("If a player contacts for RG reasons... DO NOT END the chat or ban them, even if their tone is aggressive"), the three-step warning flow for personal bullying/harassment, the site-vs-agent distinction ("insults aimed at the site, specific game... or general frustration" are NOT bannable, only bullying aimed at the agent or repeated profanity is), and the ban escalation ladder (1st offense 1 day, 2nd offense 7 days, 3rd offense 30 days, logged via priority CSR note). Also grounded in a real escalation thread where a TL was asked whether an especially abusive chat should get a longer first-time ban than the standard flow allows. Separately, Derek\u2019s RG line was deliberately written to match the real KB\u2019s listed Direct Statement (Confirmed Harm) example ("I keep trying to win my money back" / chasing losses) - the same trigger validated in the Daily Wheel scenario elsewhere in this build - so the correct remedy here is restrict + self-exclude, not restrict-only.',
@@ -1589,6 +1634,7 @@ const SCENARIOS = [
     preChatContext:'tried to deposit and it got blocked, i dont know why',
     endConditionsGuide:'End once the player has a real path forward - either they found it, or they know they can email it in or come back to chat.',
     kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Fraud', 'KYC & Verification'], kbArticles:['Fraud Requests Cheatsheet', 'Risk & Fraud Escalations'], rgStatementType:'None', rgEmbedded:false, complexity:'Layered',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:['Fraud Requests Cheatsheet', 'Risk & Fraud Escalations', 'SendGrid (confirms support@betty.ca as the real support address)'], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'AHT/Operational Judgment', policyVersionRef:null},
     kbSource:'CORRECTED per direct operational correction: players never come into chat for a document out of nowhere - there\u2019s always a trigger. The real pattern: Risk or Compliance emails the player requesting something (ID, card copies, etc.) with a timeframe; if unanswered, a restriction follows (Risk typically disables deposits and gameplay while leaving withdrawals open, per direct TL input - not itself drawn from a KB document), and the player comes to chat confused about the restriction, not about the document. The document types (ID + selfie, card copies) are real per the Fraud Requests Cheatsheet; escalating them to Risk once received is real per Risk & Fraud Escalations. The check-in-is-the-signal AHT judgment call underneath this is unchanged from the prior version.',
@@ -1626,6 +1672,7 @@ const SCENARIOS = [
     preChatContext:'my bonus didnt apply the way i expected and im sick of it, i want to talk to a manager',
     endConditionsGuide:'End once the underlying issue is actually resolved, not just once the player stops asking for a manager.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Escalations', 'Promotions & Bonuses'], kbArticles:['Customers Seeking Manager Assistance'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:['Customers Seeking Manager Assistance'], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Complaints & Escalations', policyVersionRef:null},
     kbSource:'Real KB: "Customers Seeking Manager Assistance."',
@@ -1662,6 +1709,7 @@ const SCENARIOS = [
     preChatContext:'my account got closed and nobody told me why, i want it reopened',
     endConditionsGuide:'End once the player has a clear, honest answer about what can and can\u2019t be done - not once they stop asking.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Fraud'], kbArticles:['Accounts Closed by Fraud'], rgStatementType:'None', rgEmbedded:false, complexity:'High stakes',
     readiness:'PILOT_READY',
     metadata:{kbSources:['Accounts Closed by Fraud'], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Fraud & Risk', policyVersionRef:null},
     kbSource:'Real KB: "Accounts Closed by Fraud."',
@@ -1698,6 +1746,7 @@ const SCENARIOS = [
     preChatContext:'it keeps saying my password is wrong but im sure its right',
     endConditionsGuide:'End once the player can actually get back into their account, or has a clear next step if they can\u2019t yet.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Account Management'], kbArticles:['Login Access Issues'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:['Login Access Issues'], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Account Management', policyVersionRef:null},
     kbSource:'Real KB: "Login Access Issues."',
@@ -1734,6 +1783,7 @@ const SCENARIOS = [
     preChatContext:'cant get into my account and im not sure why',
     endConditionsGuide:'End once the player is correctly routed to their real, active account - not once they\u2019ve simply been reassured.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Account Management'], kbArticles:['Duplicate Accounts'], rgStatementType:'None', rgEmbedded:false, complexity:'Layered',
     readiness:'PILOT_READY',
     metadata:{kbSources:['Duplicate Accounts'], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Account Management', policyVersionRef:null},
     kbSource:'Real KB: "Duplicate Accounts."',
@@ -1770,6 +1820,7 @@ const SCENARIOS = [
     preChatContext:'quick question, where can i see my transaction history',
     endConditionsGuide:'End as soon as the player confirms there\u2019s nothing else - don\u2019t let a farewell turn into a back-and-forth.',
     kbStatus:'coaching', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Account Management'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:[], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'AHT/Operational Judgment', policyVersionRef:null},
     kbSource:'Grounded in a real 1:1 TL coaching call (Cassidy, September): "Have a closing canned response ready; send it the moment the player says they have no further questions - do not wait. Avoid back-and-forth closing loops; once the issue is resolved and the loop question is asked, close the chat." Not a KB document citation - direct, real coaching direction.',
@@ -1806,6 +1857,7 @@ const SCENARIOS = [
     preChatContext:'a couple of my games arent loading',
     endConditionsGuide:'End once the original issue is resolved AND, if a boundary needed to be set, it was actually set - not just tolerated.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Agent Operations', 'Game Tech Temple'], kbArticles:['Chat Guidelines'], rgStatementType:'None', rgEmbedded:false, complexity:'High stakes',
     readiness:'PILOT_READY',
     metadata:{kbSources:['Chat Guidelines (Offensive Chat Behavior)'], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Complaints & Escalations', policyVersionRef:null},
     kbSource:'Grounded in a real 1:1 TL coaching call (Cassidy, September) describing an actual 43-minute chat, plus the same real Chat Guidelines three-step warning flow and ban ladder already validated for esc-13 (polite warning \u2192 formal warning \u2192 close chat and apply ban; "anything aimed to bully or harass the agent" is bannable). TL\u2019s direct point: agents have real authority to set boundaries, and shouldn\u2019t keep chasing a CSAT rating on a chat that\u2019s clearly not salvageable.',
@@ -1842,6 +1894,7 @@ const SCENARIOS = [
     preChatContext:'i finished my first loyalty tier but im not on the second one yet, why',
     endConditionsGuide:'End once the player actually understands where they stand - not just once a number has been repeated at them.',
     kbStatus:'coaching', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Promotions & Bonuses'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
     readiness:'PILOT_READY',
     metadata:{kbSources:[], lastValidatedDate:'2026-09-15', validatedBy:null, reviewTriggerCategory:'Loyalty/Promotions', policyVersionRef:null},
     kbSource:'Grounded in a real 1:1 TL coaching call (Cassidy, September): the chat itself was handled correctly, but the TL flagged a specific, reusable coaching point - "avoid citing internal numerical thresholds to players, they have no visibility on those figures and it adds confusion. Focus on confirming the player is now working toward the next gem level and celebrate progress on the first." Not a KB document citation - direct, real coaching direction.',
@@ -1878,6 +1931,7 @@ const SCENARIOS = [
     preChatContext:'this is the 4th time im contacting support about my referral reward, i referred darcy months ago and neither of us ever got it',
     endConditionsGuide:'End once the conversation reaches a controlled, professional close - the correct policy outcome delivered without the agent getting personally pulled into defending their own credibility. That can look like the player accepting the screenshot request and a note left on file as a real next step, or it can look like the player still leaving frustrated because earlier defensiveness cost that same next step its credibility - not just once the player stops responding or logs off.',
     kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Promotions & Bonuses', 'Escalations'], kbArticles:['Refer a Friend (RAF) - Choose Your RAF', 'Manual Adjustments & Goodwill Compensation Policy'], rgStatementType:'None', rgEmbedded:false, complexity:'High stakes',
     readiness:'PILOT_READY',
     metadata:{kbSources:['Refer a Friend (RAF) - Choose Your RAF policy article','Manual Adjustments & Goodwill Compensation Policy (Promotion Issues table)','Compliance case review, Chat ID TM13DFZAKS'], lastValidatedDate:'2026-09-30', validatedBy:'Zainab (TL), corroborated by Compliance case review', reviewTriggerCategory:'Complaints & Escalations', policyVersionRef:null},
     kbSource:'Fully grounded (validated 2026-09-30 against the real RAF article and the Manual Adjustments & Goodwill Compensation Policy), and revised the same day after a closer TL read of the actual transcript. The reward decision itself is real KB, not a judgment call: the RAF article’s dispute-tag table defines exactly this case - “RAF: Link/Promo expired - the friend’s deposit landed after the promo window” - and the Manual Adjustments table’s Promotion Issues section separately lists “Delayed deposits → Decline the request.” So the referral being denied is policy-correct, and the agent should hold that line. The scoring focus of this scenario is deliberately NOT whether the agent knows that policy - it’s whether they can deliver a correct, unwelcome answer without getting personally pulled into defending their own credibility. In the real transcript this is modeled on, the agent’s process answer was right the whole way through; what damaged the interaction was a pattern of self-defensive phrasing (“I do not lie,” “I work here and know our procedures,” a comment about not wanting “a passive aggressive conversation to start my shift”) and letting the player repeatedly bait her into re-litigating a “gotcha” about the word “review” instead of resetting it once. Note: a TL/supervisor hand-off is deliberately NOT treated as a required response to the legal threat here - no KB document makes that a hard rule, and the real agent did not do that either. What the real agent DID do - keep asking for screenshots and leave a note on the account as a return path - was a legitimate next step; the coaching problem was that the delivery up to that point had already cost the trust needed for that next step to land as credible. This is confirmed by the real outcome, not just a training-materials read: Compliance formally reviewed this exact chat (Chat ID TM13DFZAKS), flagged it as a rude and inappropriate way to speak to the customer, explicitly noted the customer was wrong on the underlying policy, and still recommended a one-time goodwill gesture plus an apology "considering how their query was handled." Both were issued, alongside feedback delivered to the agent and her TL. Betty’s own Compliance team reached the identical conclusion this scenario is built to teach: being right on policy did not protect against a real cost once delivery broke down. That cost is a reason to fix the in-the-moment behavior, not a reason to preemptively offer compensation on a case you’re right about. Per the real QA Chat Scorecard, Resolution & Obligations and Player Experience are scored as fully independent questions - this scenario is built specifically to test that a correct, well-defended reward denial cannot pull up a poor Player Experience score.',
@@ -1929,12 +1983,11 @@ let state = {
   diagSectionsOpen:{},
   diagSubsectionsOpen:{},
   manageAssignmentsAgent:'', // which agent's assignments are shown in the Manage Assignments subsection
+  scenarioFilters:{assign:{skill:'',kb:'',rg:'',complexity:''}, library:{skill:'',kb:'',rg:'',complexity:''}}, assignSelectedScenarioId:null, // TL Assign Scenarios list filters + selection (session-only)
   assignFormSelectedAgent:'', // narrows the Assign Scenarios scenario dropdown to what this agent can see
   agentDirectorySearch:'',   // search text for the All Registered Agents subsection
   editingAgentCanonical:null, // canonical name currently loaded into the registration form for editing
   scenarioLibrarySearch:'',
-  scenarioLibraryTopicFilter:'',
-  scenarioLibraryDifficultyFilter:'',
   scenarioLibraryReadinessFilter:'',
   feedbackStatusFilter:'active', // 'active' (new/under_review/resolved) | 'archived'
   teamProgressDashFilter:'everyone', // 'everyone' | a TL name | a single agent canonical name (see Team Progress section)
@@ -2022,6 +2075,126 @@ let state = {
 // could mistakenly learn as real Betty behaviour). scenarioById/attempt history/TL reference
 // still use the full SCENARIOS list - only pools an agent can browse/randomize into are filtered.
 const PILOT_SCENARIOS = SCENARIOS.filter(s => s.readiness !== 'ENGINE_TEST_ONLY');
+
+// ---------- TL-ONLY SCENARIO TAGS ----------
+// kbCategories, kbArticles, rgStatementType, rgEmbedded and complexity are coaching metadata for TLs choosing what to assign.
+// They must never appear in any agent-facing view (they would give away what the chat is testing). All are optional:
+// older custom scenarios and saved data without them still load. Old custom scenarios saved with the earlier `topics`
+// field are mapped to KB categories on read (see scenarioKbCategories) - the stored record itself is never rewritten.
+const SKILL_CATALOGUE = [
+  {code:'NOC', name:'Negative Outcome Communication'},
+  {code:'ESC', name:'Escalation / Resolution Judgement'},
+  {code:'RG',  name:'Responsible Gambling Recognition'},
+  {code:'SSC', name:'Soft Skills & Communication'},
+  {code:'AHT', name:'Average Handling Time'},
+  {code:'ADV', name:'Growth / Advanced'},
+];
+// The 11 top-level categories of the Betty Notion KB, each with one colour used everywhere in the TL area.
+const KB_CATEGORIES = [
+  {name:'Account Management', color:'#a06bd6'},
+  {name:'KYC & Verification', color:'#3ecfcf'},
+  {name:'Payments', color:'#5b7cff'},
+  {name:'Compliance & Responsible Gaming', color:'#3ecf8e'},
+  {name:'Fraud', color:'#8a919c'},
+  {name:'Promotions & Bonuses', color:'#e2a33d'},
+  {name:'Game Tech Temple', color:'#e05a5a'},
+  {name:'Agent Operations', color:'#5bc0be'},
+  {name:'Betty Platform Guide', color:'#d68a5b'},
+  {name:'Internal Tools', color:'#9aa36b'},
+  {name:'Escalations', color:'#e05a8e'},
+];
+const KB_CATEGORY_NAMES = KB_CATEGORIES.map(c=>c.name);
+function kbCategoryColor(name){ const c = KB_CATEGORIES.find(x=>x.name===name); return c ? c.color : 'var(--text3)'; }
+// Earlier `topics` values -> KB categories (read-time mapping for older saved custom scenarios).
+const LEGACY_TOPIC_TO_KB = {
+  'KYC / ID Verification':'KYC & Verification', 'Responsible Gambling':'Compliance & Responsible Gaming',
+  'Payments & Withdrawals':'Payments', 'Bonuses & Promotions':'Promotions & Bonuses',
+  'Account Access':'Account Management', 'Account Management':'Account Management',
+  'Fraud & Risk':'Fraud', 'Complaints & Escalations':'Escalations', 'Gameplay & Game Issues':'Game Tech Temple',
+  'Bingo':'Game Tech Temple', 'Jurisdiction / Compliance':'Compliance & Responsible Gaming',
+  'Player Conduct / Abuse':'Agent Operations', 'Crisis & Safety':'Escalations',
+};
+// Direct = direct/confirmed-harm statement; Indirect = indirect statement; Concerning = lighter concerning statement;
+// None = no RG content. Whether the signal is buried inside another issue is a separate yes/no (rgEmbedded).
+const RG_STATEMENT_TYPES = ['Direct','Indirect','Concerning','None'];
+const COMPLEXITY_LEVELS = [
+  {name:'Single issue', desc:'One clear problem, one correct process', cls:'cx-single'},
+  {name:'Layered', desc:'Multiple issues, or a hidden issue inside another', cls:'cx-layered'},
+  {name:'High stakes', desc:'Compliance, RG, fraud, privacy or a hostile player - a miss is a critical error', cls:'cx-high'},
+];
+function scenarioKbCategories(s){
+  if(!s) return [];
+  const raw = Array.isArray(s.kbCategories) ? s.kbCategories : (Array.isArray(s.topics) ? s.topics.map(t=>LEGACY_TOPIC_TO_KB[t]||t) : []);
+  return raw.filter((c,i,a)=>c && KB_CATEGORY_NAMES.includes(c) && a.indexOf(c)===i);
+}
+function scenarioKbArticles(s){ return (s && Array.isArray(s.kbArticles)) ? s.kbArticles.filter(Boolean) : []; }
+function scenarioRgType(s){ return (s && RG_STATEMENT_TYPES.includes(s.rgStatementType)) ? s.rgStatementType : ''; }   // '' = not set (also covers the retired 'Embedded' value)
+function scenarioRgEmbedded(s){ return !!s && (s.rgEmbedded===true || s.rgStatementType==='Embedded'); }
+function scenarioComplexity(s){ return (s && COMPLEXITY_LEVELS.some(c=>c.name===s.complexity)) ? s.complexity : ''; }
+function scenarioSkillCode(s){ return (s && s.skillCode) ? s.skillCode : 'CUSTOM'; }
+function skillNameForCode(code){ const k = SKILL_CATALOGUE.find(x=>x.code===code); return k ? k.name : 'Custom / not set'; }
+function kbCategoryChipHtml(name){ return `<span class="tag-chip kb" title="KB category"><span class="kb-dot" style="background:${kbCategoryColor(name)};"></span>${escapeHtml(name)}</span>`; }
+function complexityChipHtml(s){
+  const cx = scenarioComplexity(s); const def = COMPLEXITY_LEVELS.find(c=>c.name===cx);
+  return def ? `<span class="tag-chip ${def.cls}" title="${escapeHtml(def.desc)}">${escapeHtml(cx)}</span>` : `<span class="tag-chip rg-unset" title="Complexity">Complexity not set</span>`;
+}
+function scenarioTagChipsHtml(s){
+  if(!s) return '';
+  const code = scenarioSkillCode(s);
+  const rg = scenarioRgType(s);
+  const rgCls = rg==='Direct' ? 'rg-direct' : rg==='Indirect' ? 'rg-indirect' : rg==='Concerning' ? 'rg-concerning' : (rg==='None' ? '' : 'rg-unset');
+  const cats = scenarioKbCategories(s);
+  return complexityChipHtml(s)
+    + `<span class="tag-chip skill" title="Primary skill">${escapeHtml(code)} \u00b7 ${escapeHtml(code==='CUSTOM' ? (s.skill||'Custom') : skillNameForCode(code))}</span>`
+    + `<span class="tag-chip ${rgCls}" title="RG statement type">RG: ${escapeHtml(rg || 'not set')}</span>`
+    + (scenarioRgEmbedded(s) ? `<span class="tag-chip rg-direct" title="The RG signal is buried inside another issue">RG embedded</span>` : '')
+    + (cats.length ? cats.map(kbCategoryChipHtml).join('') : `<span class="tag-chip rg-unset" title="KB category">No KB category</span>`);
+}
+function scenarioKbArticlesLineHtml(s){
+  const arts = scenarioKbArticles(s);
+  return arts.length ? `<div style="font-size:11px;color:var(--text3);margin-top:5px;">KB articles: ${arts.map(a=>escapeHtml(a)).join(' \u00b7 ')}</div>` : '';
+}
+// Shared filter bar + filtering for the Assign Scenarios list and the Scenario Library. f = {skill, kb, rg, complexity}.
+function filterScenariosByTags(pool, f){
+  return pool.filter(s=>
+    (!f.skill || scenarioSkillCode(s)===f.skill) &&
+    (!f.kb || scenarioKbCategories(s).includes(f.kb)) &&
+    (!f.rg || (f.rg==='unset' ? !scenarioRgType(s) : f.rg==='embedded' ? scenarioRgEmbedded(s) : scenarioRgType(s)===f.rg)) &&
+    (!f.complexity || (f.complexity==='unset' ? !scenarioComplexity(s) : scenarioComplexity(s)===f.complexity))
+  );
+}
+function renderScenarioFilterBar(prefix, f, pool, shownCount){
+  const selStyle = 'background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;';
+  const codes = [...new Set(pool.map(scenarioSkillCode))];
+  const skillOptions = [...SKILL_CATALOGUE.map(k=>k.code), 'CUSTOM'].filter(c=>codes.includes(c));
+  const anyUnsetRg = pool.some(s=>!scenarioRgType(s));
+  const anyUnsetCx = pool.some(s=>!scenarioComplexity(s));
+  const active = f.skill||f.kb||f.rg||f.complexity;
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+    <span style="font-size:12px;color:var(--text3);">Filter:</span>
+    <select data-filter-bar="${prefix}" data-filter-key="skill" aria-label="Filter by skill" style="${selStyle}">
+      <option value="">All skills</option>
+      ${skillOptions.map(c=>`<option value="${c}" ${f.skill===c?'selected':''}>${escapeHtml(c)} \u00b7 ${escapeHtml(skillNameForCode(c))}</option>`).join('')}
+    </select>
+    <select data-filter-bar="${prefix}" data-filter-key="kb" aria-label="Filter by KB category" style="${selStyle}">
+      <option value="">All KB categories</option>
+      ${KB_CATEGORY_NAMES.map(c=>`<option value="${escapeHtml(c)}" ${f.kb===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+    </select>
+    <select data-filter-bar="${prefix}" data-filter-key="rg" aria-label="Filter by RG statement type" style="${selStyle}">
+      <option value="">Any RG type</option>
+      ${RG_STATEMENT_TYPES.map(t=>`<option value="${t}" ${f.rg===t?'selected':''}>RG: ${t}</option>`).join('')}
+      <option value="embedded" ${f.rg==='embedded'?'selected':''}>RG: embedded in another issue</option>
+      ${anyUnsetRg ? `<option value="unset" ${f.rg==='unset'?'selected':''}>RG: not set</option>` : ''}
+    </select>
+    <select data-filter-bar="${prefix}" data-filter-key="complexity" aria-label="Filter by complexity" style="${selStyle}">
+      <option value="">Any complexity</option>
+      ${COMPLEXITY_LEVELS.map(c=>`<option value="${escapeHtml(c.name)}" ${f.complexity===c.name?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}
+      ${anyUnsetCx ? `<option value="unset" ${f.complexity==='unset'?'selected':''}>Complexity not set</option>` : ''}
+    </select>
+    ${active ? `<button class="small" data-filter-clear="${prefix}">Clear filters</button>` : ''}
+    <span style="font-size:12px;color:var(--text3);margin-left:auto;">Showing ${shownCount} of ${pool.length}</span>
+  </div>`;
+}
 
 // Checks built-ins first, then TL-created custom scenarios - so every existing caller (attempt
 // history, TL review, assignments, Challenge Mode) resolves a custom scenario exactly like a built-in
@@ -2287,6 +2460,12 @@ Produce a JSON object with EXACTLY these fields (match this shape precisely, usi
   "correctSecondaryTag": "an RG flag copied verbatim from the approved secondary catalogue if hasSecondaryRGTag is true, else null",
   "secondaryTagOptions": ["None", "the correct RG flag", "one other plausible RG flag - all from the approved secondary catalogue"] or null,
   "ahtTargetMinutes": a reasonable integer 5-20 based on difficulty/complexity,
+  "primarySkillCode": "the one skill this scenario mainly trains, exactly one of: ${SKILL_CATALOGUE.map(k=>k.code+' ('+k.name+')').join(', ')}",
+  "kbCategories": ["1-3 Betty KB categories copied exactly from this list: ${KB_CATEGORY_NAMES.join(' | ')}"],
+  "kbArticles": ["names of KB articles the TL actually supplied or named in the KB/process source - copy their names exactly; empty array if none were named. Never invent an article name"],
+  "rgStatementType": "exactly one of Direct (a direct/confirmed-harm RG statement), Indirect (an indirect RG statement), Concerning (a lighter concerning statement), None (no RG content). Must be None unless hasSecondaryRGTag is true",
+  "rgEmbedded": true or false (true only if the RG signal is buried inside a different issue the player contacted about),
+  "complexity": "exactly one of: Single issue (one clear problem, one correct process) | Layered (multiple issues, or a hidden issue inside another) | High stakes (compliance, RG, fraud, privacy or a hostile player, where a miss is a critical error)",
   "processGrounding": {
     "kbTopic": "short topic label for this process area",
     "kbText": "the correct-process explanation, grounded in what the TL described and consistent with evidenceReconciliation - phrase this as coaching guidance, not a verified KB quote",
@@ -2496,6 +2675,15 @@ function normalizeGeneratedScenario(raw, intake, interp){
   let secondaryOk = !!raw.hasSecondaryRGTag && isApprovedSecondaryTag(String(raw.correctSecondaryTag||'')) && raw.correctSecondaryTag && String(raw.correctSecondaryTag)!=='None';
   if(raw.hasSecondaryRGTag && raw.correctSecondaryTag && !secondaryOk) warnings.push('The generator proposed the secondary tag "'+raw.correctSecondaryTag+'", which is not in the approved catalogue, so it was discarded. Add the right secondary RG flag manually if one applies.');
   const hasSecondary = secondaryOk;
+  // TL-only tags: kept only if they match the fixed lists exactly; anything else is left unset for the TL to choose.
+  const genSkillCode = SKILL_CATALOGUE.some(k=>k.code===raw.primarySkillCode) ? raw.primarySkillCode : 'CUSTOM';
+  const genKbCats = (Array.isArray(raw.kbCategories) ? raw.kbCategories.map(String) : []).filter((t,i,a)=>KB_CATEGORY_NAMES.includes(t) && a.indexOf(t)===i);
+  // Article names are kept only if they appear in what the TL actually typed - never trusted from the model alone.
+  const kbSourceBlob = normForMatch([intake.kbInfo, intake.correctProcess, intake.whatHappened].join(' '));
+  const genKbArticles = (Array.isArray(raw.kbArticles) ? raw.kbArticles.map(x=>String(x).trim()) : []).filter((t,i,a)=>t && a.indexOf(t)===i && kbSourceBlob.includes(normForMatch(t)));
+  const genComplexity = COMPLEXITY_LEVELS.some(c=>c.name===raw.complexity) ? raw.complexity : '';
+  let genRgType = RG_STATEMENT_TYPES.includes(raw.rgStatementType) ? raw.rgStatementType : (hasSecondary ? '' : 'None');
+  if(!hasSecondary && genRgType && genRgType!=='None') genRgType = '';
 
   // Product-surface check: tabs and uiTerms must trace back to the TL's own words.
   const blob = intakeSourceBlob(intake);
@@ -2521,7 +2709,8 @@ function normalizeGeneratedScenario(raw, intake, interp){
   const reconciliation = formatEvidenceReconciliation(raw.evidenceReconciliation);
   const scenario = {
     isCustom:true,
-    skill: topic, skillCode:'CUSTOM', difficulty,
+    skill: topic, skillCode: genSkillCode, difficulty,
+    kbCategories: genKbCats, kbArticles: genKbArticles, rgStatementType: genRgType, rgEmbedded: hasSecondary && raw.rgEmbedded===true, complexity: genComplexity,
     internalTitle: String(raw.title||'Untitled Scenario'), title: String(raw.title||'Untitled Scenario'),
     playerName: String(raw.playerName||'Player'),
     agentBriefing: String(raw.agentBriefing||''),
@@ -2602,6 +2791,7 @@ function cloneScenarioContentFields(s){
     isCustom:true,
     skill:s.skill||s.topic, skillCode:s.skillCode||'CUSTOM', difficulty:s.difficulty,
     internalTitle:s.internalTitle||s.title, title:s.title, playerName:s.playerName,
+    kbCategories: scenarioKbCategories(s).slice(), kbArticles: scenarioKbArticles(s).slice(), rgStatementType: scenarioRgType(s), rgEmbedded: scenarioRgEmbedded(s), complexity: scenarioComplexity(s),
     agentBriefing:s.agentBriefing||'', preChatReason:s.preChatReason||'', preChatContext:s.preChatContext||'', noPreChatContext:!!s.noPreChatContext, endConditionsGuide:s.endConditionsGuide||'End once the case reaches a clear, complete resolution or a reasonable natural close.',
     kbStatus:'tl_coaching_draft', engineTestRG:false, rgScoringRelevant:!!s.rgScoringRelevant,
     readiness:'PRACTICE_ONLY',
@@ -2679,6 +2869,13 @@ async function saveScenarioBuilderDraft(){
   gen.internalTitle = gen.title;
   gen.playerName = (gen.playerName||'').trim() || 'Player';
   gen.ahtTargetMinutes = Number(gen.ahtTargetMinutes) > 0 ? Math.round(Number(gen.ahtTargetMinutes)) : 12;
+  gen.kbCategories = scenarioKbCategories(gen);
+  gen.kbArticles = scenarioKbArticles(gen).map(s=>String(s).trim()).filter((t,i,a)=>t && a.indexOf(t)===i);
+  gen.rgEmbedded = scenarioRgEmbedded(gen);
+  gen.rgStatementType = scenarioRgType(gen);
+  gen.complexity = scenarioComplexity(gen);
+  delete gen.topics; // superseded by kbCategories
+  if(!gen.skillCode) gen.skillCode = 'CUSTOM';
   gen.correctTag = (gen.correctTag||'').trim();
   gen.tagOptions = (gen.tagOptions||[]).map(s=>s.trim()).filter(Boolean);
   if(gen.correctTag && !gen.tagOptions.includes(gen.correctTag)) gen.tagOptions.unshift(gen.correctTag);
@@ -3252,6 +3449,27 @@ function wireEvents(){
 
   const btnAssignScenario=document.getElementById('btnAssignScenario');
   if(btnAssignScenario) btnAssignScenario.addEventListener('click', assignScenarioFromTLForm);
+  document.querySelectorAll('[data-filter-bar]').forEach(el=>{
+    el.addEventListener('change', e=>{ state.scenarioFilters[el.getAttribute('data-filter-bar')][el.getAttribute('data-filter-key')] = e.target.value; render(); });
+  });
+  document.querySelectorAll('[data-filter-clear]').forEach(el=>{
+    el.addEventListener('click', ()=>{ state.scenarioFilters[el.getAttribute('data-filter-clear')] = {skill:'',kb:'',rg:'',complexity:''}; render(); });
+  });
+  document.querySelectorAll('[data-coverage-kb]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      state.scenarioFilters.library = {skill:'',kb:el.getAttribute('data-coverage-kb'),rg:'',complexity:''};
+      state.scenarioLibrarySearch = ''; state.scenarioLibraryReadinessFilter = '';
+      state.diagSectionsOpen['scenario-library'] = true; render();
+      const anchor = document.querySelector('[data-toggle-dash-section="scenario-library"]'); if(anchor && anchor.scrollIntoView) anchor.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+  document.querySelectorAll('[data-assign-pick]').forEach(el=>{
+    const pick = ()=>{ const id=el.getAttribute('data-assign-pick'); state.assignSelectedScenarioId = (state.assignSelectedScenarioId===id ? null : id); const w=document.getElementById('assignWarning'); if(w) w.style.display='none'; render(); };
+    el.addEventListener('click', pick);
+    el.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(); } });
+  });
+  const assignedByTLNameInput=document.getElementById('assignedByTLName');
+  if(assignedByTLNameInput) assignedByTLNameInput.addEventListener('input', e=>{ setLastAssigningTL(e.target.value.trim()); });
   const assignAgentNameSelect=document.getElementById('assignAgentName');
   if(assignAgentNameSelect) assignAgentNameSelect.addEventListener('change', e=>{
     state.assignFormSelectedAgent = e.target.value;
@@ -3671,16 +3889,6 @@ function wireEvents(){
     state.scenarioLibrarySearch = e.target.value;
     render();
   });
-  const scenarioLibraryTopicSelect=document.getElementById('scenarioLibraryTopicSelect');
-  if(scenarioLibraryTopicSelect) scenarioLibraryTopicSelect.addEventListener('change', e=>{
-    state.scenarioLibraryTopicFilter = e.target.value;
-    render();
-  });
-  const scenarioLibraryDifficultySelect=document.getElementById('scenarioLibraryDifficultySelect');
-  if(scenarioLibraryDifficultySelect) scenarioLibraryDifficultySelect.addEventListener('change', e=>{
-    state.scenarioLibraryDifficultyFilter = e.target.value;
-    render();
-  });
   const scenarioLibraryReadinessSelect=document.getElementById('scenarioLibraryReadinessSelect');
   if(scenarioLibraryReadinessSelect) scenarioLibraryReadinessSelect.addEventListener('change', e=>{
     state.scenarioLibraryReadinessFilter = e.target.value;
@@ -3766,6 +3974,23 @@ function wireEvents(){
     if(editUnvalidated) editUnvalidated.addEventListener('input', e=>{ gen.processGrounding.unvalidatedAssumptions = e.target.value.split('\n'); });
     bindText('editCorrectTag', ['correctTag']);
     bindText('editSecondaryTag', ['correctSecondaryTag']);
+    const editSkillCode=document.getElementById('editSkillCode');
+    if(editSkillCode) editSkillCode.addEventListener('change', e=>{ gen.skillCode = e.target.value; }); // TL-only tag; gen.skill (shown to agents in Challenge Mode) is left as-is
+    const editRgStatementType=document.getElementById('editRgStatementType');
+    if(editRgStatementType) editRgStatementType.addEventListener('change', e=>{ gen.rgStatementType = e.target.value; });
+    document.querySelectorAll('[data-edit-kbcat]').forEach(el=>{
+      el.addEventListener('change', e=>{
+        const c = el.getAttribute('data-edit-kbcat');
+        const cur = scenarioKbCategories(gen).filter(x=>x!==c);
+        gen.kbCategories = e.target.checked ? [...cur, c] : cur;
+      });
+    });
+    const editKbArticles=document.getElementById('editKbArticles');
+    if(editKbArticles) editKbArticles.addEventListener('input', e=>{ gen.kbArticles = e.target.value.split('\n'); });
+    const editComplexity=document.getElementById('editComplexity');
+    if(editComplexity) editComplexity.addEventListener('change', e=>{ gen.complexity = e.target.value; });
+    const editRgEmbedded=document.getElementById('editRgEmbedded');
+    if(editRgEmbedded) editRgEmbedded.addEventListener('change', e=>{ gen.rgEmbedded = e.target.checked; });
     const editDifficultySelect=document.getElementById('editDifficulty');
     if(editDifficultySelect) editDifficultySelect.addEventListener('change', e=>{ gen.difficulty = e.target.value; });
     const editRequiredActions=document.getElementById('editRequiredActions');
@@ -7022,7 +7247,6 @@ function renderChallengeSide(){
     <div class="side-identity">
       <div class="savatar">${s.playerName.charAt(0).toUpperCase()}</div>
       <div class="sname">${escapeHtml(s.playerName)}</div>
-      <div class="ssub">${escapeHtml(s.skill)}</div>
       ${(state.ahtMode && slotAhtView(slot)) ? `<div class="aht-live-timer" style="justify-content:center;margin-top:8px;" title="Handling time for this chat. Counts from this player's opening message and keeps running while you work other chats.">${icon('clock',13)} Chatting time: <span data-aht-side="${c.activeSlotIndex}">${ahtSideText(slotAhtView(slot))}</span></div>` : ''}
     </div>
     <div class="side-section">
@@ -7490,6 +7714,7 @@ function renderManageAssignmentsSubsection(){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
         <div style="min-width:0;">
           <strong>${escapeHtml(scenario ? scenario.title : a.scenarioId)}</strong>
+          ${scenario ? `<div style="font-size:11.5px;color:var(--text2);margin-top:2px;">${escapeHtml(scenario.internalTitle && scenario.internalTitle!==scenario.title ? scenario.internalTitle : '')}</div><div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;">${scenarioTagChipsHtml(scenario)}</div>` : ''}
           ${showAgentName ? `<div style="font-size:12px;color:var(--text2);margin-top:3px;">${escapeHtml(a.agentName||'(unknown agent)')}</div>` : ''}
           <div style="font-size:11px;color:var(--text3);margin-top:3px;">Assigned ${new Date(a.assignedAt).toLocaleDateString()}${a.assignedByTL?' by '+escapeHtml(a.assignedByTL):''}</div>
         </div>
@@ -7533,13 +7758,17 @@ function renderManageAssignmentsSubsection(){
 
 async function assignScenarioFromTLForm(){
   const nameSelect = document.getElementById('assignAgentName');
-  const select = document.getElementById('assignScenarioSelect');
   const tlInput = document.getElementById('assignedByTLName');
   const warningEl = document.getElementById('assignWarning');
   const agentName = nameSelect.value.trim();
-  const scenarioId = select.value;
+  const scenarioId = state.assignSelectedScenarioId;
   const assignedByTL = tlInput ? tlInput.value.trim() : '';
   if(!agentName){ nameSelect.focus(); return; }
+  if(!scenarioId || !scenarioById(scenarioId)){
+    warningEl.style.display = 'block';
+    warningEl.innerHTML = `<div class="box" style="border-color:var(--warn);color:var(--warn);font-size:13px;">Pick a scenario from the list first.</div>`;
+    return;
+  }
   setLastAssigningTL(assignedByTL);
   const existing = findPendingAssignment(agentName, scenarioId);
   if(existing){
@@ -7571,6 +7800,27 @@ function renderAssignScenariosSectionBody(){
     ? practicePoolFor(selectedAgent)
     : [...PILOT_SCENARIOS, ...customScenariosCreatedBy(state.scenarioBuilderTLName||getLastAssigningTL()), ...state.customScenarios.filter(cs=>cs.visibility==='library'&&cs.reviewStatus==='approved')];
   const uniqueAssignPool = Array.from(new Map(assignPool.map(s=>[s.id,s])).values());
+  const af = state.scenarioFilters.assign;
+  const filtered = filterScenariosByTags(uniqueAssignPool, af);
+  if(state.assignSelectedScenarioId && !uniqueAssignPool.some(s=>s.id===state.assignSelectedScenarioId)) state.assignSelectedScenarioId = null;
+  const selectedScenario = state.assignSelectedScenarioId ? scenarioById(state.assignSelectedScenarioId) : null;
+  const cxOrder = {'Single issue':0, 'Layered':1, 'High stakes':2};
+  const rowsHtml = filtered.slice().sort((a,b)=> scenarioSkillCode(a).localeCompare(scenarioSkillCode(b)) || (cxOrder[scenarioComplexity(a)]??3)-(cxOrder[scenarioComplexity(b)]??3) || a.title.localeCompare(b.title)).map(s=>{
+    const sel = s.id===state.assignSelectedScenarioId;
+    return `<div class="assign-row ${sel?'selected':''}" data-assign-pick="${escapeHtml(s.id)}" role="button" tabindex="0" aria-pressed="${sel}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div style="min-width:0;">
+          <div style="font-weight:700;font-size:13.5px;">${sel?'\u2713 ':''}${escapeHtml(s.title)} <span style="font-weight:400;font-size:11px;color:var(--text3);">(agent sees this title)</span></div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;">${escapeHtml(s.internalTitle && s.internalTitle!==s.title ? s.internalTitle : (s.agentBriefing||''))}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+          ${s.isCustom ? `<span class="tag-chip" style="border-color:var(--accent);color:var(--accent);">TL-created</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;">${scenarioTagChipsHtml(s)}</div>
+      ${scenarioKbArticlesLineHtml(s)}
+    </div>`;
+  }).join('');
   return `
     <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Shared across devices, instantly - the agent sees this assignment in their own My Assignments as soon as they open the app on any device. Pick from any registered agent, including agents on other TLs' teams - management has shared visibility across the whole roster.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:760px;">
@@ -7578,11 +7828,15 @@ function renderAssignScenariosSectionBody(){
         <option value="">Select agent…</option>
         ${[...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName)).map(a=>`<option value="${escapeHtml(a.canonicalName)}" ${selectedAgent===a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}
       </select>
-      <select id="assignScenarioSelect" style="flex:2;min-width:220px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        ${uniqueAssignPool.map(s=>`<option value="${s.id}">${escapeHtml(s.title)} (${escapeHtml(s.difficulty)})${s.isCustom?' - TL-created':''}</option>`).join('')}
-      </select>
       <input id="assignedByTLName" placeholder="Your name (assigning TL)" value="${escapeHtml(getLastAssigningTL())}" style="flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-      <button id="btnAssignScenario" class="primary">Assign</button>
+    </div>
+    <div style="margin-top:14px;max-width:760px;">
+      ${renderScenarioFilterBar('assign', af, uniqueAssignPool, filtered.length)}
+      ${filtered.length ? rowsHtml : `<div class="empty" style="padding:14px 0;">No scenarios match these filters.</div>`}
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+        <span style="font-size:13px;color:var(--text2);flex:1;min-width:200px;">${selectedScenario ? `Selected: <strong style="color:var(--text);">${escapeHtml(selectedScenario.title)}</strong>` : 'Click a scenario above to select it.'}</span>
+        <button id="btnAssignScenario" class="primary" ${selectedScenario?'':'disabled'}>Assign</button>
+      </div>
     </div>
     ${state.agentDirectory.length===0 ? `<div style="color:var(--text3);font-size:11.5px;margin-top:8px;">No agents registered yet - register one below first.</div>` : ''}
     ${selectedAgent ? '' : `<div style="color:var(--text3);font-size:11.5px;margin-top:8px;">Pick an agent above to narrow this list to exactly what they're allowed to see (private/team-only custom scenarios included only where that agent qualifies).</div>`}
@@ -7637,49 +7891,66 @@ function renderTeamProgressSectionBody(){
 
 function renderScenarioLibrarySectionBody(){
   const readinessColor = {PILOT_READY:'var(--ok)', PRACTICE_ONLY:'var(--warn)', ENGINE_TEST_ONLY:'var(--bad)'};
-  const topics = [...new Set(SCENARIOS.map(s=>s.topic))].sort();
-  const difficulties = [...new Set(SCENARIOS.map(s=>s.difficulty))];
   const readinessLevels = [...new Set(SCENARIOS.map(s=>s.readiness).filter(Boolean))];
+  const lf = state.scenarioFilters.library;
   const q = (state.scenarioLibrarySearch||'').trim().toLowerCase();
   let list = SCENARIOS.slice();
-  if(q) list = list.filter(s=>[s.internalTitle, s.title, s.topic, s.skill].filter(Boolean).join(' ').toLowerCase().includes(q));
-  if(state.scenarioLibraryTopicFilter) list = list.filter(s=>s.topic===state.scenarioLibraryTopicFilter);
-  if(state.scenarioLibraryDifficultyFilter) list = list.filter(s=>s.difficulty===state.scenarioLibraryDifficultyFilter);
+  if(q) list = list.filter(s=>[s.internalTitle, s.title, s.skill, ...scenarioKbCategories(s), ...scenarioKbArticles(s)].filter(Boolean).join(' ').toLowerCase().includes(q));
   if(state.scenarioLibraryReadinessFilter) list = list.filter(s=>s.readiness===state.scenarioLibraryReadinessFilter);
-  const controls = `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
-    <input id="scenarioLibrarySearchInput" placeholder="Search scenarios…" value="${escapeHtml(state.scenarioLibrarySearch||'')}" style="flex:1;min-width:180px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-    <select id="scenarioLibraryTopicSelect" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-      <option value="">All topics</option>
-      ${topics.map(t=>`<option value="${escapeHtml(t)}" ${state.scenarioLibraryTopicFilter===t?'selected':''}>${escapeHtml(t)}</option>`).join('')}
-    </select>
-    <select id="scenarioLibraryDifficultySelect" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-      <option value="">All difficulties</option>
-      ${difficulties.map(d=>`<option value="${escapeHtml(d)}" ${state.scenarioLibraryDifficultyFilter===d?'selected':''}>${escapeHtml(d)}</option>`).join('')}
-    </select>
-    <select id="scenarioLibraryReadinessSelect" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+  list = filterScenariosByTags(list, lf);
+  const controls = `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+    <input id="scenarioLibrarySearchInput" placeholder="Search scenarios or KB articles\u2026" value="${escapeHtml(state.scenarioLibrarySearch||'')}" style="flex:1;min-width:180px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+    <select id="scenarioLibraryReadinessSelect" aria-label="Filter by readiness" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
       <option value="">All readiness</option>
       ${readinessLevels.map(r=>`<option value="${escapeHtml(r)}" ${state.scenarioLibraryReadinessFilter===r?'selected':''}>${escapeHtml(r)}</option>`).join('')}
     </select>
-  </div>`;
+  </div>${renderScenarioFilterBar('library', lf, SCENARIOS, list.length)}`;
   const refRows = list.map(s=>{
     const initial = s.playerName.charAt(0).toUpperCase();
-    return `<div class="category-scenario-card" data-scenario="${s.id}" style="max-width:640px;">
+    return `<div class="category-scenario-card" data-scenario="${s.id}" style="max-width:760px;align-items:flex-start;">
       <div class="qavatar" style="background:var(--accent);">${initial}</div>
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:600;font-size:13.5px;">${escapeHtml(s.internalTitle || s.title)}</div>
-        <div style="font-size:11.5px;color:var(--text3);margin-top:2px;">${escapeHtml(s.topic)} \u00b7 ${escapeHtml(s.skill)} \u00b7 agent sees: "${escapeHtml(s.title)}"</div>
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
+          <div style="font-weight:600;font-size:13.5px;">${escapeHtml(s.internalTitle || s.title)}</div>
+          <span style="font-size:10px;font-weight:700;color:${readinessColor[s.readiness]||'var(--text3)'};border:1px solid ${readinessColor[s.readiness]||'var(--text3)'};border-radius:20px;padding:2px 7px;white-space:nowrap;">${s.readiness||'UNCLASSIFIED'}</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:2px;">agent sees: "${escapeHtml(s.title)}"</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${scenarioTagChipsHtml(s)}</div>
+        ${scenarioKbArticlesLineHtml(s)}
       </div>
-      <span class="diff-pill diff-${s.difficulty}">${s.difficulty}</span>
-      <span style="font-size:10px;font-weight:700;color:${readinessColor[s.readiness]||'var(--text3)'};border:1px solid ${readinessColor[s.readiness]||'var(--text3)'};border-radius:20px;padding:2px 7px;margin-left:6px;white-space:nowrap;">${s.readiness||'UNCLASSIFIED'}</span>
     </div>`;
   }).join('');
   return `
     <div style="color:var(--text2);font-size:13px;margin-bottom:10px;">Agents only ever see topics and get randomly assigned within one - this list, by name, is for your own testing and review only. Click any to start it directly.</div>
     ${controls}
-    <div style="color:var(--text3);font-size:11.5px;margin-bottom:10px;">${list.length} of ${SCENARIOS.length} built-in scenarios</div>
     ${list.length ? refRows : `<div class="empty" style="padding:14px 0;">No scenarios match these filters.</div>`}
     ${renderDashSubsection('review-queue', `Review Queue - Shared Library Submissions (${libraryReviewQueue().length})`, renderReviewQueueSubsection, false)}
   `;
+}
+
+// KB coverage: how many scenarios exist per KB category. Built-in = assignable built-ins (Engine Test Only excluded);
+// TL-created = custom scenarios approved for the shared library. A category can count a scenario more than once
+// across categories, since a scenario can belong to several.
+function renderKbCoverageSectionBody(){
+  const builtIn = PILOT_SCENARIOS;
+  const approvedCustom = state.customScenarios.filter(cs=>cs.visibility==='library' && cs.reviewStatus==='approved');
+  const rows = KB_CATEGORIES.map(c=>{
+    const b = builtIn.filter(s=>scenarioKbCategories(s).includes(c.name)).length;
+    const t = approvedCustom.filter(s=>scenarioKbCategories(s).includes(c.name)).length;
+    return {c, b, t, total:b+t};
+  });
+  const max = Math.max(1, ...rows.map(r=>r.total));
+  const zero = rows.filter(r=>r.total===0);
+  return `<div style="color:var(--text2);font-size:13px;margin-bottom:12px;">Practice scenarios per KB category. A scenario tagged with two categories counts in both. Engine-test-only scenarios and private/team-only TL drafts aren't counted. Click a category to browse it in the Scenario Library.</div>
+    ${zero.length ? `<div class="box" style="border-color:var(--warn);color:var(--warn);font-size:12.5px;max-width:640px;">\u26a0 No scenarios yet for: ${zero.map(r=>escapeHtml(r.c.name)).join(', ')}</div>` : ''}
+    <div style="max-width:640px;">
+      ${rows.map(r=>`<div data-coverage-kb="${escapeHtml(r.c.name)}" role="button" tabindex="0" style="display:grid;grid-template-columns:minmax(150px,220px) 1fr 70px;gap:10px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--hairline);cursor:pointer;">
+        <span style="display:flex;align-items:center;gap:7px;font-size:13px;"><span class="kb-dot" style="background:${r.c.color};"></span>${escapeHtml(r.c.name)}</span>
+        <span style="background:var(--panel);border-radius:4px;height:10px;overflow:hidden;">${r.total ? `<span style="display:block;height:100%;width:${Math.round(r.total/max*100)}%;background:${r.c.color};"></span>` : ''}</span>
+        <span style="font-size:12.5px;text-align:right;font-weight:700;color:${r.total?'var(--text)':'var(--warn)'};" title="${r.b} built-in, ${r.t} TL-created">${r.total ? r.total : '0 \u26a0'}</span>
+      </div>`).join('')}
+    </div>
+    <div style="color:var(--text3);font-size:11.5px;margin-top:8px;">${builtIn.length} built-in practice scenarios${approvedCustom.length ? ` and ${approvedCustom.length} approved TL-created` : ''}.</div>`;
 }
 
 // ---------- TL SCENARIO BUILDER: shared labels/helpers ----------
@@ -7724,10 +7995,11 @@ function renderReviewQueueSubsection(){
         <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
           <div>
             <strong>${escapeHtml(cs.title)}</strong>
-            <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${escapeHtml(cs.topic)} · ${escapeHtml(cs.difficulty)} · created by ${escapeHtml(cs.createdBy||'(unknown)')} on ${new Date(cs.createdAt).toLocaleDateString()}${cs.sourceType==='duplicate' ? ' · duplicated from '+escapeHtml(cs.duplicatedFromId||'?') : ''}</div>
+            <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${escapeHtml(cs.topic)} · created by ${escapeHtml(cs.createdBy||'(unknown)')} on ${new Date(cs.createdAt).toLocaleDateString()}${cs.sourceType==='duplicate' ? ' · duplicated from '+escapeHtml(cs.duplicatedFromId||'?') : ''}</div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;">${renderCustomScenarioBadges(cs)}</div>
         </div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${scenarioTagChipsHtml(cs)}</div>
         <div style="margin-top:8px;font-size:12.5px;color:var(--text2);"><strong>Agent briefing:</strong> ${escapeHtml(cs.agentBriefing)}</div>
         <div style="margin-top:4px;font-size:12.5px;color:var(--text2);"><strong>Process grounding (KB text):</strong> ${escapeHtml(cs.processGrounding.kbText)}</div>
         ${cs.reviewNotes ? `<div style="margin-top:6px;font-size:12px;color:var(--warn);"><strong>Previous review notes:</strong> ${escapeHtml(cs.reviewNotes)}${cs.reviewedBy?' — '+escapeHtml(cs.reviewedBy):''}</div>` : ''}
@@ -7946,6 +8218,37 @@ function renderScenarioPreviewEditForm(){
         
         
       </div>
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+        <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:6px;">TL tags <span style="font-weight:400;color:var(--text3);">(shown in Assign Scenarios and Manage Assignments only - never to agents)</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <label style="font-size:12px;color:var(--text2);">Primary skill
+            <select id="editSkillCode" style="display:block;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;">
+              ${SKILL_CATALOGUE.map(k=>`<option value="${k.code}" ${gen.skillCode===k.code?'selected':''}>${k.code} \u00b7 ${escapeHtml(k.name)}</option>`).join('')}
+              <option value="CUSTOM" ${(!gen.skillCode||gen.skillCode==='CUSTOM')?'selected':''}>Custom / not set</option>
+            </select>
+          </label>
+          <label style="font-size:12px;color:var(--text2);">RG statement type
+            <select id="editRgStatementType" style="display:block;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;">
+              <option value="" ${!scenarioRgType(gen)?'selected':''}>Not set</option>
+              ${RG_STATEMENT_TYPES.map(t=>`<option value="${t}" ${scenarioRgType(gen)===t?'selected':''}>${t}</option>`).join('')}
+            </select>
+          </label>
+          <label style="font-size:12px;color:var(--text2);">Complexity
+            <select id="editComplexity" style="display:block;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;">
+              <option value="" ${!scenarioComplexity(gen)?'selected':''}>Not set</option>
+              ${COMPLEXITY_LEVELS.map(c=>`<option value="${escapeHtml(c.name)}" ${scenarioComplexity(gen)===c.name?'selected':''} title="${escapeHtml(c.desc)}">${escapeHtml(c.name)}</option>`).join('')}
+            </select>
+          </label>
+          <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:5px;margin-top:18px;"><input type="checkbox" id="editRgEmbedded" ${scenarioRgEmbedded(gen)?'checked':''}> RG signal is embedded in another issue</label>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-top:8px;">KB categories (pick all that apply)</div>
+        <div style="display:flex;gap:4px 12px;flex-wrap:wrap;margin-top:4px;">
+          ${KB_CATEGORIES.map(c=>`<label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" data-edit-kbcat="${escapeHtml(c.name)}" ${scenarioKbCategories(gen).includes(c.name)?'checked':''}> <span class="kb-dot" style="background:${c.color};"></span>${escapeHtml(c.name)}</label>`).join('')}
+        </div>
+        <label style="font-size:12px;color:var(--text2);display:block;margin-top:8px;">KB articles (one per line, exact Notion article names)
+          <textarea id="editKbArticles" style="width:100%;min-height:40px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;">${escapeHtml(scenarioKbArticles(gen).join('\n'))}</textarea>
+        </label>
+      </div>
       <label style="font-size:12px;color:var(--text2);">Pre-chat: What brings you here? <span style="color:var(--text3);">(the live-chat category the player would pick, e.g. Promotions &amp; Tournaments. Confirm it matches a real option. Not the scenario title.)</span>
         <input id="editPreChatReason" value="${escapeHtml(gen.preChatReason||'')}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
       </label>
@@ -8069,7 +8372,7 @@ function renderMyCreatedScenariosList(myScenarios){
     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <div>
         <strong>${escapeHtml(cs.title)}</strong>
-        <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${escapeHtml(cs.topic)} · ${escapeHtml(cs.difficulty)} · ${escapeHtml(scenarioVisibilityLabel(cs))} · v${cs.version||1}</div>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${escapeHtml(cs.topic)} · ${escapeHtml(scenarioVisibilityLabel(cs))} · v${cs.version||1}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;">${renderCustomScenarioBadges(cs)}</div>
     </div>
@@ -8152,6 +8455,7 @@ function renderDiagnostics(){
     ${renderDashSection('team-progress', 'Team Progress', 'View and review attempts', renderTeamProgressSectionBody, 'chart', '#3ecf8e')}
     ${renderDashSection('feedback', 'Feedback & Suggestions', `${unresolvedCount} unresolved suggestion${unresolvedCount===1?'':'s'}`, renderFeedbackManagementSectionBody, 'chat', '#e2a33d')}
     ${renderDashSection('scenario-library', 'Scenario Library', `Browse ${SCENARIOS.length} scenarios`, renderScenarioLibrarySectionBody, 'grid', '#5bc0be')}
+    ${renderDashSection('kb-coverage', 'KB Coverage', (()=>{ const z = KB_CATEGORIES.filter(c=>!PILOT_SCENARIOS.some(s=>scenarioKbCategories(s).includes(c.name)) && !state.customScenarios.some(cs=>cs.visibility==='library'&&cs.reviewStatus==='approved'&&scenarioKbCategories(cs).includes(c.name))).length; return z ? `${z} of ${KB_CATEGORIES.length} KB categories have no scenarios` : `All ${KB_CATEGORIES.length} KB categories covered`; })(), renderKbCoverageSectionBody, 'check', '#3ecf8e')}
     ${renderDashSection('system-tests', 'System Tests', 'Development diagnostics', renderSystemTestsSectionBody, 'gear', '#8a919c')}
   </div>`;
 }
@@ -8397,7 +8701,7 @@ function renderNameModal(){
   overlay.className='modal-overlay';
   overlay.innerHTML = `<div class="modal" style="max-width:420px;">
     <h2>What\u2019s your name?</h2>
-    <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Please enter your full first and last name. Your attempt details, including transcripts and documentation, are saved to Team Progress for your TL/management to review as part of coaching. A chat name or other name you go by works too, if that's easier - just your name, no account or password.</div>
+    <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Use your full name so your TL can see your practice results.</div>
     <input id="nameModalInput" type="text" placeholder="e.g. Poojan Solanki" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
     <div id="nameModalRecognized" style="margin-top:10px;font-size:12.5px;color:var(--ok);display:none;"></div>
     <div style="margin-top:16px;"><button id="btnSaveName" class="primary">Continue</button></div>
