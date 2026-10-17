@@ -107,6 +107,16 @@
   .tag-chip.cx-layered{border-color:var(--warn-border);background:var(--warn-bg);color:var(--warn);font-weight:700;}
   .tag-chip.cx-high{border-color:var(--bad-border2);background:var(--bad-bg2);color:var(--bad);font-weight:700;}
   .tag-chip.rg-unset{border-style:dashed;color:var(--text3);}
+  .assign-picker-field{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 12px;font-size:13.5px;}
+  .assign-picker-field.placeholder{color:var(--text3);}
+  .assign-picker-panel{border:1px solid var(--border);border-radius:10px;background:var(--panel2);margin-top:6px;padding:10px;max-height:400px;display:flex;flex-direction:column;}
+  .assign-picker-list{overflow-y:auto;min-height:0;flex:1;margin-top:4px;}
+  .cx-legend{display:inline-flex;align-items:center;gap:10px;font-size:11px;color:var(--text3);}
+  .cx-legend i{display:inline-block;width:4px;height:12px;border-radius:2px;margin-right:4px;vertical-align:middle;}
+  .manage-group{border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden;}
+  .manage-group-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;background:var(--panel);font-size:13px;}
+  .manage-group-head:hover{background:var(--hover-tint);}
+  .manage-group-body{padding:8px 10px 4px 18px;}
   .assign-row{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;background:var(--panel);}
   .assign-row:hover{border-color:var(--accent);}
   .assign-row.selected{border-color:var(--accent);background:var(--active-bg);box-shadow:0 0 0 1px var(--accent) inset;}
@@ -1983,6 +1993,8 @@ let state = {
   diagSectionsOpen:{},
   diagSubsectionsOpen:{},
   manageAssignmentsAgent:'', // which agent's assignments are shown in the Manage Assignments subsection
+  assignDueDate:'', tlAlertSince:null, tlAlertName:'', tlAlertDismissed:false,
+  assignPickerOpen:false, assignSearch:'', manageOpen:{}, manageJumpTarget:null, libraryExpanded:{}, // TL list UI state (session-only)
   scenarioFilters:{assign:{skill:'',kb:'',rg:'',complexity:''}, library:{skill:'',kb:'',rg:'',complexity:''}}, assignSelectedScenarioId:null, // TL Assign Scenarios list filters + selection (session-only)
   assignFormSelectedAgent:'', // narrows the Assign Scenarios scenario dropdown to what this agent can see
   agentDirectorySearch:'',   // search text for the All Registered Agents subsection
@@ -2142,14 +2154,20 @@ function scenarioTagChipsHtml(s){
   if(!s) return '';
   const code = scenarioSkillCode(s);
   const rg = scenarioRgType(s);
-  const rgCls = rg==='Direct' ? 'rg-direct' : rg==='Indirect' ? 'rg-indirect' : rg==='Concerning' ? 'rg-concerning' : (rg==='None' ? '' : 'rg-unset');
+  const rgCls = rg==='Direct' ? 'rg-direct' : rg==='Indirect' ? 'rg-indirect' : rg==='Concerning' ? 'rg-concerning' : 'rg-unset';
   const cats = scenarioKbCategories(s);
-  return complexityChipHtml(s)
-    + `<span class="tag-chip skill" title="Primary skill">${escapeHtml(code)} \u00b7 ${escapeHtml(code==='CUSTOM' ? (s.skill||'Custom') : skillNameForCode(code))}</span>`
-    + `<span class="tag-chip ${rgCls}" title="RG statement type">RG: ${escapeHtml(rg || 'not set')}</span>`
+  const shown = cats.slice(0,2), rest = cats.slice(2);
+  return `<span class="tag-chip skill" title="${escapeHtml(code==='CUSTOM' ? 'Custom: '+(s.skill||'not set') : skillNameForCode(code))}">${escapeHtml(code)}</span>`
+    + (rg==='None' ? '' : `<span class="tag-chip ${rgCls}" title="RG statement type">RG: ${escapeHtml(rg || 'not set')}</span>`)
     + (scenarioRgEmbedded(s) ? `<span class="tag-chip rg-direct" title="The RG signal is buried inside another issue">RG embedded</span>` : '')
-    + (cats.length ? cats.map(kbCategoryChipHtml).join('') : `<span class="tag-chip rg-unset" title="KB category">No KB category</span>`);
+    + (cats.length ? shown.map(kbCategoryChipHtml).join('') + (rest.length ? `<span class="tag-chip" title="${escapeHtml(rest.join(', '))}">+${rest.length}</span>` : '') : `<span class="tag-chip rg-unset" title="KB category">No KB category</span>`);
 }
+// Complexity is shown as a 4px coloured left border on the row (green / amber / red), name in the tooltip.
+const COMPLEXITY_COLORS = {'Single issue':'var(--ok)', 'Layered':'var(--warn)', 'High stakes':'var(--bad)'};
+function complexityBorderStyle(s){ const cx = scenarioComplexity(s); return `border-left:4px solid ${COMPLEXITY_COLORS[cx]||'var(--border)'};`; }
+function complexityTitle(s){ const cx = scenarioComplexity(s); return cx ? 'Complexity: '+cx : 'Complexity not set'; }
+function complexityLegendHtml(){ return `<span class="cx-legend" aria-label="Complexity colours">${COMPLEXITY_LEVELS.map(c=>`<span title="${escapeHtml(c.desc)}"><i style="background:${COMPLEXITY_COLORS[c.name]};"></i>${escapeHtml(c.name)}</span>`).join('')}</span>`; }
+const SCENARIO_ROW_KEY_TEXT = 'Bold title = what the agent sees. Grey line = what it\u2019s testing.';
 function scenarioKbArticlesLineHtml(s){
   const arts = scenarioKbArticles(s);
   return arts.length ? `<div style="font-size:11px;color:var(--text3);margin-top:5px;">KB articles: ${arts.map(a=>escapeHtml(a)).join(' \u00b7 ')}</div>` : '';
@@ -2192,6 +2210,7 @@ function renderScenarioFilterBar(prefix, f, pool, shownCount){
       ${anyUnsetCx ? `<option value="unset" ${f.complexity==='unset'?'selected':''}>Complexity not set</option>` : ''}
     </select>
     ${active ? `<button class="small" data-filter-clear="${prefix}">Clear filters</button>` : ''}
+    ${complexityLegendHtml()}
     <span style="font-size:12px;color:var(--text3);margin-left:auto;">Showing ${shownCount} of ${pool.length}</span>
   </div>`;
 }
@@ -3097,6 +3116,7 @@ function render(){
   // leaving you where you were. Capture before the rebuild, restore after.
   const prevMainScroll = document.querySelector('.main');
   const prevMainScrollTop = prevMainScroll ? prevMainScroll.scrollTop : null;
+  const keepScroll = {}; document.querySelectorAll('[data-keep-scroll][id]').forEach(el=>{ keepScroll[el.id] = el.scrollTop; });
   const prevSideScroll = document.querySelector('.side');
   const prevSideScrollTop = prevSideScroll ? prevSideScroll.scrollTop : null;
   captureChallengeScroll();
@@ -3115,6 +3135,7 @@ function render(){
     const newMain = document.querySelector('.main');
     if(newMain) newMain.scrollTop = prevMainScrollTop;
   }
+  Object.keys(keepScroll).forEach(id=>{ const el=document.getElementById(id); if(el) el.scrollTop = keepScroll[id]; });
   if(prevSideScrollTop!==null){
     const newSide = document.querySelector('.side');
     if(newSide) newSide.scrollTop = prevSideScrollTop;
@@ -3248,6 +3269,7 @@ function renderCategoriesView(){
     </div>`;
   }).join('');
   const assignedBanner = renderMyAssignmentsHomeWidget();
+  const newAssignmentBanner = renderNewAssignmentBanner();
   const totalScenarios = pool.length;
   const totalTopics = Object.keys(topics).length;
   const hero = `<div class="home-hero">
@@ -3262,7 +3284,7 @@ function renderCategoriesView(){
     </div>
   </div>`;
   return `<div class="main" style="padding:32px;overflow-y:auto;">
-    ${hero}
+    ${newAssignmentBanner}${hero}
     ${assignedBanner}
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-top:${assignedBanner?'28px':'0'};">
       <div>
@@ -3441,12 +3463,46 @@ function wireEvents(){
   if(btnRandomizeTopic) btnRandomizeTopic.addEventListener('click', ()=> randomizeAndMaybeConfirm(practicePoolFor(state.agentName).filter(s=>s.topic===state.categoryFilter)));
   const railTLArea=document.getElementById('railTLArea');
   if(railTLArea) railTLArea.addEventListener('click', ()=>{
-    if(state.tlUnlocked){ state.view = state.view==='diagnostics'?'sim':'diagnostics'; render(); }
+    if(state.tlUnlocked){ if(state.view!=='diagnostics') enterTLArea(); state.view = state.view==='diagnostics'?'sim':'diagnostics'; render(); }
     else renderTLPasswordModal();
   });
   const btnLockTLArea=document.getElementById('btnLockTLArea');
   if(btnLockTLArea) btnLockTLArea.addEventListener('click', ()=>{ state.tlUnlocked=false; state.view='sim'; render(); });
 
+  const assignDueDateInput=document.getElementById('assignDueDateInput');
+  if(assignDueDateInput) assignDueDateInput.addEventListener('change', e=>{ state.assignDueDate = isValidDueDate(e.target.value) ? e.target.value : ''; render(); });
+  const btnClearDueDate=document.getElementById('btnClearDueDate');
+  if(btnClearDueDate) btnClearDueDate.addEventListener('click', ()=>{ state.assignDueDate=''; render(); });
+  const btnDismissNewAssignments=document.getElementById('btnDismissNewAssignments');
+  if(btnDismissNewAssignments) btnDismissNewAssignments.addEventListener('click', ()=>{ markAssignmentsSeen((btnDismissNewAssignments.getAttribute('data-ids')||'').split(',').filter(Boolean)); render(); });
+  const btnTLAlertDismiss=document.getElementById('btnTLAlertDismiss');
+  if(btnTLAlertDismiss) btnTLAlertDismiss.addEventListener('click', ()=>{ state.tlAlertDismissed = true; render(); });
+  const btnTLAlertManage=document.getElementById('btnTLAlertManage');
+  if(btnTLAlertManage) btnTLAlertManage.addEventListener('click', ()=>{
+    state.diagSectionsOpen['assign-scenarios'] = true; state.diagSubsectionsOpen['manage-assignments'] = true;
+    const key = 'tl:'+(state.tlAlertName||'').trim().toLowerCase(); if(state.tlAlertName) state.manageOpen[key] = true;
+    render();
+    setTimeout(()=>{ const t=document.querySelector('[data-toggle-dash-subsection="manage-assignments"]'); if(t && t.scrollIntoView) t.scrollIntoView({behavior:'smooth', block:'start'}); }, 0);
+  });
+  const btnTLAlertProgress=document.getElementById('btnTLAlertProgress');
+  if(btnTLAlertProgress) btnTLAlertProgress.addEventListener('click', ()=>{
+    const roster = state.tlRosters.find(r=>namesMatch(r.tlName, state.tlAlertName));
+    openTeamProgress(roster || undefined);
+  });
+  const btnSaveTLContact=document.getElementById('btnSaveTLContact');
+  if(btnSaveTLContact) btnSaveTLContact.addEventListener('click', async ()=>{
+    const name = (document.getElementById('tlContactName').value||'').trim();
+    const email = (document.getElementById('tlContactEmail').value||'').trim();
+    const slack = (document.getElementById('tlContactSlack').value||'').trim();
+    const st = document.getElementById('tlContactStatus');
+    const show = (msg, ok)=>{ if(st){ st.style.display='block'; st.style.color = ok ? 'var(--ok)' : 'var(--bad)'; st.textContent = msg; } };
+    if(!name){ show('Enter your name first.', false); return; }
+    if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ show('That email address doesn\u2019t look right.', false); return; }
+    setLastAssigningTL(name);
+    await saveTLContact(name, email, slack);
+    render();
+    const st2 = document.getElementById('tlContactStatus'); if(st2){ st2.style.display='block'; st2.style.color='var(--ok)'; st2.textContent='Saved.'; }
+  });
   const btnAssignScenario=document.getElementById('btnAssignScenario');
   if(btnAssignScenario) btnAssignScenario.addEventListener('click', assignScenarioFromTLForm);
   document.querySelectorAll('[data-filter-bar]').forEach(el=>{
@@ -3463,8 +3519,27 @@ function wireEvents(){
       const anchor = document.querySelector('[data-toggle-dash-section="scenario-library"]'); if(anchor && anchor.scrollIntoView) anchor.scrollIntoView({behavior:'smooth', block:'start'});
     });
   });
+  const assignPickerField=document.getElementById('assignPickerField');
+  if(assignPickerField) assignPickerField.addEventListener('click', ()=>{ state.assignPickerOpen = !state.assignPickerOpen; render(); if(state.assignPickerOpen){ const si=document.getElementById('assignSearchInput'); if(si) si.focus(); } });
+  const assignSearchInput=document.getElementById('assignSearchInput');
+  if(assignSearchInput){
+    assignSearchInput.addEventListener('input', e=>{ state.assignSearch = e.target.value; render(); });
+    assignSearchInput.addEventListener('keydown', e=>{ if(e.key==='Escape'){ state.assignPickerOpen=false; render(); } });
+  }
+  document.querySelectorAll('[data-manage-toggle]').forEach(el=>{
+    const t = ()=>{ const k=el.getAttribute('data-manage-toggle'); state.manageOpen[k] = !state.manageOpen[k]; render(); };
+    el.addEventListener('click', t);
+    el.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); } });
+  });
+  document.querySelectorAll('[data-library-expand]').forEach(el=>{
+    el.addEventListener('click', e=>{ e.stopPropagation(); const id=el.getAttribute('data-library-expand'); state.libraryExpanded[id] = !state.libraryExpanded[id]; render(); });
+  });
+  if(state.manageJumpTarget){
+    const targetId = state.manageJumpTarget; state.manageJumpTarget = null;
+    setTimeout(()=>{ const target = document.getElementById(targetId); if(target && target.scrollIntoView) target.scrollIntoView({behavior:'smooth', block:'center'}); }, 0); // after render() restores the page scroll
+  }
   document.querySelectorAll('[data-assign-pick]').forEach(el=>{
-    const pick = ()=>{ const id=el.getAttribute('data-assign-pick'); state.assignSelectedScenarioId = (state.assignSelectedScenarioId===id ? null : id); const w=document.getElementById('assignWarning'); if(w) w.style.display='none'; render(); };
+    const pick = ()=>{ const id=el.getAttribute('data-assign-pick'); state.assignSelectedScenarioId = id; state.assignPickerOpen = false; const w=document.getElementById('assignWarning'); if(w) w.style.display='none'; render(); };
     el.addEventListener('click', pick);
     el.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(); } });
   });
@@ -3739,12 +3814,18 @@ function wireEvents(){
     const chatName = (document.getElementById('regAgentChatName').value||'').trim();
     const additionalName = (document.getElementById('regAgentAltName').value||'').trim();
     const tlName = (document.getElementById('regAgentTLName').value||'').trim();
+    const email = (document.getElementById('regAgentEmail').value||'').trim();
+    const slackHandle = (document.getElementById('regAgentSlack').value||'').trim();
     const statusEl = document.getElementById('registerAgentStatus');
     if(!fullName){
       if(statusEl){ statusEl.style.display='block'; statusEl.style.color='var(--bad)'; statusEl.textContent='Full name is required.'; }
       return;
     }
-    await registerAgent({fullName, chatName, additionalName, tlName});
+    if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+      if(statusEl){ statusEl.style.display='block'; statusEl.style.color='var(--bad)'; statusEl.textContent='That email address doesn\u2019t look right.'; }
+      return;
+    }
+    await registerAgent({fullName, chatName, additionalName, tlName, email, slackHandle});
     if(statusEl){ statusEl.style.display='block'; statusEl.style.color='var(--ok)'; statusEl.textContent=`Registered ${fullName}.`; }
     render();
   });
@@ -3763,6 +3844,8 @@ function wireEvents(){
       if(altNameInput) altNameInput.value = (profile.aliases||[]).find(a=>a!==profile.chatName) || '';
       const owningRoster = state.tlRosters.find(r=>r.agents.some(a=>namesMatch(a, canonicalName)));
       if(tlNameInput) tlNameInput.value = owningRoster ? owningRoster.tlName : (tlNameInput.value||'');
+      const emailInput = document.getElementById('regAgentEmail'); if(emailInput) emailInput.value = profile.email || '';
+      const slackInput = document.getElementById('regAgentSlack'); if(slackInput) slackInput.value = profile.slackHandle || '';
       if(fullNameInput) fullNameInput.scrollIntoView({behavior:'smooth', block:'center'});
     });
   });
@@ -3803,7 +3886,19 @@ function wireEvents(){
   // ---------- Manage Assignments subsection ----------
   const manageAssignmentsAgentSelect=document.getElementById('manageAssignmentsAgentSelect');
   if(manageAssignmentsAgentSelect) manageAssignmentsAgentSelect.addEventListener('change', e=>{
-    state.manageAssignmentsAgent = e.target.value;
+    const agent = e.target.value;
+    state.manageAssignmentsAgent = agent;
+    if(agent){
+      // Open every TL group that holds this agent's assignments, plus the agent row(s), then scroll to the first.
+      let first = null;
+      state.assignments.filter(a=>namesMatch(a.agentName, agent)).forEach(a=>{
+        const tlId = ((a.assignedByTL||'').trim() || 'Unassigned TL').toLowerCase();
+        const agKey = 'ag:'+tlId+'|'+(canonicalNameFor(a.agentName)||'(unknown agent)').toLowerCase();
+        state.manageOpen['tl:'+tlId] = true; state.manageOpen[agKey] = true;
+        if(!first) first = 'manage-'+agKey.replace(/[^a-z0-9]+/gi,'-');
+      });
+      state.manageJumpTarget = first;
+    }
     render();
   });
   document.querySelectorAll('[data-view-assignment-attempt]').forEach(el=>{
@@ -4541,6 +4636,7 @@ function renderPreChatCardHtml(s){
 }
 
 function startScenario(id, assignmentId){
+  if(assignmentId) markAssignmentsSeen([assignmentId]);
   if(state.ahtTimerInterval){ clearInterval(state.ahtTimerInterval); state.ahtTimerInterval=null; }
   if(state.silenceCheckInterval){ clearInterval(state.silenceCheckInterval); state.silenceCheckInterval=null; }
   const s=scenarioById(id);
@@ -6074,15 +6170,15 @@ async function upsertAgentDirectoryRemote(profile){
     console.error('Saving this agent profile to the shared backend failed (saved locally only for now):', err);
   }
 }
-async function upsertTLRosterRemote(tlName, addAgents){
+async function upsertTLRosterRemote(tlName, addAgents, extra){
   try{ localStorage.setItem(TL_ROSTERS_KEY, JSON.stringify(state.tlRosters)); }
   catch(err){ console.error('Saving TL rosters locally failed:', err); }
   try{
     const resp = await fetch(BACKEND_URL + '/api/store/tl-rosters/upsert', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({tlName, addAgents})
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(Object.assign({tlName, addAgents}, extra||{}))
     });
     const data = await resp.json();
-    if(Array.isArray(data.tlRosters)){ state.tlRosters = data.tlRosters; try{ localStorage.setItem(TL_ROSTERS_KEY, JSON.stringify(state.tlRosters)); }catch(err){} }
+    if(Array.isArray(data.tlRosters)){ state.tlRosters = data.tlRosters; mergeTlContactsIntoRosters(); try{ localStorage.setItem(TL_ROSTERS_KEY, JSON.stringify(state.tlRosters)); }catch(err){} }
   }catch(err){
     console.error('Saving this TL roster update to the shared backend failed (saved locally only for now):', err);
   }
@@ -6151,11 +6247,15 @@ async function resolveAmbiguousName(rawName, canonicalName){
 // Registers or updates one agent's canonical profile, and (optionally) attaches them to a TL's
 // roster. Editing an existing canonicalName (case-insensitive) replaces that profile's names/aliases
 // rather than creating a duplicate - this is what keeps the roster editable per the spec.
-async function registerAgent({fullName, chatName, additionalName, tlName}){
+async function registerAgent({fullName, chatName, additionalName, tlName, email, slackHandle}){
   const canonicalName = fullName.trim();
   const aliases = [chatName, additionalName].map(a=>(a||'').trim()).filter(Boolean);
   const existingIdx = state.agentDirectory.findIndex(a => (a.canonicalName||'').trim().toLowerCase()===canonicalName.toLowerCase());
   const profile = { canonicalName, fullName: canonicalName, chatName:(chatName||'').trim()||null, aliases };
+  // Optional contact details - stored only, nothing is sent. Undefined (not passed) keeps whatever the profile already had.
+  const prev = existingIdx>=0 ? state.agentDirectory[existingIdx] : null;
+  profile.email = email!==undefined ? ((email||'').trim()||null) : (prev ? prev.email||null : null);
+  profile.slackHandle = slackHandle!==undefined ? ((slackHandle||'').trim()||null) : (prev ? prev.slackHandle||null : null);
   if(existingIdx>=0) state.agentDirectory[existingIdx] = profile;
   else state.agentDirectory.push(profile);
   await upsertAgentDirectoryRemote(profile); // single-profile write - never clobbers another TL's concurrent registration
@@ -6350,13 +6450,14 @@ async function deleteCustomScenarioRemote(id){
 function findPendingAssignment(agentName, scenarioId){
   return state.assignments.find(a => !a.completed && a.scenarioId===scenarioId && namesMatch(a.agentName, agentName));
 }
-async function createAssignment(agentName, scenarioId, assignedByTL){
+async function createAssignment(agentName, scenarioId, assignedByTL, dueDate){
   const entry = {
     id: 'a'+Date.now()+Math.random().toString(36).slice(2,7),
     agentName: agentName.trim(), scenarioId, assignedAt: Date.now(),
     assignedByTL: (assignedByTL||'').trim() || null,
     startedAt: null, completed:false, completedAt:null,
   };
+  if(isValidDueDate(dueDate)) entry.dueDate = dueDate; // optional; omitted entirely when not set
   state.assignments.push(entry);
   cacheAssignmentsLocally();
   await createAssignmentRemote(entry);
@@ -6413,7 +6514,7 @@ async function loadTLRosters(){
     const response = await fetch(BACKEND_URL + '/api/store');
     if(response.ok){
       const data = await response.json();
-      if(Array.isArray(data.tlRosters)){ state.tlRosters = data.tlRosters; return; }
+      if(Array.isArray(data.tlRosters)){ state.tlRosters = data.tlRosters; mergeTlContactsIntoRosters(); return; }
     }
   }catch(err){
     console.error('Loading shared TL rosters from backend failed, falling back to this device\u2019s local copy:', err);
@@ -6422,6 +6523,7 @@ async function loadTLRosters(){
   try{
     const raw = localStorage.getItem(TL_ROSTERS_KEY);
     if(raw){ const parsed = JSON.parse(raw); if(Array.isArray(parsed)) state.tlRosters = parsed; }
+    mergeTlContactsIntoRosters();
   }catch(err){ console.error('Loading TL rosters failed:', err); }
 }
 async function saveTLRosters(){
@@ -6485,6 +6587,7 @@ function renderTLRostersList(){
     <div style="min-width:0;">
       <strong data-open-tl-progress="${escapeHtml(r.tlName)}" style="cursor:pointer;color:var(--accent2);">${escapeHtml(r.tlName)}</strong>
       <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${r.agents.length} agent${r.agents.length===1?'':'s'}: ${escapeHtml(r.agents.join(', ')) || '(none added yet)'}</div>
+      ${contactLineHtml(r.email, r.slackHandle)}
     </div>
     <button class="small" data-open-tl-progress="${escapeHtml(r.tlName)}">View their progress</button>
   </div>`).join('');
@@ -6511,6 +6614,7 @@ function renderAgentDirectoryList(searchQuery){
     return `<div class="box" style="margin-bottom:6px;max-width:700px;cursor:pointer;" data-edit-agent="${escapeHtml(a.canonicalName)}">
       <strong>${escapeHtml(a.canonicalName)}</strong>
       ${names.length ? `<span style="color:var(--text3);font-size:12px;"> - also known as ${escapeHtml(names.join(', '))}</span>` : ''}
+      ${contactLineHtml(a.email, a.slackHandle)}
     </div>`;
   }).join('');
   return `<div style="margin-top:10px;">${rows}</div>`;
@@ -7603,6 +7707,109 @@ function selectAllResultsText(){
 // One assignment row, shared between the homepage widget and the dedicated My Assignments page.
 // The Start Scenario button always launches that EXACT assigned scenario+assignment (via
 // data-start-assignment/data-assignment-scenario, wired in wireEvents) - never a library search.
+// ---------- ASSIGNMENT DUE DATES ----------
+// dueDate is an optional 'YYYY-MM-DD' string on the assignment record. It counts as overdue only after the due day has
+// fully passed (local time) and the assignment isn't completed. Assignments without a dueDate behave exactly as before.
+function localDateStr(d){ d = d || new Date(); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function isValidDueDate(s){ return typeof s==='string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+function formatDueDate(s){
+  if(!isValidDueDate(s)) return '';
+  const [y,m,d] = s.split('-').map(Number); const dt = new Date(y, m-1, d);
+  const opts = {month:'short', day:'numeric'}; if(y!==new Date().getFullYear()) opts.year='numeric';
+  return dt.toLocaleDateString('en-US', opts);
+}
+function isAssignmentOverdue(a){ return !!a && !a.completed && isValidDueDate(a.dueDate) && localDateStr() > a.dueDate; }
+function dueDateHtml(a){
+  if(!a || !isValidDueDate(a.dueDate)) return '';
+  return isAssignmentOverdue(a)
+    ? `<span style="color:var(--bad);font-weight:700;" title="Was due ${escapeHtml(formatDueDate(a.dueDate))}">Overdue \u00b7 was due ${escapeHtml(formatDueDate(a.dueDate))}</span>`
+    : `<span>Due ${escapeHtml(formatDueDate(a.dueDate))}</span>`;
+}
+
+// ---------- IN-APP ALERTS (stored on this device only) ----------
+const SEEN_ASSIGNMENTS_KEY = 'zteamz_seenAssignments_v1';
+const TL_LAST_VISIT_KEY = 'zteamz_tlLastVisit_v1';
+function loadSeenAssignments(){ try{ const v = JSON.parse(localStorage.getItem(SEEN_ASSIGNMENTS_KEY)||'[]'); return Array.isArray(v) ? v : []; }catch(err){ return []; } }
+function markAssignmentsSeen(ids){
+  const seen = new Set(loadSeenAssignments()); ids.forEach(id=>seen.add(id));
+  try{ localStorage.setItem(SEEN_ASSIGNMENTS_KEY, JSON.stringify([...seen])); }catch(err){}
+}
+// New = pending, assigned to this agent, not started yet, and not yet acknowledged on this device.
+function unseenAssignmentsFor(agentName){
+  const seen = new Set(loadSeenAssignments());
+  return pendingAssignmentsFor(agentName).filter(a=>!a.startedAt && !seen.has(a.id)).sort((a,b)=>b.assignedAt-a.assignedAt);
+}
+function renderNewAssignmentBanner(){
+  const fresh = unseenAssignmentsFor(state.agentName);
+  if(!fresh.length) return '';
+  const line = a => { const sc = scenarioById(a.scenarioId); return `New assignment from ${escapeHtml(a.assignedByTL||'your TL')}: <strong>${escapeHtml(sc ? sc.title : 'a scenario')}</strong>${isValidDueDate(a.dueDate) ? ', due '+escapeHtml(formatDueDate(a.dueDate)) : ''}.`; };
+  return `<div class="box" id="newAssignmentBanner" role="status" style="max-width:900px;border-color:var(--accent);background:var(--active-bg);display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px;">
+    <div style="font-size:13.5px;color:var(--text);line-height:1.6;">${fresh.slice(0,3).map(line).join('<br>')}${fresh.length>3 ? `<br><span style="color:var(--text2);">and ${fresh.length-3} more in My Assignments.</span>` : ''}</div>
+    <button class="small" id="btnDismissNewAssignments" data-ids="${escapeHtml(fresh.map(a=>a.id).join(','))}" aria-label="Dismiss">Dismiss</button>
+  </div>`;
+}
+function loadTlLastVisits(){ try{ const v = JSON.parse(localStorage.getItem(TL_LAST_VISIT_KEY)||'{}'); return (v && typeof v==='object') ? v : {}; }catch(err){ return {}; } }
+// Called whenever the TL Management area is opened. Snapshots the previous visit time for this TL name (so the
+// "since your last visit" counts stay put for the whole visit), then records this visit.
+function enterTLArea(){
+  const name = (getLastAssigningTL()||'').trim();
+  state.tlAlertDismissed = false;
+  if(!name){ state.tlAlertSince = null; state.tlAlertName = ''; return; }
+  const key = name.toLowerCase(); const visits = loadTlLastVisits();
+  state.tlAlertName = name; state.tlAlertSince = visits[key] || null;
+  visits[key] = Date.now();
+  try{ localStorage.setItem(TL_LAST_VISIT_KEY, JSON.stringify(visits)); }catch(err){}
+}
+function tlActivitySince(name, since){
+  if(!name || !since) return null;
+  const done = state.assignments.filter(a=>a.completed && namesMatch(a.assignedByTL||'', name) && (a.completedAt||0) > since);
+  const doneTs = new Set(done.map(a=>a.attemptTimestamp).filter(Boolean));
+  const roster = state.tlRosters.find(r=>namesMatch(r.tlName, name));
+  const practice = roster ? state.teamProgressLog.filter(e=>e && e.type!=='tl-review' && (e.timestamp||0) > since && !doneTs.has(e.timestamp) && roster.agents.some(ag=>namesMatch(ag, e.agentName))) : [];
+  return {assignments: done.length, practice: practice.length};
+}
+function renderTLAlertBanner(){
+  if(state.tlAlertDismissed) return '';
+  const act = tlActivitySince(state.tlAlertName, state.tlAlertSince);
+  if(!act || (!act.assignments && !act.practice)) return '';
+  const parts = [];
+  if(act.assignments) parts.push(`${act.assignments} assignment${act.assignments===1?'':'s'} completed`);
+  if(act.practice) parts.push(`${act.practice} practice attempt${act.practice===1?'':'s'} by your team`);
+  return `<div class="box" id="tlAlertBanner" role="status" style="border-color:var(--accent);background:var(--active-bg);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 4px;">
+    <span style="font-size:13.5px;color:var(--text);">${parts.join(' and ')} since your last visit (${escapeHtml(new Date(state.tlAlertSince).toLocaleString())}).</span>
+    <span style="display:flex;gap:8px;">
+      ${act.assignments ? `<button class="small primary" id="btnTLAlertManage">Open Manage Assignments</button>` : ''}
+      ${act.practice ? `<button class="small" id="btnTLAlertProgress">Open Team Progress</button>` : ''}
+      <button class="small" id="btnTLAlertDismiss">Dismiss</button>
+    </span>
+  </div>`;
+}
+
+// ---------- CONTACT DETAILS (stored only - nothing is sent anywhere yet) ----------
+// TL contact details live on the TL's roster entry (email, slackHandle). They are also cached on this device, so they
+// survive even if the shared backend's roster endpoint doesn't keep extra fields.
+const TL_CONTACTS_KEY = 'zteamz_tlContacts_v1';
+function loadTlContactsCache(){ try{ const v = JSON.parse(localStorage.getItem(TL_CONTACTS_KEY)||'{}'); return (v && typeof v==='object') ? v : {}; }catch(err){ return {}; } }
+function mergeTlContactsIntoRosters(){
+  const cache = loadTlContactsCache();
+  state.tlRosters.forEach(r=>{ const c = cache[(r.tlName||'').trim().toLowerCase()]; if(c){ if(!r.email && c.email) r.email = c.email; if(!r.slackHandle && c.slackHandle) r.slackHandle = c.slackHandle; } });
+}
+async function saveTLContact(tlName, email, slackHandle){
+  const name = tlName.trim(); const key = name.toLowerCase();
+  const cache = loadTlContactsCache(); cache[key] = {email: email||null, slackHandle: slackHandle||null};
+  try{ localStorage.setItem(TL_CONTACTS_KEY, JSON.stringify(cache)); }catch(err){}
+  let r = state.tlRosters.find(x=>namesMatch(x.tlName, name));
+  if(!r){ r = {tlName:name, agents:[]}; state.tlRosters.push(r); }
+  r.email = email||null; r.slackHandle = slackHandle||null;
+  await upsertTLRosterRemote(r.tlName, [], {email: r.email, slackHandle: r.slackHandle});
+  // Re-apply after the server's authoritative copy comes back: this device's own entry wins.
+  state.tlRosters.forEach(x=>{ if((x.tlName||'').trim().toLowerCase()===key){ x.email = email||null; x.slackHandle = slackHandle||null; } });
+}
+function contactLineHtml(email, slack){
+  const bits = [email ? `\u2709 ${escapeHtml(email)}` : '', slack ? `Slack ${escapeHtml(slack)}` : ''].filter(Boolean);
+  return bits.length ? `<div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${bits.join(' \u00b7 ')}</div>` : '';
+}
+
 function assignmentRowHtml(a){
   const scenario = scenarioById(a.scenarioId);
   if(!scenario) return '';
@@ -7611,6 +7818,7 @@ function assignmentRowHtml(a){
     <span class="ilabel">
       <div style="font-weight:600;font-size:13.5px;">${escapeHtml(scenario.title)}</div>
       <div style="font-size:10.5px;color:var(--text3);margin-top:3px;">${escapeHtml(scenario.topic)} · ${escapeHtml(scenario.difficulty)} · assigned ${new Date(a.assignedAt).toLocaleDateString()}${a.assignedByTL?' by '+escapeHtml(a.assignedByTL):''}</div>
+      ${isValidDueDate(a.dueDate) && !a.completed ? `<div style="font-size:12px;margin-top:3px;color:var(--text2);">${dueDateHtml(a)}</div>` : ''}
     </span>
     <span style="display:flex;align-items:center;gap:10px;white-space:nowrap;">
       <span class="ival" style="color:${assignmentStatusColor(a)};font-weight:700;">${status==='Completed'?'✓ ':''}${status}</span>
@@ -7710,13 +7918,13 @@ function renderManageAssignmentsSubsection(){
   function row(a, showAgentName){
     const scenario = scenarioById(a.scenarioId);
     const linkedEntry = findTeamProgressEntryForAssignment(a);
-    return `<div class="box" style="margin-bottom:8px;">
+    return `<div class="box" style="margin-bottom:8px;${scenario ? complexityBorderStyle(scenario) : ''}" ${scenario ? `title="${escapeHtml(complexityTitle(scenario))}"` : ''}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
         <div style="min-width:0;">
           <strong>${escapeHtml(scenario ? scenario.title : a.scenarioId)}</strong>
           ${scenario ? `<div style="font-size:11.5px;color:var(--text2);margin-top:2px;">${escapeHtml(scenario.internalTitle && scenario.internalTitle!==scenario.title ? scenario.internalTitle : '')}</div><div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;">${scenarioTagChipsHtml(scenario)}</div>` : ''}
           ${showAgentName ? `<div style="font-size:12px;color:var(--text2);margin-top:3px;">${escapeHtml(a.agentName||'(unknown agent)')}</div>` : ''}
-          <div style="font-size:11px;color:var(--text3);margin-top:3px;">Assigned ${new Date(a.assignedAt).toLocaleDateString()}${a.assignedByTL?' by '+escapeHtml(a.assignedByTL):''}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px;">Assigned ${new Date(a.assignedAt).toLocaleDateString()}${a.assignedByTL?' by '+escapeHtml(a.assignedByTL):''}${isValidDueDate(a.dueDate) ? ' \u00b7 '+dueDateHtml(a) : ''}</div>
         </div>
         <span style="color:${assignmentStatusColor(a)};font-weight:700;font-size:12.5px;white-space:nowrap;">${assignmentStatus(a)}</span>
       </div>
@@ -7727,32 +7935,53 @@ function renderManageAssignmentsSubsection(){
       <div data-cancel-confirm-slot="${a.id}"></div>
     </div>`;
   }
-  // Default view (no agent chosen yet): show every pending assignment across the whole team, so
-  // there's always something useful to look at immediately instead of an empty "pick someone" prompt -
-  // this is what makes stray/old assignments (like leftover test entries) discoverable without having
-  // to guess-and-check each agent one at a time. Picking an agent below narrows to just their history,
-  // pending and completed.
-  if(!state.manageAssignmentsAgent){
-    const allPending = state.assignments.filter(a=>!a.completed).sort((a,b)=>b.assignedAt-a.assignedAt);
-    return `<div>
-      ${picker}
-      <h4 style="margin:16px 0 6px;font-size:12.5px;color:var(--text2);">All pending, every agent (${allPending.length})</h4>
-      ${allPending.length ? allPending.map(a=>row(a,true)).join('') : `<div class="empty" style="padding:8px 0;">Nothing pending right now.</div>`}
-      <div style="font-size:11.5px;color:var(--text3);margin-top:10px;">Pick an agent above to see their pending and completed history together instead.</div>
+  // Grouped view: assigning TL -> agent -> that agent's pending/completed assignments. Everything starts collapsed;
+  // what's open is remembered for the session in state.manageOpen. The agent picker is a shortcut that opens the
+  // right TL group(s) and agent row and scrolls to it.
+  if(state.assignments.length===0) return `<div>${picker}<div class="empty" style="padding:14px 0;">No assignments yet.</div></div>`;
+  const tlKey = a => ((a.assignedByTL||'').trim() || 'Unassigned TL');
+  const groups = {};
+  state.assignments.forEach(a=>{
+    const tl = tlKey(a); const tlId = tl.toLowerCase();
+    const g = groups[tlId] = groups[tlId] || {name:tl, agents:{}};
+    const ag = canonicalNameFor(a.agentName) || '(unknown agent)';
+    (g.agents[ag] = g.agents[ag] || []).push(a);
+  });
+  const counts = list => { const od = list.filter(isAssignmentOverdue).length; return `${list.filter(a=>!a.completed).length} pending${od ? ` (<span style="color:var(--bad);font-weight:700;">${od} overdue</span>)` : ''} \u00b7 ${list.filter(a=>a.completed).length} completed`; };
+  const tlIds = Object.keys(groups).sort((x,y)=> (x==='unassigned tl') - (y==='unassigned tl') || groups[x].name.localeCompare(groups[y].name));
+  const arrow = open => `<span class="dash-card-arrow${open?' open':''}">\u25b6</span>`;
+  const tree = tlIds.map(tlId=>{
+    const g = groups[tlId]; const all = Object.values(g.agents).flat();
+    const tlOpenKey = 'tl:'+tlId; const tlOpen = !!state.manageOpen[tlOpenKey];
+    const agentRows = tlOpen ? Object.keys(g.agents).sort((a,b)=>a.localeCompare(b)).map(ag=>{
+      const list = g.agents[ag].slice().sort((a,b)=>b.assignedAt-a.assignedAt);
+      const agKey = 'ag:'+tlId+'|'+ag.toLowerCase(); const agOpen = !!state.manageOpen[agKey];
+      const pending = list.filter(a=>!a.completed), completed = list.filter(a=>a.completed);
+      return `<div class="manage-group" id="manage-${escapeHtml(agKey.replace(/[^a-z0-9]+/gi,'-'))}">
+        <div class="manage-group-head" data-manage-toggle="${escapeHtml(agKey)}" role="button" tabindex="0" aria-expanded="${agOpen}">
+          <span style="display:flex;align-items:center;gap:8px;">${arrow(agOpen)}<strong>${escapeHtml(ag)}</strong></span>
+          <span style="font-size:12px;color:var(--text3);white-space:nowrap;">${counts(list)}</span>
+        </div>
+        ${agOpen ? `<div class="manage-group-body">
+          <h4 style="margin:4px 0 6px;font-size:12.5px;color:var(--text2);">Pending (${pending.length})</h4>
+          ${pending.length ? pending.map(a=>row(a,false)).join('') : `<div class="empty" style="padding:6px 0;">None pending.</div>`}
+          <h4 style="margin:12px 0 6px;font-size:12.5px;color:var(--text2);">Completed (${completed.length})</h4>
+          ${completed.length ? completed.map(a=>row(a,false)).join('') : `<div class="empty" style="padding:6px 0;">None completed yet.</div>`}
+        </div>` : ''}
+      </div>`;
+    }).join('') : '';
+    return `<div class="manage-group">
+      <div class="manage-group-head" data-manage-toggle="${escapeHtml(tlOpenKey)}" role="button" tabindex="0" aria-expanded="${tlOpen}">
+        <span style="display:flex;align-items:center;gap:8px;">${arrow(tlOpen)}<strong>${escapeHtml(g.name)}</strong></span>
+        <span style="font-size:12px;color:var(--text3);white-space:nowrap;">${counts(all)}</span>
+      </div>
+      ${tlOpen ? `<div class="manage-group-body">${agentRows}</div>` : ''}
     </div>`;
-  }
-  const mine = assignmentsForAgent(state.manageAssignmentsAgent);
-  if(mine.length===0){
-    return `<div>${picker}<div class="empty" style="padding:14px 0;">No assignments for ${escapeHtml(state.manageAssignmentsAgent)} yet.</div></div>`;
-  }
-  const pending = mine.filter(a=>!a.completed);
-  const completed = mine.filter(a=>a.completed);
+  }).join('');
   return `<div>
-    ${picker}
-    <h4 style="margin:16px 0 6px;font-size:12.5px;color:var(--text2);">Pending (${pending.length})</h4>
-    ${pending.length ? pending.map(a=>row(a,false)).join('') : `<div class="empty" style="padding:8px 0;">None pending.</div>`}
-    <h4 style="margin:16px 0 6px;font-size:12.5px;color:var(--text2);">Completed (${completed.length})</h4>
-    ${completed.length ? completed.map(a=>row(a,false)).join('') : `<div class="empty" style="padding:8px 0;">None completed yet.</div>`}
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">${picker}<span style="font-size:11.5px;color:var(--text3);">Jump to an agent</span></div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--text3);margin-bottom:8px;"><span>${SCENARIO_ROW_KEY_TEXT}</span>${complexityLegendHtml()}</div>
+    ${tree}
   </div>`;
 }
 
@@ -7766,7 +7995,7 @@ async function assignScenarioFromTLForm(){
   if(!agentName){ nameSelect.focus(); return; }
   if(!scenarioId || !scenarioById(scenarioId)){
     warningEl.style.display = 'block';
-    warningEl.innerHTML = `<div class="box" style="border-color:var(--warn);color:var(--warn);font-size:13px;">Pick a scenario from the list first.</div>`;
+    warningEl.innerHTML = `<div class="box" style="border-color:var(--warn);color:var(--warn);font-size:13px;">Pick a scenario first.</div>`;
     return;
   }
   setLastAssigningTL(assignedByTL);
@@ -7780,12 +8009,13 @@ async function assignScenarioFromTLForm(){
       <button id="btnCancelDuplicateAssign" class="small">Cancel</button>
     </div>`;
     document.getElementById('btnConfirmDuplicateAssign').addEventListener('click', async ()=>{
-      await createAssignment(agentName, scenarioId, assignedByTL); warningEl.style.display='none'; state.view='diagnostics'; render();
+      await createAssignment(agentName, scenarioId, assignedByTL, state.assignDueDate); state.assignDueDate=''; warningEl.style.display='none'; state.view='diagnostics'; render();
     });
     document.getElementById('btnCancelDuplicateAssign').addEventListener('click', ()=>{ warningEl.style.display='none'; });
     return;
   }
-  await createAssignment(agentName, scenarioId, assignedByTL);
+  await createAssignment(agentName, scenarioId, assignedByTL, state.assignDueDate);
+  state.assignDueDate='';
   state.view='diagnostics'; render();
 }
 
@@ -7801,16 +8031,17 @@ function renderAssignScenariosSectionBody(){
     : [...PILOT_SCENARIOS, ...customScenariosCreatedBy(state.scenarioBuilderTLName||getLastAssigningTL()), ...state.customScenarios.filter(cs=>cs.visibility==='library'&&cs.reviewStatus==='approved')];
   const uniqueAssignPool = Array.from(new Map(assignPool.map(s=>[s.id,s])).values());
   const af = state.scenarioFilters.assign;
-  const filtered = filterScenariosByTags(uniqueAssignPool, af);
+  const aq = (state.assignSearch||'').trim().toLowerCase();
+  const filtered = filterScenariosByTags(uniqueAssignPool, af).filter(s=> !aq || [s.title, s.internalTitle, s.skill, scenarioSkillCode(s), ...scenarioKbCategories(s), ...scenarioKbArticles(s)].filter(Boolean).join(' ').toLowerCase().includes(aq));
   if(state.assignSelectedScenarioId && !uniqueAssignPool.some(s=>s.id===state.assignSelectedScenarioId)) state.assignSelectedScenarioId = null;
   const selectedScenario = state.assignSelectedScenarioId ? scenarioById(state.assignSelectedScenarioId) : null;
   const cxOrder = {'Single issue':0, 'Layered':1, 'High stakes':2};
   const rowsHtml = filtered.slice().sort((a,b)=> scenarioSkillCode(a).localeCompare(scenarioSkillCode(b)) || (cxOrder[scenarioComplexity(a)]??3)-(cxOrder[scenarioComplexity(b)]??3) || a.title.localeCompare(b.title)).map(s=>{
     const sel = s.id===state.assignSelectedScenarioId;
-    return `<div class="assign-row ${sel?'selected':''}" data-assign-pick="${escapeHtml(s.id)}" role="button" tabindex="0" aria-pressed="${sel}">
+    return `<div class="assign-row ${sel?'selected':''}" data-assign-pick="${escapeHtml(s.id)}" role="option" tabindex="0" aria-selected="${sel}" title="${escapeHtml(complexityTitle(s))}" style="${complexityBorderStyle(s)}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
         <div style="min-width:0;">
-          <div style="font-weight:700;font-size:13.5px;">${sel?'\u2713 ':''}${escapeHtml(s.title)} <span style="font-weight:400;font-size:11px;color:var(--text3);">(agent sees this title)</span></div>
+          <div style="font-weight:700;font-size:13.5px;">${sel?'\u2713 ':''}${escapeHtml(s.title)}</div>
           <div style="font-size:12px;color:var(--text2);margin-top:2px;">${escapeHtml(s.internalTitle && s.internalTitle!==s.title ? s.internalTitle : (s.agentBriefing||''))}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
@@ -7818,9 +8049,9 @@ function renderAssignScenariosSectionBody(){
         </div>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;">${scenarioTagChipsHtml(s)}</div>
-      ${scenarioKbArticlesLineHtml(s)}
     </div>`;
   }).join('');
+  const pickerOpen = !!state.assignPickerOpen;
   return `
     <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Shared across devices, instantly - the agent sees this assignment in their own My Assignments as soon as they open the app on any device. Pick from any registered agent, including agents on other TLs' teams - management has shared visibility across the whole roster.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:760px;">
@@ -7830,11 +8061,28 @@ function renderAssignScenariosSectionBody(){
       </select>
       <input id="assignedByTLName" placeholder="Your name (assigning TL)" value="${escapeHtml(getLastAssigningTL())}" style="flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
     </div>
-    <div style="margin-top:14px;max-width:760px;">
-      ${renderScenarioFilterBar('assign', af, uniqueAssignPool, filtered.length)}
-      ${filtered.length ? rowsHtml : `<div class="empty" style="padding:14px 0;">No scenarios match these filters.</div>`}
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
-        <span style="font-size:13px;color:var(--text2);flex:1;min-width:200px;">${selectedScenario ? `Selected: <strong style="color:var(--text);">${escapeHtml(selectedScenario.title)}</strong>` : 'Click a scenario above to select it.'}</span>
+    <div id="assignPickerWrap" style="margin-top:14px;max-width:760px;">
+      <button type="button" id="assignPickerField" class="assign-picker-field ${selectedScenario?'':'placeholder'}" aria-haspopup="listbox" aria-expanded="${pickerOpen}">
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${selectedScenario?'font-weight:700;':''}">${selectedScenario ? escapeHtml(selectedScenario.title) : 'Select a scenario\u2026'}</span>
+        ${icon('chevronDown',14)}
+      </button>
+      ${pickerOpen ? `<div class="assign-picker-panel" role="listbox" aria-label="Scenarios">
+        ${renderScenarioFilterBar('assign', af, uniqueAssignPool, filtered.length)}
+        <input id="assignSearchInput" placeholder="Search scenarios or KB articles\u2026" value="${escapeHtml(state.assignSearch||'')}" style="width:100%;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;">
+        <div style="font-size:11.5px;color:var(--text3);margin-top:6px;">${SCENARIO_ROW_KEY_TEXT}</div>
+        <div class="assign-picker-list" id="assignPickerList" data-keep-scroll>
+          ${filtered.length ? rowsHtml : `<div class="empty" style="padding:14px 0;">No scenarios match these filters.</div>`}
+        </div>
+      </div>` : ''}
+      ${selectedScenario && !pickerOpen ? `<div class="box" style="margin-top:6px;${complexityBorderStyle(selectedScenario)}" title="${escapeHtml(complexityTitle(selectedScenario))}">
+        <div style="font-size:12px;color:var(--text2);">${escapeHtml(selectedScenario.internalTitle && selectedScenario.internalTitle!==selectedScenario.title ? selectedScenario.internalTitle : (selectedScenario.agentBriefing||''))}</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${scenarioTagChipsHtml(selectedScenario)}</div>
+        ${scenarioKbArticlesLineHtml(selectedScenario)}
+      </div>` : ''}
+      <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap;margin-top:10px;">
+        <label for="assignDueDateInput" style="font-size:12.5px;color:var(--text2);">Due date <span style="color:var(--text3);">(optional)</span></label>
+        <input type="date" id="assignDueDateInput" min="${localDateStr()}" value="${escapeHtml(state.assignDueDate||'')}" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;color-scheme:${state.theme==='light'?'light':'dark'};">
+        ${state.assignDueDate ? `<button class="small" id="btnClearDueDate" title="Remove due date">Clear</button>` : ''}
         <button id="btnAssignScenario" class="primary" ${selectedScenario?'':'disabled'}>Assign</button>
       </div>
     </div>
@@ -7854,6 +8102,8 @@ function renderTeamLeadsRosterSectionBody(){
         <input id="regAgentChatName" placeholder="Chat name" style="flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentAltName" placeholder="Other recognized name (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentTLName" placeholder="Reports to (TL name)" value="Zainab Yahaya" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <input id="regAgentEmail" type="email" placeholder="Email (optional)" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <input id="regAgentSlack" placeholder="Slack handle (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <button id="btnRegisterAgent" class="primary">Register agent</button>
       </div>
       <div id="registerAgentStatus" style="display:none;margin-top:10px;"></div>
@@ -7861,6 +8111,16 @@ function renderTeamLeadsRosterSectionBody(){
     ${renderDashSubsection('tl-rosters', 'Team Leads', ()=>`
       <div style="color:var(--text3);font-size:11.5px;margin-bottom:8px;">Click a TL's name to view just their team's progress (still fully editable/visible to any TL).</div>
       ${renderTLRostersList()}
+      <div class="box" style="max-width:700px;margin-top:12px;">
+        <div style="font-size:12.5px;font-weight:600;margin-bottom:6px;">Your contact details <span style="font-weight:400;color:var(--text3);">(saved on your roster entry; stored only, nothing is sent yet)</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input id="tlContactName" placeholder="Your name (TL)" value="${escapeHtml(getLastAssigningTL())}" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+          <input id="tlContactEmail" type="email" placeholder="Email" value="${escapeHtml(((state.tlRosters.find(r=>namesMatch(r.tlName, getLastAssigningTL()))||{}).email)||'')}" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+          <input id="tlContactSlack" placeholder="Slack handle" value="${escapeHtml(((state.tlRosters.find(r=>namesMatch(r.tlName, getLastAssigningTL()))||{}).slackHandle)||'')}" style="flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+          <button id="btnSaveTLContact" class="primary">Save</button>
+        </div>
+        <div id="tlContactStatus" style="display:none;font-size:12px;margin-top:6px;"></div>
+      </div>
     `, false)}
     ${renderDashSubsection('agent-directory', 'All Registered Agents', ()=>`
       <input id="agentDirectorySearchInput" placeholder="Search agents…" value="${escapeHtml(state.agentDirectorySearch||'')}" style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;margin-bottom:10px;">
@@ -7907,22 +8167,27 @@ function renderScenarioLibrarySectionBody(){
   </div>${renderScenarioFilterBar('library', lf, SCENARIOS, list.length)}`;
   const refRows = list.map(s=>{
     const initial = s.playerName.charAt(0).toUpperCase();
-    return `<div class="category-scenario-card" data-scenario="${s.id}" style="max-width:760px;align-items:flex-start;">
+    const open = !!state.libraryExpanded[s.id];
+    return `<div class="category-scenario-card" data-scenario="${s.id}" title="${escapeHtml(complexityTitle(s))}" style="max-width:760px;align-items:flex-start;${complexityBorderStyle(s)}">
       <div class="qavatar" style="background:var(--accent);">${initial}</div>
       <div style="flex:1;min-width:0;">
         <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
-          <div style="font-weight:600;font-size:13.5px;">${escapeHtml(s.internalTitle || s.title)}</div>
-          <span style="font-size:10px;font-weight:700;color:${readinessColor[s.readiness]||'var(--text3)'};border:1px solid ${readinessColor[s.readiness]||'var(--text3)'};border-radius:20px;padding:2px 7px;white-space:nowrap;">${s.readiness||'UNCLASSIFIED'}</span>
+          <div style="font-weight:700;font-size:13.5px;">${escapeHtml(s.title)}</div>
+          <span style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+            <span style="font-size:10px;font-weight:700;color:${readinessColor[s.readiness]||'var(--text3)'};border:1px solid ${readinessColor[s.readiness]||'var(--text3)'};border-radius:20px;padding:2px 7px;white-space:nowrap;">${s.readiness||'UNCLASSIFIED'}</span>
+            <button class="small" data-library-expand="${s.id}" aria-expanded="${open}" title="Show KB articles">${open?'Less':'More'}</button>
+          </span>
         </div>
-        <div style="font-size:11.5px;color:var(--text3);margin-top:2px;">agent sees: "${escapeHtml(s.title)}"</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px;">${escapeHtml(s.internalTitle && s.internalTitle!==s.title ? s.internalTitle : (s.agentBriefing||''))}</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${scenarioTagChipsHtml(s)}</div>
-        ${scenarioKbArticlesLineHtml(s)}
+        ${open ? (scenarioKbArticlesLineHtml(s) || `<div style="font-size:11px;color:var(--text3);margin-top:5px;">No KB articles listed.</div>`) : ''}
       </div>
     </div>`;
   }).join('');
   return `
     <div style="color:var(--text2);font-size:13px;margin-bottom:10px;">Agents only ever see topics and get randomly assigned within one - this list, by name, is for your own testing and review only. Click any to start it directly.</div>
     ${controls}
+    <div style="font-size:11.5px;color:var(--text3);margin-bottom:8px;">${SCENARIO_ROW_KEY_TEXT}</div>
     ${list.length ? refRows : `<div class="empty" style="padding:14px 0;">No scenarios match these filters.</div>`}
     ${renderDashSubsection('review-queue', `Review Queue - Shared Library Submissions (${libraryReviewQueue().length})`, renderReviewQueueSubsection, false)}
   `;
@@ -7991,7 +8256,7 @@ function renderReviewQueueSubsection(){
   return `<div style="color:var(--text3);font-size:11.5px;margin-bottom:10px;">Every TL's shared-library submissions, across every team - reviewing is an org-wide function, not scoped to one team. A scenario only reaches the general practice pool once it's Approved here; Private/Team-only scenarios never pass through this queue at all.</div>
     ${queue.map(cs=>{
       const draftNote = state.reviewQueueDraftNotes[cs.id] || '';
-      return `<div class="box" style="margin-bottom:10px;">
+      return `<div class="box" style="margin-bottom:10px;${complexityBorderStyle(cs)}" title="${escapeHtml(complexityTitle(cs))}">
         <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
           <div>
             <strong>${escapeHtml(cs.title)}</strong>
@@ -8368,7 +8633,7 @@ function renderScenarioPreviewEditForm(){
 
 function renderMyCreatedScenariosList(myScenarios){
   if(myScenarios.length===0) return `<div class="empty" style="padding:8px 0;">You haven't created any scenarios yet.</div>`;
-  return myScenarios.map(cs=>`<div class="box" style="margin-bottom:8px;">
+  return myScenarios.map(cs=>`<div class="box" style="margin-bottom:8px;${complexityBorderStyle(cs)}" title="${escapeHtml(complexityTitle(cs))}">
     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <div>
         <strong>${escapeHtml(cs.title)}</strong>
@@ -8448,6 +8713,7 @@ function renderDiagnostics(){
       </div>
       <button id="btnLockTLArea">\u2190 Lock &amp; back to simulator</button>
     </div>
+    ${renderTLAlertBanner()}
 
     ${renderDashSection('assign-scenarios', 'Assign Scenarios', `${pendingCount} pending assignment${pendingCount===1?'':'s'}`, renderAssignScenariosSectionBody, 'bolt', '#5b7cff')}
     ${renderDashSection('create-scenario', 'Create Scenario', `${customScenariosCreatedBy(state.scenarioBuilderTLName||getLastAssigningTL()).length} created by you`, renderCreateScenarioSectionBody, 'chat', '#e05a8e')}
@@ -8761,6 +9027,7 @@ function renderTLPasswordModal(){
     if(val === TL_AREA_PASSWORD.toLowerCase()){
       state.tlUnlocked = true;
       overlay.remove();
+      enterTLArea();
       state.view = 'diagnostics';
       render();
     }else{
@@ -8773,6 +9040,12 @@ function renderTLPasswordModal(){
   document.getElementById('btnCancelTLPassword').addEventListener('click', ()=> overlay.remove());
   input.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
 }
+
+document.addEventListener('click', e=>{
+  if(!state.assignPickerOpen) return;
+  const wrap = document.getElementById('assignPickerWrap');
+  if(wrap && !wrap.contains(e.target)){ state.assignPickerOpen = false; render(); }
+}, true);
 
 async function init(){
   loadTheme();
