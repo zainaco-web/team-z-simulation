@@ -2020,6 +2020,7 @@ let state = {
   agentDirectory:[], // [{canonicalName, fullName, chatName, aliases:[...]}] - canonical agent profiles for name resolution
   agentDirectoryLoadError:null,
   allFeedback:[],
+  patternSummaries:[], patternLoading:{}, patternError:{}, // TL pattern summaries (see TL PATTERN SUMMARIES)
   feedbackLoadError:null,
   currentAttemptContext:null, // self-contained snapshot of the attempt currently being scored - see runEvaluation/archiveAttempt
   activeAssignmentId:null, // set only when the live scenario was launched via a My Assignments "Start Scenario" button
@@ -4521,7 +4522,10 @@ function loadLocalTlReviews(){
 }
 function applyTlReviews(list){
   const attempts = [], reviews = {};
+  const summaries = {};
+  loadLocalPatternSummaries().forEach(s=>{ if(s && s.id) summaries[s.id] = s; });
   (list||[]).forEach(r=>{
+    if(r && r.type==='pattern-summary'){ if(r.id) summaries[r.id] = r; return; } // TL pattern summaries ride along in the same shared list; never treated as attempts
     if(r && r.type==='tl-review' && r.reviewKey){
       const prev = reviews[r.reviewKey];
       if(!prev || (r.tlReviewedAt||0) >= (prev.tlReviewedAt||0)) reviews[r.reviewKey] = r;
@@ -4530,7 +4534,97 @@ function applyTlReviews(list){
   const local = loadLocalTlReviews(); // this device's own saved reviews, in case the shared save didn't go through
   Object.keys(local).forEach(k=>{ const prev = reviews[k]; if(!prev || (local[k].tlReviewedAt||0) > (prev.tlReviewedAt||0)) reviews[k] = local[k]; });
   attempts.forEach(e=>{ const r = reviews[reviewKeyFor(e)]; if(r && r.tlOverrides){ e.tlOverrides = r.tlOverrides; e.tlReviewedAt = r.tlReviewedAt; } });
+  state.patternSummaries = Object.values(summaries).sort((a,b)=>(b.generatedAt||0)-(a.generatedAt||0));
   return attempts;
+}
+
+// ---------- TL PATTERN SUMMARIES ----------
+// On demand only. Each summary is saved as a {type:'pattern-summary'} record through the existing team-progress append
+// route (like TL reviews), plus a copy on this device, so TLs can compare summaries over time.
+const PATTERN_SUMMARIES_KEY = 'zteamz_patternSummaries_v1';
+function loadLocalPatternSummaries(){ try{ const v=JSON.parse(localStorage.getItem(PATTERN_SUMMARIES_KEY)||'[]'); return Array.isArray(v)?v:[]; }catch(err){ return []; } }
+function scoredAttemptsFor(canonical){ return state.teamProgressLog.filter(e=>e && e.type!=='tl-review' && e.evaluation && Array.isArray(e.evaluation.questions) && namesMatch(e.agentName, canonical)).sort((a,b)=>(a.timestamp||0)-(b.timestamp||0)); }
+function patternSummariesFor(canonical){ return (state.patternSummaries||[]).filter(s=>namesMatch(s.agentName, canonical)); }
+function buildPatternSummaryPrompt(canonical, attempts){
+  const lettersOf = e => QA_SCORECARD.questions.map(q=>{ const t=e.tlOverrides&&e.tlOverrides[q.id]; const a=e.evaluation.questions.find(x=>x.id===q.id)||{}; return q.label+': '+((e.tlReviewedAt && t && t.letter) || a.letter || '?'); }).join(', ');
+  const body = attempts.map((e,k)=>{
+    const ev = e.evaluation;
+    const detail = hasFindings(ev)
+      ? ev.findings.map(f=>`  - [${f.type}${f.strength?', strength':', '+f.severity}] standard: ${f.kbSays} | agent: ${f.agentDid} | impact: ${f.impact} | next time: ${f.nextTime}`).join('\n')
+      : `  - summary: ${ev.overallSummary||''}\n` + (ev.questions||[]).map(q=>`  - ${q.id} citation: ${q.citation||''}`).join('\n');
+    return `ATTEMPT ${k+1} - ${new Date(e.timestamp).toLocaleDateString()} - scenario "${e.scenarioTitle||e.scenarioId}" (${e.scenarioId})${e.tlReviewedAt?' - TL-reviewed':''}\n  letters: ${lettersOf(e)}\n${detail}`;
+  }).join('\n\n');
+  const library = practicePoolFor(canonical).map(s=>`${s.id}: "${s.title}" - ${s.internalTitle||''} [${scenarioSkillCode(s)}; ${scenarioKbCategories(s).join(', ')}]`).join('\n');
+  return `You are helping a Team Lead at Betty (iGaming customer support) coach one agent, ${canonical}. Below are the agent's ${attempts.length} scored practice attempts, oldest first. Identify patterns across attempts. Output ONLY a single JSON object, no markdown.
+
+RULES
+- Only name a pattern that appears in 2 or more different attempts, and list the attempt numbers it appears in. A one-off is not a pattern - leave it out.
+- Use plain, specific language a TL can act on. No scorecard letters or rubric jargon in the text. Don't invent anything the attempts don't show.
+- suggestedScenarios must use ONLY ids from the scenario library below (copy the id exactly), at most 3, each targeting a recurring gap.
+- confidence: one sentence on how much to trust this summary (e.g. few attempts, mostly older evaluations without findings, mixed signals).
+
+ATTEMPTS
+${body}
+
+SCENARIO LIBRARY (id: title - what it tests [skill; KB categories])
+${library}
+
+Return exactly:
+{
+  "recurringGaps": [ {"pattern": "plain description", "attempts": [1, 3], "evidence": "short example from the attempts"} ],
+  "recurringStrengths": [ {"pattern": "...", "attempts": [2, 4], "evidence": "..."} ],
+  "toneAndWording": "1-2 sentences on how the agent tends to word things, only if seen in 2+ attempts, otherwise an empty string",
+  "focusArea": "the one thing to work on next, in one sentence",
+  "suggestedScenarios": [ {"id": "scenario id from the library", "why": "which gap it practises"} ],
+  "confidence": "one sentence"
+}`;
+}
+function normalizePatternSummary(raw, attemptCount, canonical){
+  raw = raw || {}; const str = v=>(v===undefined||v===null)?'':String(v).trim();
+  const pats = list => (Array.isArray(list)?list:[]).map(p=>({pattern:str(p&&p.pattern), evidence:str(p&&p.evidence), attempts:[...new Set((Array.isArray(p&&p.attempts)?p.attempts:[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=attemptCount))]})).filter(p=>p.pattern && p.attempts.length>=2); // 2+ attempts or it isn't a pattern
+  const pool = practicePoolFor(canonical);
+  const sugg = (Array.isArray(raw.suggestedScenarios)?raw.suggestedScenarios:[]).map(s=>({id:str(s&&s.id), why:str(s&&s.why)})).filter((s,i,a)=>pool.some(x=>x.id===s.id) && a.findIndex(y=>y.id===s.id)===i).slice(0,3);
+  return { recurringGaps:pats(raw.recurringGaps), recurringStrengths:pats(raw.recurringStrengths), toneAndWording:str(raw.toneAndWording), focusArea:str(raw.focusArea), suggestedScenarios:sugg, confidence:str(raw.confidence) };
+}
+async function generatePatternSummary(canonical){
+  const attempts = scoredAttemptsFor(canonical).slice(-15); // most recent 15, oldest first
+  if(attempts.length<3) return {ok:false, error:'Needs at least 3 scored attempts.'};
+  const raw = await callClaudeJson(buildPatternSummaryPrompt(canonical, attempts), 'complex', {maxTokens:3000, timeoutMs:180000});
+  const rec = {type:'pattern-summary', id:'ps'+Date.now()+Math.random().toString(36).slice(2,7), agentName:canonical, generatedAt:Date.now(), generatedBy:(getLastAssigningTL()||'').trim()||null,
+    attemptCount:attempts.length, attemptTimestamps:attempts.map(e=>e.timestamp), summary: normalizePatternSummary(raw, attempts.length, canonical)};
+  state.patternSummaries = [rec, ...(state.patternSummaries||[])];
+  try{ const local = loadLocalPatternSummaries(); local.push(rec); localStorage.setItem(PATTERN_SUMMARIES_KEY, JSON.stringify(local.slice(-200))); }catch(err){}
+  let shared = false;
+  try{ const resp = await fetch(BACKEND_URL + '/api/store/team-progress', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec)}); shared = resp.ok; }catch(err){}
+  return {ok:true, shared};
+}
+function renderPatternSummaryCard(rec){
+  const s = rec.summary || {};
+  const scName = id => { const sc = scenarioById(id); return sc ? `${sc.title} (${id})` : id; };
+  const pats = (title, list) => list && list.length ? `<div style="margin-top:6px;"><strong style="font-size:12.5px;">${title}</strong>${list.map(p=>`<div style="font-size:12.5px;margin-top:3px;">\u2022 ${escapeHtml(p.pattern)} <span style="color:var(--text3);">(attempts ${p.attempts.join(', ')})</span>${p.evidence?`<div style="color:var(--text3);margin-left:12px;">${escapeHtml(p.evidence)}</div>`:''}</div>`).join('')}</div>` : '';
+  return `<div style="font-size:11.5px;color:var(--text3);">${escapeHtml(new Date(rec.generatedAt).toLocaleString())} \u00b7 ${rec.attemptCount} attempts${rec.generatedBy ? ' \u00b7 by '+escapeHtml(rec.generatedBy) : ''}</div>
+    ${s.focusArea ? `<div style="font-size:13px;margin-top:6px;"><strong>Focus next:</strong> ${escapeHtml(s.focusArea)}</div>` : ''}
+    ${pats('Recurring gaps', s.recurringGaps)}
+    ${pats('Recurring strengths', s.recurringStrengths)}
+    ${s.toneAndWording ? `<div style="font-size:12.5px;margin-top:6px;"><strong>Tone and wording:</strong> ${escapeHtml(s.toneAndWording)}</div>` : ''}
+    ${s.suggestedScenarios && s.suggestedScenarios.length ? `<div style="font-size:12.5px;margin-top:6px;"><strong>Suggested scenarios:</strong>${s.suggestedScenarios.map(x=>`<div style="margin-top:2px;">\u2022 ${escapeHtml(scName(x.id))}${x.why?` - <span style="color:var(--text3);">${escapeHtml(x.why)}</span>`:''}</div>`).join('')}</div>` : ''}
+    ${s.confidence ? `<div style="font-size:11.5px;color:var(--text3);margin-top:6px;">${escapeHtml(s.confidence)}</div>` : ''}
+    ${!(s.recurringGaps||[]).length && !(s.recurringStrengths||[]).length ? `<div style="font-size:12.5px;color:var(--text3);margin-top:6px;">No pattern appeared in 2 or more attempts.</div>` : ''}`;
+}
+function renderPatternSummaryBlock(canonical){
+  const n = scoredAttemptsFor(canonical).length;
+  const list = patternSummariesFor(canonical);
+  const loading = state.patternLoading && state.patternLoading[canonical];
+  const err = state.patternError && state.patternError[canonical];
+  return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="small" data-pattern-generate="${escapeHtml(canonical)}" ${n<3||loading?'disabled':''} title="${n<3?'Needs at least 3 scored attempts':'Summarise patterns across this agent\u2019s attempts'}">${loading?'Generating\u2026':'Generate pattern summary'}</button>
+      <span style="font-size:11.5px;color:var(--text3);">${n<3 ? `${n} of 3 scored attempts needed` : `${n} scored attempts${n>15?' (uses the most recent 15)':''}`}</span>
+    </div>
+    ${err ? `<div style="font-size:12px;color:var(--bad);margin-top:6px;">${escapeHtml(err)}</div>` : ''}
+    ${list.length ? `<div class="box" style="margin-top:8px;">${renderPatternSummaryCard(list[0])}</div>` : ''}
+    ${list.length>1 ? `<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12.5px;">Earlier summaries (${list.length-1})</summary>${list.slice(1).map(r=>`<div class="box" style="margin-top:6px;">${renderPatternSummaryCard(r)}</div>`).join('')}</details>` : ''}
+  </div>`;
 }
 // The score a TL sees in Team Progress: the TL-reviewed score once someone has reviewed the attempt,
 // otherwise the original AI score.
@@ -5147,6 +5241,19 @@ async function callClaudeJson(prompt, modelTier, opts){
 // "AF - Conduct" is re-scored as D (root cause unaddressed / player left with the problem) with a visible
 // note, and the corrected Q2 AF (if the model gave one) is what carries the Conduct zero. Q2 AF is
 // Conduct by definition, so a missing Q2 duty is filled in.
+// Keeps the optional findings array well-formed: at most 6, known types and severities, text fields as strings.
+// Evaluations without findings (legacy prompt, older attempts) are left exactly as they are.
+function normalizeEvalFindings(result){
+  if(!result || !Array.isArray(result.findings)) return result;
+  const str = v => (v===undefined || v===null) ? '' : String(v).trim();
+  result.findings = result.findings.filter(f=>f && typeof f==='object').map(f=>({
+    type: f.type==='coaching' ? 'coaching' : 'process',
+    kbSays: str(f.kbSays), agentDid: str(f.agentDid), impact: str(f.impact), nextTime: str(f.nextTime),
+    severity: ['minor','moderate','major'].includes(f.severity) ? f.severity : 'minor',
+    strength: f.strength===true,
+  })).filter(f=>f.kbSays || f.agentDid || f.nextTime).slice(0,6);
+  return result;
+}
 function enforceAFDutyBoundary(result){
   if(!result || !Array.isArray(result.questions)) return result;
   const q1 = result.questions.find(q=>q.id==='q1');
@@ -5528,6 +5635,13 @@ Rate each "good" | "mixed" | "needs-work" | "not-applicable" (not-applicable onl
 
 EFFICIENCY NARRATIVE (coaching only, never affects scoring): 1-2 sentences in this style - "Correctly resolved in 6m 20s. Most of the additional time came from repeating troubleshooting after the root cause was already known." or "You kept the conversation moving well: targeted question, relevant investigation, clear answer and prompt closure." Total chat duration: ${totalDurationLabel}. Name the specific avoidable behaviour behind any meaningful lost time (unnecessary investigation, re-asking for given info, repeated troubleshooting after a dead end, over-explaining, continuing after the answer was clear), or praise what was efficient. Never frame speed as good if Q1 is D/F/AF - say plainly and neutrally that the time doesn't reflect a correct resolution (e.g. "The chat was short because the issue was never investigated, so the time does not reflect a correct resolution.").
 
+FINDINGS (a plain-language coaching layer shown to the agent under the scorecard; it never changes a letter): up to 6 findings, most important first. Write to the agent as "you", in plain everyday words - no scorecard letters, no "Q1/Q2/Q3", no rubric terms such as "AF", "duty breach" or "Resolution & Obligations". Every finding must agree with your letters and citations: never call something a gap that your citations don't support, never praise something a citation counts against the agent, and every deduction behind a letter below A should appear as a finding unless you already have 6 more important ones.
+- type "process": what this scenario's Process Grounding or KB required (kbSays), what the agent actually did (agentDid), what that meant for the player or the case (impact), and what to do next time (nextTime).
+- type "coaching": how something was said. kbSays states the standard in plain words (e.g. "Acknowledge the frustration before explaining the rule"); agentDid quotes the agent's actual line; nextTime rewrites that same line the way it should have been said, in quotes.
+- severity: "major" when there was real or predictable cost to the player or the case, "moderate" when the player noticed or the process was visibly off, "minor" when there was little or no effect.
+- Strengths may be findings too: set strength to true, severity "minor", and use nextTime to say briefly what to keep doing. Don't use strengths to pad the list.
+- Quote agent lines exactly (under 25 words) and only from the transcript. Leave out anything the transcript doesn't show.
+
 FINAL CHECK BEFORE YOU SCORE Q1/Q2 (one line each):
 1. Pace, filler or closing timing in a Q1/Q2 reason, with no real outcome impact? Move it to coaching and re-decide the letter on outcome alone (rule 13).
 2. Citing a "process deviation"? Confirm Process Grounding prohibits it or it bypassed/replaced a required step; otherwise drop it (rule 10).
@@ -5537,6 +5651,7 @@ FINAL CHECK BEFORE YOU SCORE Q1/Q2 (one line each):
 6. Praising an escalation, follow-up or other action? Confirm Process Grounding calls for it at that point; if premature, treat it as a process issue (rule 11).
 7. Q1 = AF? Only Responsible Gambling, Privacy or Company Exposure - stopped serving belongs in Q2; re-score Q1 on outcome (AF DUTY BOUNDARY).
 8. overallSummary and efficiencyNarrative neutral and specific - what happened, the impact, why each letter - with no dramatic wording ("near-total failure", "worst possible", "abandoned").
+9. Every finding agrees with your letters and citations, uses no scorecard letters or jargon, and each coaching finding rewrites the agent's actual line.
 
 Return ONLY valid JSON (no markdown fences, no preamble), exactly this shape. For q1, "recognitionCheck" is REQUIRED whenever the scenario involves a possible RG trigger - fill it in BEFORE deciding the letter, it is not optional commentary:
 {
@@ -5547,6 +5662,9 @@ Return ONLY valid JSON (no markdown fences, no preamble), exactly this shape. Fo
   ],
   "overallSummary": "2-3 sentence summary grounded in specific transcript turns. Neutral, precise, coaching-oriented - not editorial or dramatic. It must say what happened, what the impact on the player was, and why Q1 and Q2 each received their letter (if either is AF, say which question it applies to and why). Example of the right register: \"The issue was never investigated or resolved. The agent attempted to close the chat before asking for the player's location or checking geolocation data, which left the player without an answer and forced them to re-engage. This is a serious resolution failure (Q1) and, because the agent attempted to end the interaction without serving the player, also meets the Conduct AF threshold under Player Experience (Q2).\"",
   "efficiencyNarrative": "1-2 sentence AHT/efficiency coaching narrative per the instructions above - never affects the score",
+  "findings": [
+    { "type": "process|coaching", "kbSays": "what the process or standard required, in plain words", "agentDid": "what the agent actually did, quoting their line if useful", "impact": "what this meant for the player or the case", "nextTime": "what to do differently (for coaching findings, the agent's line rewritten in quotes)", "severity": "minor|moderate|major", "strength": false }
+  ],
   "coachingSignals": {
     "keepsPlayerEngaged": {"rating":"good|mixed|needs-work|not-applicable", "note":"..."},
     "gathersInfoBeforeTroubleshooting": {"rating":"...", "note":"..."},
@@ -5641,7 +5759,7 @@ function renderDocModal(){
 async function runEvaluation(attemptContext){
   try{
     const prompt = buildEvalPrompt(attemptContext.scenario, attemptContext.transcript, attemptContext.actionLog, attemptContext.docNote, attemptContext.docTag, attemptContext.docSecondaryTag, attemptContext.chatStartedAt, attemptContext.playerLeftEarly, attemptContext.playerLeftReason);
-    const result = enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex'));
+    const result = normalizeEvalFindings(enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex')));
     attemptContext.evaluation = result;
     attemptContext.tlOverrides = {};
     result.questions.forEach(q=>{ attemptContext.tlOverrides[q.id] = {letter:q.letter, afDuty:q.afDuty||null, notes:''}; });
@@ -5683,6 +5801,17 @@ function wireTeamProgressModal(overlay, filterRoster){
   });
   const backBtn=document.getElementById('btnBackToAllTeamProgress');
   if(backBtn) backBtn.addEventListener('click', ()=>{ state.teamProgressOpen=false; overlay.remove(); openTeamProgress(); });
+  document.querySelectorAll('[data-pattern-generate]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const c = btn.getAttribute('data-pattern-generate');
+      state.patternLoading[c] = true; state.patternError[c] = null;
+      const redraw = ()=>{ if(state.teamProgressOpen && document.body.contains(overlay)){ overlay.innerHTML = renderTeamProgressModal(filterRoster); wireTeamProgressModal(overlay, filterRoster); } };
+      redraw();
+      try{ const r = await generatePatternSummary(c); if(!r.ok) state.patternError[c] = r.error; else if(!r.shared) state.patternError[c] = 'Saved on this device only - the shared server didn\u2019t accept it.'; }
+      catch(err){ state.patternError[c] = 'Could not generate: ' + (err.message||String(err)); }
+      state.patternLoading[c] = false; redraw();
+    });
+  });
   document.querySelectorAll('[data-unmatched-add]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const row = btn.closest('[data-unmatched-row]'); const sel = row && row.querySelector('.unmatchedAliasSelect');
@@ -5776,6 +5905,7 @@ function renderTeamProgressModal(filterRoster){
         <span style="color:var(--text3);font-size:12px;">${entries.length} attempt${entries.length===1?'':'s'} \u00b7 ${passCount}/${entries.length} passed</span>
       </div>
       ${rows}
+      ${registeredProfileFor(name) ? renderPatternSummaryBlock(registeredProfileFor(name).canonicalName) : ''}
     </div>`;
   }).join('');
 
@@ -5995,8 +6125,9 @@ function renderEvalModal(){
 // AF duties follow the scorecard's own boundary: Q1 AF = Responsible Gambling / Privacy / Company Exposure;
 // Q2 AF = Conduct (stopped serving / turned on the player). Q3 has no AF.
 const TL_AF_DUTIES_BY_QUESTION = { q1:['Responsible Gambling','Privacy','Company Exposure'], q2:['Conduct'] };
-function scorecardRowsHtml(ev, tlOverrides, mode){
+function scorecardRowsHtml(ev, tlOverrides, mode, opts){
   const tlMode = mode==='tl';
+  const compact = !!(opts && opts.compact); // findings layout: citations and the RG check move to the QA detail section
   return QA_SCORECARD.questions.map(qDef=>{
     const aiQ = ev.questions.find(x=>x.id===qDef.id);
     const override = (tlMode && tlOverrides && tlOverrides[qDef.id]) ? tlOverrides[qDef.id] : {letter:aiQ.letter, afDuty:aiQ.afDuty, notes:''};
@@ -6010,8 +6141,8 @@ function scorecardRowsHtml(ev, tlOverrides, mode){
         <div class="label">${escapeHtml(qDef.label)} <span style="color:var(--text3);font-weight:400;">(${qDef.weightPct}%)</span></div>
         <div class="aiVal ${aiQ.letter==='AF'?'af':''}">AI: ${escapeHtml(aiQ.letter)}${aiQ.afDuty?` - ${escapeHtml(aiQ.afDuty)}`:''}</div>
       </div>
-      <div class="cite">${escapeHtml(aiQ.citation)}</div>
-      ${showRecognitionCheck ? `<div class="cite" style="color:var(--warn);"><strong>RG recognition check:</strong> ${escapeHtml(aiQ.recognitionCheck)}</div>` : ''}
+      ${compact ? '' : `<div class="cite">${escapeHtml(aiQ.citation)}</div>`}
+      ${(!compact && showRecognitionCheck) ? `<div class="cite" style="color:var(--warn);"><strong>RG recognition check:</strong> ${escapeHtml(aiQ.recognitionCheck)}</div>` : ''}
       ${tlMode ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span style="font-size:12px;color:var(--text3);">TL override:</span>
         <select class="tlOverrideSelect" data-id="${qDef.id}">
@@ -6024,6 +6155,36 @@ function scorecardRowsHtml(ev, tlOverrides, mode){
       <textarea class="notes tlNotes" data-id="${qDef.id}" placeholder="TL coaching note (optional)">${escapeHtml(override.notes)}</textarea>` : ''}
     </div>`;
   }).join('');
+}
+
+function hasFindings(ev){ return !!(ev && Array.isArray(ev.findings) && ev.findings.length); }
+const FINDING_SEVERITY_STYLE = {major:'color:var(--bad);border-color:var(--bad-border2);background:var(--bad-bg);', moderate:'color:var(--warn);border-color:var(--warn-border);background:var(--warn-bg);', minor:'color:var(--text2);'};
+function findingCardHtml(f){
+  const chip = f.strength ? `<span class="tag-chip cx-single">Strength</span>` : `<span class="tag-chip" style="${FINDING_SEVERITY_STYLE[f.severity]||''}">${escapeHtml(f.severity.charAt(0).toUpperCase()+f.severity.slice(1))}</span>`;
+  const line = (label, text) => text ? `<div style="font-size:13px;line-height:1.5;margin-top:4px;"><span style="color:var(--text3);">${label}</span> ${escapeHtml(text)}</div>` : '';
+  const coaching = f.type==='coaching';
+  return `<div class="box" style="margin-bottom:8px;border-left:4px solid ${f.strength ? 'var(--ok)' : f.severity==='major' ? 'var(--bad)' : f.severity==='moderate' ? 'var(--warn)' : 'var(--border)'};">
+    <div style="margin-bottom:2px;">${chip}</div>
+    ${line(coaching ? 'The standard:' : 'What the process says:', f.kbSays)}
+    ${line(coaching ? 'What you said:' : 'What you did:', f.agentDid)}
+    ${line('What it meant:', f.impact)}
+    ${line(f.strength ? 'Keep doing:' : coaching ? 'Try saying:' : 'Next time:', f.nextTime)}
+  </div>`;
+}
+function renderFindingsSection(ev){
+  if(!hasFindings(ev)) return '';
+  const group = (title, list) => list.length ? `<h3 style="font-size:14px;margin:16px 0 8px;">${title}</h3>${list.map(findingCardHtml).join('')}` : '';
+  return group('Process (KB)', ev.findings.filter(f=>f.type==='process')) + group('How you said it', ev.findings.filter(f=>f.type==='coaching'));
+}
+function renderQADetailSection(ev){
+  const rows = QA_SCORECARD.questions.map(qDef=>{
+    const q = ev.questions.find(x=>x.id===qDef.id) || {};
+    const rg = qDef.id==='q1' && q.recognitionCheck && q.recognitionCheck.trim().toUpperCase()!=='N/A';
+    return `<div class="rubric-row"><div class="head"><div class="label">${escapeHtml(qDef.label)}</div><div class="aiVal ${q.letter==='AF'?'af':''}">${escapeHtml(q.letter||'')}${q.afDuty?` - ${escapeHtml(q.afDuty)}`:''}</div></div>
+      <div class="cite">${escapeHtml(q.citation||'')}</div>
+      ${rg ? `<div class="cite" style="color:var(--warn);"><strong>RG recognition check:</strong> ${escapeHtml(q.recognitionCheck)}</div>` : ''}</div>`;
+  }).join('');
+  return `<details class="box" style="margin-top:12px;"><summary style="cursor:pointer;font-weight:600;">QA detail</summary><div style="margin-top:6px;">${rows}</div></details>`;
 }
 
 function renderAHTBox(elapsedMinutes, targetMinutes, resolvedCorrectly, lateStart){
@@ -7561,7 +7722,7 @@ async function submitChallengeSlotDoc(slotIndex){
   render();
   try{
     const prompt = buildEvalPrompt(slot.scenario, slot.transcript, slot.actionLog, slot.docNote, slot.docTag, slot.docSecondaryTag, slot.ahtModeUsed ? slot.chatStartedAt : null, slot.playerLeftEarly, slot.playerLeftReason, !!slot.ahtModeUsed);
-    const result = enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex'));
+    const result = normalizeEvalFindings(enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex')));
     slot.evaluation = result;
     QA_SCORECARD.questions.forEach(q=>{ const aiQ=result.questions.find(x=>x.id===q.id); slot.tlOverrides[q.id] = {letter:aiQ.letter, afDuty:aiQ.afDuty||null, notes:''}; });
     archiveChallengeSlotAttempt(slot);
@@ -8014,12 +8175,21 @@ function evalModalContent(){
       <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">${escapeHtml((s.internalTitle||s.title))} - ${new Date(att.timestamp).toLocaleString()}${att.agentName ? ' - '+escapeHtml(att.agentName) : ''}</div>
       ${kbBannerFor(s)}
       ${scoreHeaderHtml(ev, reviewDraft, att.ahtElapsedMinutes, att.ahtTargetMinutes, att.ahtLateStart, tlMode)}
+      ${hasFindings(ev) ? `
+      ${tlMode ? `<div class="box" style="border-color:var(--accent);"><strong>TL / Management review.</strong> The AI\u2019s assessment stays on record as-is. Use the override and note on each question below where the AI got something wrong or the case deserves leniency, then save.${att.tlReviewedAt ? `<div style="color:var(--text3);font-size:12px;margin-top:4px;">Last reviewed ${new Date(att.tlReviewedAt).toLocaleString()}</div>` : ''}</div>` : ''}
+      ${scorecardRowsHtml(ev, reviewDraft, tlMode ? 'tl' : 'agent', {compact:true})}
+      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}
+      ${renderFindingsSection(ev)}
+      <div class="box" style="margin-top:12px;">${escapeHtml(ev.overallSummary)}</div>
+      ${renderEfficiencyNarrativeBox(ev)}
+      ${renderCoachingSignalsBox(ev.coachingSignals)}
+      ${renderQADetailSection(ev)}` : `
       ${renderEfficiencyNarrativeBox(ev)}
       ${renderCoachingSignalsBox(ev.coachingSignals)}
       <div class="box">${escapeHtml(ev.overallSummary)}</div>
       ${tlMode ? `<div class="box" style="border-color:var(--accent);"><strong>TL / Management review.</strong> The AI\u2019s assessment stays on record as-is. Use the override and note on each question below where the AI got something wrong or the case deserves leniency, then save.${att.tlReviewedAt ? `<div style="color:var(--text3);font-size:12px;margin-top:4px;">Last reviewed ${new Date(att.tlReviewedAt).toLocaleString()}</div>` : ''}</div>` : ''}
       ${scorecardRowsHtml(ev, reviewDraft, tlMode ? 'tl' : 'agent')}
-      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}
+      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}`}
       <div class="box" style="margin-top:16px;">
         <div class="box title" style="margin-bottom:6px;">Documentation submitted</div>
         Note: ${escapeHtml(att.docNote||'(none)')}<br>Primary tag: ${escapeHtml(att.docTag||'(none)')}${att.docSecondaryTag && att.docSecondaryTag!=='None' ? `<br>Secondary RG flag: ${escapeHtml(att.docSecondaryTag)}` : ''}
@@ -8098,11 +8268,19 @@ function evalModalContent(){
     <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">${escapeHtml(s.title)} - scored against Betty's real QA Chat Scorecard</div>
     ${kbBannerFor(s)}
     ${scoreHeaderHtml(ev, null, state.ahtElapsedMinutes, s.ahtTargetMinutes, state.ahtLateStart, false)}
+    ${hasFindings(ev) ? `
+    ${scorecardRowsHtml(ev, null, 'agent', {compact:true})}
+    ${renderFindingsSection(ev)}
+    <div class="box" style="margin-top:12px;">${escapeHtml(ev.overallSummary)}</div>
+    ${renderEfficiencyNarrativeBox(ev)}
+    ${renderCoachingSignalsBox(ev.coachingSignals)}
+    ${comparisonHtml}
+    ${renderQADetailSection(ev)}` : `
     ${renderEfficiencyNarrativeBox(ev)}
     ${renderCoachingSignalsBox(ev.coachingSignals)}
     <div class="box">${escapeHtml(ev.overallSummary)}</div>
     ${comparisonHtml}
-    ${scorecardRowsHtml(ev, null, 'agent')}
+    ${scorecardRowsHtml(ev, null, 'agent')}`}
     ${!state.resultsCopied ? `<div class="box" id="unsavedWarningBox" style="border-color:var(--warn);color:var(--warn);font-weight:600;text-align:center;">\u26a0 This attempt is saved in your Attempt History, but hasn't been copied to your coaching notes/hub yet - copy it before closing if you need it outside this tool.</div>` : ''}
     <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
       <button id="closeEvalModal">Close</button>
@@ -8135,6 +8313,11 @@ function buildResultsText(){
   }
   out += `\n`;
   out += `SUMMARY: ${ev.overallSummary}\n\n`;
+  if(hasFindings(ev)){
+    out += `FINDINGS:\n`;
+    ev.findings.forEach(f=>{ out += `- [${f.type==='coaching'?'How you said it':'Process (KB)'}${f.strength?', strength':', '+f.severity}] ${f.kbSays}${f.agentDid?' | You: '+f.agentDid:''}${f.impact?' | Impact: '+f.impact:''}${f.nextTime?' | Next time: '+f.nextTime:''}\n`; });
+    out += `\n`;
+  }
   out += `SCORECARD:\n`;
   QA_SCORECARD.questions.forEach(qDef=>{
     const aiQ = ev.questions.find(x=>x.id===qDef.id);
@@ -9426,7 +9609,7 @@ async function runDiagnostic3(){
 // EVAL_PROMPT_VERSION is switched. Uses the normal scoring path (callClaudeJson + enforceAFDutyBoundary).
 async function scoreWithBuilder(builder, sc, inp){
   const prompt = builder(sc, inp.transcript, inp.actionLog||[], inp.docNote||'', inp.docTag||null, inp.docSecondaryTag||null, inp.chatStartedAt||null, !!inp.playerLeftEarly, inp.playerLeftReason||null, !!inp.ahtModeOn);
-  return enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex'));
+  return normalizeEvalFindings(enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex')));
 }
 function scenarioForSavedAttempt(e){
   const s = scenarioById(e.scenarioId); if(!s) return null;
