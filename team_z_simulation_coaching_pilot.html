@@ -321,6 +321,42 @@ const GLOBAL_EVAL_RULES = `GLOBAL EVALUATION RULES (apply to every criterion bel
 16. GROUND TRUTH AND CONFLICTS. Available Case Data (the records the agent could see or investigate) is the ground truth for this scenario. (a) A player statement that contradicts Case Data - not remembering an activity, disputing a record - is pushback, not a fact: do not penalize an agent for politely relying on verified account records over the player's recollection, do not treat the player's claim as having changed the facts, and judge the manner in which the agent handled the dispute. (b) If a Required Action asks the agent to treat something as unresolved or discrepant that a later or additional record in Available Case Data already explains or supersedes (for example an earlier Cancelled reward followed by a replacement that is Used and confirmed by game history), do not deduct the agent for following the evidence; note the conflict in the summary as a possible scenario-construction issue.
 17. FACT VS. QUALIFIED HYPOTHESIS, AND TURN ORDER. (a) Claiming a cause as fact ("this is a display lag") is different from offering a clearly qualified possibility ("it could be a display issue, but I can't confirm that yet") while continuing to verify or troubleshoot; only the former is an unsupported claim under rule 2. (b) A conditional troubleshooting question ("if you're using the app, ...") asked before the player has said which platform they use is not inattention; it is a lapse only if the agent asks it AFTER the player clearly stated the answer. Before saying the agent ignored or contradicted something the player said, check the turn numbers: the player's statement must come in an earlier turn than the agent turn you cite.`;
 
+// Consolidated rules used by buildEvalPromptV2 (see EVAL_PROMPT_VERSION). Legacy rules above stay unchanged for A/B comparison.
+const GLOBAL_EVAL_RULES_V2 = `EVALUATION RULES (apply to every question)
+
+EVIDENCE
+1. AVAILABLE INFORMATION. Never penalise the agent for not stating, using or acting on information that wasn't available to them (from the player, Available Case Data or Process Grounding). If Process Grounding doesn't give enough to judge a point, say "Cannot Determine From Authoritative Material" (or "Not Applicable" for demonstration-scale criteria) instead of guessing.
+2. KB STATUS. Judge the agent against what is supplied for THIS scenario, respecting its KB status label (validated content is authoritative; mixed, ambiguous, fictional, coaching and TL-draft content are handled as their labels say). Don't substitute your own knowledge of real support policy, and don't assume everything is fictional.
+3. UNSUPPORTED CLAIMS. Any specific claim the agent makes that the player could act on (a promotion's name or terms, an amount, a deadline, a status, a policy detail, a cause) must be traceable to the player, Available Case Data, the Action Log or Process Grounding. If it isn't, it is confident invention: a real Q1 accuracy issue, noted in the citation, never neutral and never praised as initiative, however warmly delivered. This includes placeholder-style values sent to the player (e.g. "[Free Tickets / Betty Coins]"), whether or not the player treated them as a commitment. Initiative earns credit only when it is grounded. A clearly qualified possibility ("it could be a display issue, but I can't confirm that yet") offered while still verifying is not a claim; stating a cause as fact is.
+   Example: Case Data covers only a deposit bonus the player didn't qualify for. The agent declines it correctly, then offers a named alternative promotion with deposit and reward terms that appear nowhere in the inputs. That is invention - for an otherwise-correct chat, typically B or C on Q1 depending on how specific and consequential the claim was.
+4. GROUND TRUTH. Available Case Data is the ground truth. (a) A player disputing or not remembering a record is pushback, not a fact: don't penalise the agent for politely relying on the records, don't treat the claim as changing the facts, and judge how the agent handled the dispute. (b) If a Required Action treats something as unresolved that a later or additional record already explains (e.g. a Cancelled reward followed by a Used replacement confirmed by game history), don't deduct for following the evidence; note the conflict in overallSummary as a possible scenario-construction issue.
+5. PROOF OF ACTIONS.
+   - Investigation: NOT GATED Case Data is visible from the start, so never require an Action Log entry for it. GATED items need an Investigate click: use the Action Log to judge whether the agent actually checked before using that information, rather than guessing correctly.
+   - Operational actions with no UI control (applying a promo, restricting deposits, starting self-exclusion): a clear, specific statement in the transcript ("I've restricted your deposits") is sufficient evidence; a missing Action Log entry proves nothing. Doubt it only if it is vague, contradicted elsewhere, or something Process Grounding says isn't possible.
+   - Escalations are held to a stricter bar. The agent correctly shouldn't name internal channels (e.g. "#eng-escalations") to the player, but generic reassurance ("I'll report it", "I'll flag it so it can be looked into") doesn't prove the specific required escalation happened. Credit it only for a concrete commitment to the actual required action, or where the Action Log tracks it.
+   - Simulated review workflow (items marked [SIMULATED WORKFLOW ACTION] on a Review tab): here the Action Log IS ground truth. Credit a review as requested only if the log shows REVIEW REQUESTED, and the agent as knowing the outcome only if it also shows REVIEW DECISION VIEWED; the decision text in Available Case Data is the outcome for this attempt. Telling the player an outcome without both steps is an unsupported claim (rule 3); acting against the decision (e.g. promising reinstatement after Declined) is a process error with player impact. Name the reviewer only by the action name in the log and Case Data (e.g. "Request CS Manager Review"), never as a TL, manager or any other role.
+6. DON'T INFER EVENTS. "Implied", "presumably" and "likely" are not evidence. If the transcript only says something was approved, arranged or handled, credit the outcome as communicated, but don't fill in who did it or how, and never describe a consultation, escalation or check as shown when it isn't. If a required step (e.g. checking with a TL) isn't visible, say it is not directly evidenced and weigh that by impact (rule 9).
+7. CITE ACCURATELY. Every statement about what an input says or established must match its wording and be quotable. Don't attribute conclusions Case Data doesn't state (one deposit shown does not mean no other deposit exists). Keep Required and Optional actions as labelled - never relabel a required action to soften a miss; weigh it by impact instead (rule 9). Verifying that a Case Data item is the one the player means, after new or contradictory information, is sound practice, not a "loop" or an unnecessary check. Before saying the agent ignored or contradicted the player, check turn order: the player's statement must come in an earlier turn (a conditional question like "if you're using the app, ..." asked before the player said which platform is fine).
+8. PLAYER-FACING TERMS. Process Grounding may use internal names (e.g. "PayTech", "Gigadat"). Using a reasonable player-facing equivalent with the player ("our payments team") is correct; only the underlying process can be wrong.
+
+WEIGHING
+9. IMPACT, NOT CHECKLIST. Required Actions describe good handling; they are not a hidden checklist. For each potential deduction, ask what the actual or predictable impact on the player or the case was. A miss with no realistic consequence is a citation note, not a letter drop; reserve D/F/AF for real or predictable cost. Behaviours Process Grounding doesn't require for this scenario (e.g. asking "is there anything else I can help with") and the Chat Guidelines habit of confirming the game or promotion name early are judged the same way: they affect the letter only if the transcript shows a real consequence (confusion, investigating the wrong item, wasted turns), cited with evidence.
+10. CONFIRM A MISS HAPPENED BEFORE PENALISING IT.
+   - Process deviation: only if Process Grounding prohibits the action, or the action replaced, bypassed or conflicted with a required step. An extra, unforbidden step that didn't get in the way of the required process is not a deviation (at most a coaching note). A genuine deviation can still be B with no consequence, exactly as the rubric defines.
+   - "Repetitive" (Q2): only near-identical wording - quote both turns. Restating a correct "no" in different words through pushback is not repetition, and is the desired behaviour where Process Grounding asks for varied explanations.
+   - "Defensive" (Q2): only curt, snippy, dismissive, or arguing to win rather than help. A calm, direct answer to a specific accusation the player just made is professional pushback-handling.
+   Example: Process Grounding prohibits verifying identity through chat questions and changing the email directly. The agent asks for name and date of birth but still sends the player through the full required process without using the answers. That is not a deviation; Q1 is judged on whether the required process was delivered, which it was.
+11. ESCALATIONS AND ACTIONS MUST BE CALLED FOR. Before crediting an escalation, follow-up promise or other operational action, check that Process Grounding's escalationCriteria and requiredActions call for it at that point in the case. Escalating before the conditions are met is a real process issue (work pushed onto another team, the player left waiting on an unnecessary follow-up), not thorough service.
+   Example: Auto-Deposit is ON, no flags, 3 hours in, and Process Grounding says this is normal for up to 24 hours. Escalating with a promised email follow-up instead of explaining the supported timeframe is a premature escalation, even if the investigation before it was correct.
+12. ONE ROOT CAUSE, ONE DEDUCTION. Deduct in both Q1 and Q2 only if the mistake had two separate impacts (on the outcome, and on how the chat felt). Otherwise deduct once, where it most directly belongs, and mention the link in the other citation.
+13. PACE IS COACHING, NOT QA. Slowness, filler, lingering pleasantries, unnecessary extra steps that changed nothing, or a delayed close never lower Q1 or Q2 on their own; report them in coachingSignals/efficiencyNarrative. They count for QA only if the same behaviour, independent of its time cost, caused a rubric outcome: genuine confusion, a skipped or wrong KB step, a duty issue, or the player materially worse off. The rubric's "minor deviation" wording is for real procedural or KB misses, not conversational pace. This never excuses a genuine process or KB miss, which is scored as usual.
+   Example: correct, complete answer; the player says "that's all, thanks"; the agent's closing message doesn't end the chat and two more rounds of "you too / bye!" follow. Q1 = A; closesConfidently = needs-work, with a note.
+
+PER QUESTION
+14. Q1 needs specific evidence: every letter below A traces to a quotable turn, an Action Log entry, or a specific missing action with real or predictable cost - never a general impression.
+15. Q2 reflects the overall pattern and feel across the whole chat, using representative turns as evidence, not one isolated line.
+16. Q3 is judged only on the submitted note and tags, independent of how well the chat was handled (a great chat with a thin note scores low; a rough chat with an accurate note scores well). A note is accurate when every factual statement in it is supported by the transcript, Action Log or Case Data. A note claiming an outcome the evidence doesn't support ("escalated to Fraud", "reward credited", "sent for review"), or naming something more specific than the transcript shows (an approver, team or channel when the transcript only shows an approval), is not accurate and can't get A. Don't mark a note down for not interpreting facts the scenario never established, for leaving out an internal step that never affected the player or the outcome, or for "omitting" something without re-reading its exact wording. The test is whether a colleague could pick up the case: issue, actions, outcome, key context.`;
+
 /* ============================================================
    REAL BETTY QA SCORECARD - replaces the old per-scenario
    custom rubric. This is the actual scorecard real chats are
@@ -1993,6 +2029,7 @@ let state = {
   diagSectionsOpen:{},
   diagSubsectionsOpen:{},
   manageAssignmentsAgent:'', // which agent's assignments are shown in the Manage Assignments subsection
+  agentAction:null, agentMgmtMsg:null, regPrompt:null, regFormDraft:null, regMsg:null, rosterTableTL:'', deletedAgents:[],
   assignDueDate:'', tlAlertSince:null, tlAlertName:'', tlAlertDismissed:false,
   assignPickerOpen:false, assignSearch:'', manageOpen:{}, manageJumpTarget:null, libraryExpanded:{}, // TL list UI state (session-only)
   scenarioFilters:{assign:{skill:'',kb:'',rg:'',complexity:''}, library:{skill:'',kb:'',rg:'',complexity:''}}, assignSelectedScenarioId:null, // TL Assign Scenarios list filters + selection (session-only)
@@ -3809,27 +3846,75 @@ function wireEvents(){
   });
 
   const btnRegisterAgent=document.getElementById('btnRegisterAgent');
-  if(btnRegisterAgent) btnRegisterAgent.addEventListener('click', async ()=>{
-    const fullName = (document.getElementById('regAgentFullName').value||'').trim();
-    const chatName = (document.getElementById('regAgentChatName').value||'').trim();
-    const additionalName = (document.getElementById('regAgentAltName').value||'').trim();
-    const tlName = (document.getElementById('regAgentTLName').value||'').trim();
-    const email = (document.getElementById('regAgentEmail').value||'').trim();
-    const slackHandle = (document.getElementById('regAgentSlack').value||'').trim();
-    const statusEl = document.getElementById('registerAgentStatus');
-    if(!fullName){
-      if(statusEl){ statusEl.style.display='block'; statusEl.style.color='var(--bad)'; statusEl.textContent='Full name is required.'; }
-      return;
-    }
-    if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-      if(statusEl){ statusEl.style.display='block'; statusEl.style.color='var(--bad)'; statusEl.textContent='That email address doesn\u2019t look right.'; }
-      return;
-    }
-    await registerAgent({fullName, chatName, additionalName, tlName, email, slackHandle});
-    if(statusEl){ statusEl.style.display='block'; statusEl.style.color='var(--ok)'; statusEl.textContent=`Registered ${fullName}.`; }
-    render();
+  if(btnRegisterAgent) btnRegisterAgent.addEventListener('click', ()=>{
+    const v = id=>(document.getElementById(id).value||'').trim();
+    const form = {fullName:v('regAgentFullName'), chatName:v('regAgentChatName'), additionalName:v('regAgentAltName'), tlName:v('regAgentTLName'), email:v('regAgentEmail'), slackHandle:v('regAgentSlack')};
+    if(!form.fullName){ state.regMsg = {text:'Full name is required.', color:'var(--bad)'}; state.regFormDraft = form; render(); return; }
+    if(form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)){ state.regMsg = {text:'That email address doesn\u2019t look right.', color:'var(--bad)'}; state.regFormDraft = form; render(); return; }
+    continueAgentRegistration(form, {});
+  });
+  document.querySelectorAll('[data-reg-prompt]').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      const pr = state.regPrompt; if(!pr) return; const ans = el.getAttribute('data-reg-prompt');
+      state.regPrompt = null;
+      if(ans==='cancel'){ state.regMsg = null; render(); return; }
+      if(pr.kind==='dup'){
+        if(ans==='yes'){
+          const r = await addAliasesToProfile(pr.match, [pr.form.fullName, pr.form.chatName, pr.form.additionalName]);
+          state.regFormDraft = null;
+          state.regMsg = r.ok ? {text: r.added.length ? `Added ${r.added.join(', ')} as alias${r.added.length===1?'':'es'} of ${pr.match}.` : `${pr.match} already has these names.`, color:'var(--ok)'} : {text:r.error, color:'var(--bad)'};
+          render(); return;
+        }
+        return continueAgentRegistration(pr.form, Object.assign({}, pr.opts, {skipDup:true}));
+      }
+      return continueAgentRegistration(pr.form, Object.assign({}, pr.opts, {skipDup:true, move: ans==='yes' ? 'move' : 'keep'}));
+    });
   });
 
+  document.querySelectorAll('[data-agent-action]').forEach(el=>{
+    el.addEventListener('click', e=>{ e.stopPropagation(); const c=el.getAttribute('data-agent'); const k=el.getAttribute('data-agent-action'); state.agentAction = (state.agentAction && state.agentAction.canonical===c && state.agentAction.kind===k) ? null : {canonical:c, kind:k}; render(); });
+  });
+  document.querySelectorAll('[data-stop-row]').forEach(el=>{ el.addEventListener('click', e=>e.stopPropagation()); });
+  document.querySelectorAll('[data-agent-cancel]').forEach(el=>{ el.addEventListener('click', e=>{ e.stopPropagation(); state.agentAction=null; render(); }); });
+  document.querySelectorAll('[data-agent-confirm]').forEach(el=>{
+    el.addEventListener('click', async e=>{
+      e.stopPropagation(); const act = state.agentAction; if(!act) return; const what = el.getAttribute('data-agent-confirm');
+      let r;
+      if(what==='transfer'){ const sel=document.getElementById('agentTransferSelect'); if(!sel || !sel.value){ if(sel) sel.focus(); return; } r = await transferAgent(act.canonical, sel.value); if(r.ok) r.done = `Moved ${act.canonical} to ${sel.value}.`; }
+      else if(what==='delete'){ r = await hardDeleteAgent(act.canonical); if(r.ok) r.done = `Deleted ${act.canonical}.`; }
+      else { r = await setAgentStatus(act.canonical, what); if(r.ok) r.done = `${act.canonical} marked as ${what.toLowerCase()}.`; }
+      state.agentAction = null;
+      state.agentMgmtMsg = r.ok ? {text: r.done + (r.warn ? ' '+r.warn : ''), color: r.warn ? 'var(--warn)' : 'var(--ok)'} : {text:r.error, color:'var(--bad)'};
+      render();
+    });
+  });
+  document.querySelectorAll('[data-agent-reactivate]').forEach(el=>{
+    el.addEventListener('click', async ()=>{ const c=el.getAttribute('data-agent-reactivate'); const r = await setAgentStatus(c, 'Active');
+      state.agentMgmtMsg = r.ok ? {text:`${c} reactivated.${r.warn ? ' '+r.warn : ''}${rostersContaining(c).length ? '' : ' They are not on any roster - use Transfer to place them.'}`, color: r.warn ? 'var(--warn)' : 'var(--ok)'} : {text:r.error, color:'var(--bad)'}; render(); });
+  });
+  document.querySelectorAll('[data-keep-on-roster]').forEach(el=>{
+    el.addEventListener('click', async ()=>{ const c=el.getAttribute('data-keep-on-roster'), tl=el.getAttribute('data-keep-tl'); const r = await transferAgent(c, tl);
+      state.agentMgmtMsg = r.ok ? {text:`${c} is now only on ${tl}'s roster.${r.warn ? ' '+r.warn : ''}`, color: r.warn ? 'var(--warn)' : 'var(--ok)'} : {text:r.error, color:'var(--bad)'}; render(); });
+  });
+  document.querySelectorAll('[data-audit-delete]').forEach(el=>{
+    el.addEventListener('click', ()=>{ const c=el.getAttribute('data-audit-delete'); const p=profileByCanonical(c);
+      if(p && !isActiveAgent(p)){ state.agentMgmtMsg = {text:`Reactivate ${c} first, then delete from All Registered Agents.`, color:'var(--warn)'}; render(); return; }
+      state.agentAction = {canonical:c, kind:'delete'}; state.diagSubsectionsOpen['agent-directory']=true; state.agentDirectorySearch = c; render();
+      setTimeout(()=>{ const row=document.querySelector('[data-agent-row]'); if(row && row.scrollIntoView) row.scrollIntoView({behavior:'smooth', block:'center'}); },0); });
+  });
+  document.querySelectorAll('.auditAmbiguousSelect').forEach(sel=>{
+    sel.addEventListener('change', async e=>{ if(!e.target.value) return; await resolveAmbiguousName(e.target.getAttribute('data-raw'), e.target.value); state.agentMgmtMsg={text:`"${e.target.getAttribute('data-raw')}" now counts as ${e.target.value}.`, color:'var(--ok)'}; render(); });
+  });
+  document.querySelectorAll('#app [data-unmatched-add]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{ const row=btn.closest('[data-unmatched-row]'); const sel=row && row.querySelector('.unmatchedAliasSelect'); const raw=btn.getAttribute('data-unmatched-add');
+      const r = await addUnmatchedAlias(raw, sel ? sel.value : ''); if(!r.ok){ if(sel) sel.focus(); return; }
+      state.agentMgmtMsg = {text:`"${raw}" added as an alias of ${sel.value}.`, color:'var(--ok)'}; render(); });
+  });
+  const rosterTableTLSelect=document.getElementById('rosterTableTLSelect');
+  if(rosterTableTLSelect) rosterTableTLSelect.addEventListener('change', e=>{ state.rosterTableTL = e.target.value; render(); });
+  document.querySelectorAll('[data-open-agent-progress]').forEach(el=>{
+    el.addEventListener('click', e=>{ e.preventDefault(); const n=el.getAttribute('data-open-agent-progress'); openTeamProgress({tlName:n, agents:[n]}); });
+  });
   document.querySelectorAll('[data-edit-agent]').forEach(el=>{
     el.addEventListener('click', ()=>{
       const canonicalName = el.getAttribute('data-edit-agent');
@@ -3856,6 +3941,8 @@ function wireEvents(){
   if(d2) d2.addEventListener('click', runDiagnostic2);
   const d3=document.getElementById('runDiag3');
   if(d3) d3.addEventListener('click', runDiagnostic3);
+  const runAB=document.getElementById('runABTest');
+  if(runAB) runAB.addEventListener('click', ()=>{ if(!(state.abTest && state.abTest.running)) runABComparison(); });
 
   // ---------- TL Management dashboard: section/subsection collapse-expand ----------
   // Independent per id, per Zainab's "opening one must not expand others" requirement - each toggle
@@ -5202,7 +5289,8 @@ function formatDocumentationForEval(docNote, docTag, docSecondaryTag){
   return `Submitted note: "${note}"\nSubmitted primary tag: ${tag}\nSubmitted secondary RG flag: ${secondary}`;
 }
 
-function formatProcessGroundingForEval(s){
+function formatProcessGroundingForEval(s, refs){
+  refs = refs || {impact:'6', cite:'13', truth:'16'}; // rule numbers in the legacy prompt; v2 passes its own
   const pg=s.processGrounding;
   const statusLabel = {
     validated:'REAL BETTY KB, VALIDATED. Treat as authoritative.',
@@ -5210,7 +5298,7 @@ function formatProcessGroundingForEval(s){
     ambiguous:'GENUINE KB GAP: real KB was checked and does not clearly resolve this case. Do not treat either direction as "correct" - evaluate whether the agent correctly recognized the ambiguity instead.',
     fictional:'FICTIONAL/PROTOTYPE-ONLY. Not real Betty KB - use only for testing engine behaviour, not as a real-world correctness standard.',
     coaching:'COACHING-GROUNDED, REAL. Based on documented real TL/QA coaching direction, not a formal written KB article - treat as a genuine, authoritative correctness standard for this scenario (this is real guidance an agent would actually be coached on), just not a KB citation. Do not treat it as fictional/prototype-only.',
-    tl_coaching_draft:'TL COACHING DRAFT - NOT INDEPENDENTLY VALIDATED. This process grounding was written by the creating Team Lead from their own description of a real coaching need, not a cited KB article, and has not been checked by QA. The Required Actions below are the TL\u2019s own stated standard (or follow directly from confirmed Case Data) and may be scored per rules 6 and 13 - do not refuse to score or soften scoring because of this status, but do not treat them as confirmed official Betty policy. Anything under "Unvalidated Assumptions" is NOT a requirement: never deduct for not doing it and never describe it as policy. If a Required Action conflicts with Available Case Data, apply rule 16.'
+    tl_coaching_draft:'TL COACHING DRAFT - NOT INDEPENDENTLY VALIDATED. This process grounding was written by the creating Team Lead from their own description of a real coaching need, not a cited KB article, and has not been checked by QA. The Required Actions below are the TL\u2019s own stated standard (or follow directly from confirmed Case Data) and may be scored per rules '+refs.impact+' and '+refs.cite+' - do not refuse to score or soften scoring because of this status, but do not treat them as confirmed official Betty policy. Anything under "Unvalidated Assumptions" is NOT a requirement: never deduct for not doing it and never describe it as policy. If a Required Action conflicts with Available Case Data, apply rule '+refs.truth+'.'
   }[s.kbStatus] || 'FICTIONAL/PROTOTYPE-ONLY.';
   let out = `KB STATUS: ${statusLabel}\n${s.kbSource?('Source: '+s.kbSource+'\n'):''}KB Topic: ${pg.kbTopic}\nKB Text: ${pg.kbText}\nRequired Actions: ${(pg.requiredActions||[]).filter(x=>x&&x.trim()).join('; ') || '(NONE DEFINED - this scenario was flagged for review without required actions. Judge only against Available Case Data, the transcript and the rules above; do not invent required actions.)'}\nOptional Actions: ${(pg.optionalActions||[]).join('; ')||'(none)'}\nEscalation Criteria: ${pg.escalationCriteria}\nCritical Errors: ${pg.criticalErrors}\nAmbiguity Notes: ${pg.ambiguityNotes||'(none)'}`;
   if(pg.evidenceReconciliation) out += `\nEvidence Reconciliation (chronological, written when the scenario was created):\n${pg.evidenceReconciliation}`;
@@ -5228,7 +5316,7 @@ function formatQAScorecardForEval(){
   }).join('\n\n');
 }
 
-function buildEvalPrompt(s, transcript, actionLog, docNote, docTag, docSecondaryTag, chatStartedAt, playerLeftEarly, playerLeftReason, ahtModeOn){
+function buildEvalPromptLegacy(s, transcript, actionLog, docNote, docTag, docSecondaryTag, chatStartedAt, playerLeftEarly, playerLeftReason, ahtModeOn){
   actionLog = actionLog !== undefined ? actionLog : state.actionLog;
   docNote = docNote !== undefined ? docNote : state.docNote;
   docTag = docTag !== undefined ? docTag : state.docTag;
@@ -5339,6 +5427,116 @@ Rate each "good" | "mixed" | "needs-work" | "not-applicable" (use not-applicable
 EFFICIENCY NARRATIVE (separate field, coaching only, never affects scoring): write 1-2 sentences in this exact style - "Correctly resolved in 6m 20s. Most of the additional time came from repeating troubleshooting after the root cause was already known." or "You kept the conversation moving well: targeted question, relevant investigation, clear answer and prompt closure." Total chat duration: ${totalDurationLabel}. Ground the sentence in what actually happened - name the SPECIFIC avoidable behavior if there was meaningful lost time (unnecessary investigation, re-asking for info already given, repeated troubleshooting after a dead end, over-explaining, continuing after the answer was already clear), or specifically praise what was efficient if the chat moved well. The goal is coaching agents to cut avoidable time while still resolving correctly - NEVER frame speed itself as good if Q1 scored D/F/AF; a fast wrong answer is not good AHT, say so plainly if that's what happened, in neutral factual language (e.g. "The chat was short because the issue was never investigated, so the time does not reflect a correct resolution.") - no superlatives or dramatic phrasing such as "worst possible outcome."
 
 FINAL CHECK BEFORE YOU SCORE Q1/Q2: (1) if your reasoning for either letter mentions pace, speed, filler, lingering, or closing timing, and the player was never actually confused/misled/left-unresolved by it, that's not a valid reason to go below the letter the actual resolution quality earns - move that observation to coachingSignals/efficiencyNarrative instead and re-decide the letter on outcome quality alone. (2) if your reasoning cites a "process deviation" or "minor deviation," re-check: does Process Grounding actually prohibit that specific action, or did it conflict with/bypass/replace a required step? If the action was merely extra or non-essential, was never forbidden, and the required process was still fully and correctly delivered, that's not a real deviation - drop it from the Q1 citation and score on whether the required process was actually completed correctly. (3) if your Q2 reasoning cites "repetitive," quote the actual wording being compared - if it's genuinely different phrasing of the same fact, that's not repetition, drop it. If your Q2 reasoning cites "defensive," re-read the line in context - if it's a calm, direct response to something the player specifically said, not curt or dismissive, that's not defensiveness, drop it. (4) if your citation or overallSummary describes the agent positively for offering something specific (a promo, a discount, an alternative, a policy detail, a workaround) - stop and verify that specific offer is actually traceable to Available Case Data, Player Knowledge, the Action Log, or Process Grounding for this scenario. If it isn't there, this is confident invention per Global Eval Rule 2 - correct the Q1 letter to reflect a real accuracy issue and remove any positive framing of it. (5) if recognitionCheck is anything other than "N/A" or if RG considerations factored into your Q1/Q2 reasoning in any way, re-check RG SCORING APPLICABILITY above - if this scenario's flag says RG is not relevant, recognitionCheck must be corrected to "N/A" and every RG-related consideration removed from your scoring, regardless of what the player said about money, stress, or anything else. (6) if your reasoning or overallSummary describes an escalation, a follow-up promise, or any operational action positively - stop and verify Process Grounding's escalationCriteria/requiredActions actually call for that action at this point in the case. If Process Grounding says this should still be resolved directly (e.g. a normal timeframe hasn't elapsed yet), a premature escalation is a real process issue, not good service - correct the framing and reflect it appropriately in Q1. (7) if your Q1 letter is AF, re-check AF DUTY BOUNDARY above: Q1 AF is valid ONLY for Responsible Gambling, Privacy, or Company Exposure - if your afDuty for Q1 is Conduct, or your reason is "stopped serving / abandoned / closed early," that reasoning belongs in Q2. Re-score Q1 on outcome using the Q1 letter definitions (typically D when the root cause was left unaddressed and the player was left with the problem) and move the stopped-serving reasoning to Q2. (8) re-read overallSummary and efficiencyNarrative for tone: state what happened, the impact on the player, and why each criterion received its letter, in neutral and specific terms - remove dramatic or editorial wording (e.g. "near-total failure," "worst possible," "abandoned") and replace it with the factual description.
+
+Return ONLY valid JSON (no markdown fences, no preamble), exactly this shape. For q1, "recognitionCheck" is REQUIRED whenever the scenario involves a possible RG trigger - fill it in BEFORE deciding the letter, it is not optional commentary:
+{
+  "questions": [
+    { "id": "q1", "letter": "A|B|C|D|F|AF", "citation": "brief citation of the specific transcript turn(s) supporting this letter, quoting under 15 words or referencing turn numbers", "afDuty": "one of Responsible Gambling|Privacy|Company Exposure, ONLY if letter is AF, otherwise null - Conduct is NOT a valid Q1 duty (see AF DUTY BOUNDARY)", "recognitionCheck": "If this scenario could involve an RG trigger: state plainly YES or NO on whether the agent's response demonstrably engaged with the SPECIFIC disclosure (quote the exact words that do or don't qualify), per CHECK 1 above. If YES, the letter CANNOT be AF for Responsible Gambling. If not RG-relevant, write 'N/A'." },
+    { "id": "q2", "letter": "A|B|C|D|F|AF", "citation": "...", "afDuty": "Conduct, ONLY if letter is AF, otherwise null" },
+    { "id": "q3", "letter": "A|B", "citation": "..." }
+  ],
+  "overallSummary": "2-3 sentence summary grounded in specific transcript turns. Neutral, precise, coaching-oriented - not editorial or dramatic. It must say what happened, what the impact on the player was, and why Q1 and Q2 each received their letter (if either is AF, say which question it applies to and why). Example of the right register: \"The issue was never investigated or resolved. The agent attempted to close the chat before asking for the player's location or checking geolocation data, which left the player without an answer and forced them to re-engage. This is a serious resolution failure (Q1) and, because the agent attempted to end the interaction without serving the player, also meets the Conduct AF threshold under Player Experience (Q2).\"",
+  "efficiencyNarrative": "1-2 sentence AHT/efficiency coaching narrative per the instructions above - never affects the score",
+  "coachingSignals": {
+    "keepsPlayerEngaged": {"rating":"good|mixed|needs-work|not-applicable", "note":"..."},
+    "gathersInfoBeforeTroubleshooting": {"rating":"...", "note":"..."},
+    "avoidsRepetition": {"rating":"...", "note":"..."},
+    "avoidsFiller": {"rating":"...", "note":"..."},
+    "stopsInvestigatingOnceClear": {"rating":"...", "note":"..."},
+    "closesConfidently": {"rating":"...", "note":"..."}
+  }
+}`;
+}
+
+// ---------- CONSOLIDATED EVALUATOR PROMPT (v2) ----------
+// Same requirements as the legacy prompt (kept below as buildEvalPromptLegacy), merged into one statement per rule with
+// at most one worked example each. EVAL_PROMPT_VERSION decides which one live scoring uses. It stays 'legacy' until the
+// System Tests A/B comparison shows the two score the same; then switch it to 'v2'.
+const EVAL_PROMPT_VERSION = 'legacy';
+function buildEvalPrompt(...args){ return EVAL_PROMPT_VERSION==='v2' ? buildEvalPromptV2(...args) : buildEvalPromptLegacy(...args); }
+
+function buildEvalPromptV2(s, transcript, actionLog, docNote, docTag, docSecondaryTag, chatStartedAt, playerLeftEarly, playerLeftReason, ahtModeOn){
+  actionLog = actionLog !== undefined ? actionLog : state.actionLog;
+  docNote = docNote !== undefined ? docNote : state.docNote;
+  docTag = docTag !== undefined ? docTag : state.docTag;
+  docSecondaryTag = docSecondaryTag !== undefined ? docSecondaryTag : state.docSecondaryTag;
+  playerLeftEarly = playerLeftEarly !== undefined ? playerLeftEarly : state.playerLeftEarly;
+  playerLeftReason = playerLeftReason !== undefined ? playerLeftReason : state.playerLeftReason;
+  const timingSignals = computeTimingSignals(transcript, chatStartedAt);
+  const realMsgs = transcript.filter(m=>m.speaker!=='system' && m.ts);
+  const totalDurationLabel = (chatStartedAt && realMsgs.length)
+    ? formatElapsed((realMsgs[realMsgs.length-1].ts) - chatStartedAt)
+    : 'unknown (timestamps unavailable for this transcript)';
+  const playerLeftBlock = playerLeftEarly ? `
+PLAYER LEFT FIRST: the player ended this chat themselves${playerLeftReason==='silence' ? ' after the agent went silent for an extended period with no response' : ' mid-conversation'}. This is a real Q1/Q2 input, but a departure is not automatically an agent failure - judge its cause from the transcript. If agent failure caused it (ignoring the player, long unexplained silence, repeated irrelevant or unhelpful replies, rudeness), score Q1 (player left with the problem, repeat contact likely) and Q2 accordingly. If the agent handled the case correctly and the player left anyway (refusing a correct, unavoidable answer, or impatient despite reasonable pacing), score the handling exactly as if the chat had closed normally.
+Example: the agent explains a real policy limit clearly, holds the line once more, and the player leaves calling it ridiculous - not agent-caused. If instead the agent goes silent after a reasonable follow-up question until the player leaves - agent-caused.
+` : '';
+  const ahtModeLabel = (ahtModeOn!==undefined ? ahtModeOn : state.ahtMode)
+    ? `AHT Mode is ON for this attempt: you may compare handling time with this scenario's target (${s.ahtTargetMinutes ? s.ahtTargetMinutes+' min' : 'no target set'}) in efficiencyNarrative. It is still never a QA input - don't lower Q1 or Q2 because the chat exceeded the target; a slow but correct, well-communicated resolution is still A/A.`
+    : `AHT Mode is OFF for this attempt: handling-time behaviours (pace, filler, lingering, closing speed) are coaching only - report them in efficiencyNarrative, never in the scorecard reasoning.`;
+  const refs = {impact:'9', cite:'7', truth:'4'};
+
+  return `You are a QA evaluator scoring a CUSTOMER SUPPORT AGENT'S performance (not the customer's) in a completed training simulation transcript, using Betty's real Chat Scorecard. Apply it exactly as defined; don't soften or reinterpret it. Q1/Q2/Q3 are scored only from the rubric's letter definitions, this scenario's process requirements and the actual or predictable impact on the player or the business. Coaching signals and the efficiency narrative are separate and never change a letter.
+
+${GLOBAL_EVAL_RULES_V2}
+
+${ahtModeLabel}
+
+SCENARIO: ${s.title} (${s.skill}, ${s.difficulty})
+
+AVAILABLE CASE DATA (each item is GATED or NOT GATED - see rule 5):
+${formatCaseDataForEval(s)}
+
+AGENT ACTION LOG (ground truth for GATED items and the simulated review workflow only):
+${formatActionLogForEval(actionLog)}
+
+POST-CHAT DOCUMENTATION (the only basis for Q3):
+${formatDocumentationForEval(docNote, docTag, docSecondaryTag)}
+${primaryTagResolved(s) ? `For reference (evaluator only, not shown to the agent): the primary tag that best matches this case is "${s.correctTag}".` : 'For reference (evaluator only, not shown to the agent): the primary tag for this scenario is UNRESOLVED - it was never matched to the approved tag catalogue. Do NOT score the agent\u2019s primary tag choice at all: judge Q3 on the note only, and do not describe the tag as right or wrong.'}${s.correctSecondaryTag ? ` This scenario also has a real secondary RG intervention flag: "${s.correctSecondaryTag}", applied ALONGSIDE the primary tag, not instead of it. Don't penalise a different but reasonable primary tag on its own; a missing or clearly wrong secondary RG flag is a documentation gap for Q3.` : ' This scenario has no applicable secondary RG flag - selecting one anyway is a documentation accuracy issue.'} Q3 = A only if the tag(s) reasonably match AND the note is accurate and lets a colleague pick up the case cold (rule 16). Q3 = B if a required tag is missing or wrong, or the note is missing, inaccurate or too thin - per the rubric, B never fails the chat on its own; it caps the score at 95%.
+
+PROCESS GROUNDING (authoritative for judging Q1 in THIS scenario - note the KB status):
+${formatProcessGroundingForEval(s, refs)}
+
+THE SCORECARD (apply exactly - this is the real rubric):
+${formatQAScorecardForEval()}
+
+RG SCORING APPLICABILITY: ${s.rgScoringRelevant ? 'This scenario IS designed with Responsible Gambling content and obligations. Apply the RG RECOGNITION section below.' : 'This scenario is NOT designed with any Responsible Gambling content or obligation. Don\u2019t infer an RG trigger from money, bills, financial stress or frustration - only the scenario\u2019s design makes it RG-relevant, and this one has none; treat such statements like any other ordinary customer statement. recognitionCheck MUST be exactly "N/A", Responsible Gambling must never be the afDuty, and RG must not raise, lower or appear in any letter or citation. Skip the RG RECOGNITION section below.'}
+
+AF DUTY BOUNDARY (follows the scorecard's own AF definitions):
+- Q1 AF is available ONLY for Responsible Gambling (a direct statement or clear trigger went completely unactioned), Privacy, or Company Exposure. Conduct is never a Q1 AF duty, and "stopped serving", "abandoned the player", "closed the chat early" or "never engaged" are not Q1 AF triggers.
+- Q2 AF is available ONLY for Conduct: the agent turned on the player, or stopped serving them (closing mid-conversation, refusing to engage, arguing to win rather than resolve).
+- If the agent stopped serving or tried to end the chat before investigating or resolving anything: Q2 = AF (Conduct), and Q1 is scored separately on outcome - D when the root cause was left unaddressed, the player was left with the problem and a repeat contact is predictable (F only if the Q1 F definition is independently met, e.g. misleading information the player will act on, or a committed action that never happened). These are two distinct impacts, so this is not a double deduction under rule 12; note the connection in both citations.
+- Without an independent Q1-eligible breach, Q1 is never AF, however severe the resolution failure.
+
+RG RECOGNITION (only when RG applies): AF for Responsible Gambling applies only when the disclosure went completely UNACTIONED. Recognition and execution are separate checks, and AF depends only on the first:
+CHECK 1 - recognition: did the agent engage with the SPECIFIC disclosure - a follow-up question referencing what the player said, naming it back to them, or a concrete action tied to it (restricting deposits/gameplay, mentioning self-exclusion)? A generic platitude that doesn't reference the disclosure ("play responsibly", "have fun out there", "we want you to enjoy yourself") is not recognition, even with RG-adjacent words, and scores the same as silence: AF. If CHECK 1 is YES, AF is ruled out; the worst is D or F on Q1.
+CHECK 2 - execution (only if CHECK 1 is YES): did the agent complete the RG action THIS scenario's Process Grounding requires (its Required Actions, Critical Errors and Escalation Criteria)? There is no universal RG response - don't default to "restrict + self-exclude". For example: a Direct Statement may require restricting deposits/gameplay AND indicating self-exclusion intent; an indirect essentials-framed statement may require suspending and escalating for review (self-exclusion would be wrong); a concerning statement may require restricting deposits/gameplay only (restricting withdrawals would be wrong); an indirect check-in may require a genuine open-ended check-in first. Recognised but not completed = D on Q1, never AF. A different RG action than required is a listed Critical Error - still recognition, so never AF; letter by its real cost.
+Example: the player makes a Direct Statement; the agent asks "you mentioned trying to win back money - is that something that's been on your mind?" (CHECK 1 YES), then only says "maybe set yourself a limit", with no restriction or self-exclusion (CHECK 2 NO). Q1 = D, not AF.
+
+FULL TRANSCRIPT:
+${formatTranscriptForEval(transcript, s)}
+${playerLeftBlock}
+COACHING SIGNALS (never change a Q1/Q2/Q3 letter, never factor into AF, never appear in a scorecard citation): ${formatTimingSignalsForEval(timingSignals)}
+Judge each behaviour independently from the full transcript:
+- keepsPlayerEngaged: did the agent keep the player informed and attended to, or was the player left hanging?
+- gathersInfoBeforeTroubleshooting: did the agent ask relevant questions / check Case Data before a fix, or guess first and backfill?
+- avoidsRepetition: did the agent re-ask something already answered, or restate something already said, more than once?
+- avoidsFiller: using the filler count above plus your own read - is there real, repeated empty filler, or was the count coincidental?
+- stopsInvestigatingOnceClear: once the answer was clear, did the agent keep digging or stalling, or move to resolution?
+- closesConfidently: once resolved, did the agent close promptly - or drag the ending out, or close before the issue was actually resolved?
+Rate each "good" | "mixed" | "needs-work" | "not-applicable" (not-applicable only when the transcript gives no basis, e.g. the chat ended before any close was possible), with a one-sentence, transcript-grounded note - no generic praise or criticism.
+
+EFFICIENCY NARRATIVE (coaching only, never affects scoring): 1-2 sentences in this style - "Correctly resolved in 6m 20s. Most of the additional time came from repeating troubleshooting after the root cause was already known." or "You kept the conversation moving well: targeted question, relevant investigation, clear answer and prompt closure." Total chat duration: ${totalDurationLabel}. Name the specific avoidable behaviour behind any meaningful lost time (unnecessary investigation, re-asking for given info, repeated troubleshooting after a dead end, over-explaining, continuing after the answer was clear), or praise what was efficient. Never frame speed as good if Q1 is D/F/AF - say plainly and neutrally that the time doesn't reflect a correct resolution (e.g. "The chat was short because the issue was never investigated, so the time does not reflect a correct resolution.").
+
+FINAL CHECK BEFORE YOU SCORE Q1/Q2 (one line each):
+1. Pace, filler or closing timing in a Q1/Q2 reason, with no real outcome impact? Move it to coaching and re-decide the letter on outcome alone (rule 13).
+2. Citing a "process deviation"? Confirm Process Grounding prohibits it or it bypassed/replaced a required step; otherwise drop it (rule 10).
+3. Citing "repetitive" or "defensive"? Quote the wording and confirm it meets rule 10; otherwise drop it.
+4. Praising a specific offer (promo, discount, alternative, policy detail, workaround)? Confirm it is traceable to the inputs; if not, it is invention - lower Q1 and remove the praise (rule 3).
+5. RG not relevant for this scenario? recognitionCheck must be "N/A" and nothing RG-related may affect any letter.
+6. Praising an escalation, follow-up or other action? Confirm Process Grounding calls for it at that point; if premature, treat it as a process issue (rule 11).
+7. Q1 = AF? Only Responsible Gambling, Privacy or Company Exposure - stopped serving belongs in Q2; re-score Q1 on outcome (AF DUTY BOUNDARY).
+8. overallSummary and efficiencyNarrative neutral and specific - what happened, the impact, why each letter - with no dramatic wording ("near-total failure", "worst possible", "abandoned").
 
 Return ONLY valid JSON (no markdown fences, no preamble), exactly this shape. For q1, "recognitionCheck" is REQUIRED whenever the scenario involves a possible RG trigger - fill it in BEFORE deciding the letter, it is not optional commentary:
 {
@@ -5485,6 +5683,15 @@ function wireTeamProgressModal(overlay, filterRoster){
   });
   const backBtn=document.getElementById('btnBackToAllTeamProgress');
   if(backBtn) backBtn.addEventListener('click', ()=>{ state.teamProgressOpen=false; overlay.remove(); openTeamProgress(); });
+  document.querySelectorAll('[data-unmatched-add]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const row = btn.closest('[data-unmatched-row]'); const sel = row && row.querySelector('.unmatchedAliasSelect');
+      const r = await addUnmatchedAlias(btn.getAttribute('data-unmatched-add'), sel ? sel.value : '');
+      if(!r.ok){ if(sel) sel.focus(); return; }
+      overlay.innerHTML = renderTeamProgressModal(filterRoster);
+      wireTeamProgressModal(overlay, filterRoster);
+    });
+  });
   document.querySelectorAll('.ambiguousResolveSelect').forEach(sel=>{
     sel.addEventListener('change', async e=>{
       const raw = e.target.getAttribute('data-raw');
@@ -5529,7 +5736,7 @@ function renderTeamProgressModal(filterRoster){
         <button id="btnBackToAllTeamProgress" class="small">Show everyone</button>
       </div>`
     : '';
-  const ambiguousPanel = !filterRoster ? renderAmbiguousNamesPanel(fullLog) : '';
+  const ambiguousPanel = renderAmbiguousNamesPanel(fullLog, filterRoster) + (!filterRoster ? renderUnmatchedNamesPanel(fullLog) : '');
   if(fullLog.length===0){
     return `<div class="modal"><h2>Team Progress</h2>${filterBanner}<div class="empty">${filterRoster ? 'No attempts recorded yet for this team.' : 'No attempts recorded yet by anyone using this link.'}</div><button id="closeEvalModal" style="margin-top:16px;">Close</button></div>`;
   }
@@ -5565,7 +5772,7 @@ function renderTeamProgressModal(filterRoster){
     }).join('');
     return `<div class="box" style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <strong style="font-size:15px;">${escapeHtml(name)}</strong>
+        <strong style="font-size:15px;">${escapeHtml(name)}${agentStatusSuffix(name) ? `<span style="font-weight:400;color:var(--text3);">${escapeHtml(agentStatusSuffix(name))}</span>` : ''}</strong>
         <span style="color:var(--text3);font-size:12px;">${entries.length} attempt${entries.length===1?'':'s'} \u00b7 ${passCount}/${entries.length} passed</span>
       </div>
       ${rows}
@@ -6115,6 +6322,7 @@ async function loadAgentDirectory(){
       const data = await response.json();
       if(Array.isArray(data.agentDirectory)) state.agentDirectory = data.agentDirectory;
       if(data.manualNameOverrides && typeof data.manualNameOverrides==='object') state.manualNameOverrides = data.manualNameOverrides;
+      if(Array.isArray(data.deletedAgents)) state.deletedAgents = data.deletedAgents; // hard-delete tombstones (needs the backend delete route)
       return;
     }
   }catch(err){
@@ -6247,6 +6455,30 @@ async function resolveAmbiguousName(rawName, canonicalName){
 // Registers or updates one agent's canonical profile, and (optionally) attaches them to a TL's
 // roster. Editing an existing canonicalName (case-insensitive) replaces that profile's names/aliases
 // rather than creating a duplicate - this is what keeps the roster editable per the spec.
+// Registration flow with the two checks that can pause it: a likely duplicate ("Did you mean ...?") and an agent who is
+// already on another TL's roster ("Move ... from A to B?"). Each pause is a prompt rendered from state.regPrompt.
+async function continueAgentRegistration(form, opts){
+  const existing = profileByCanonical(form.fullName);
+  if(!existing && !opts.skipDup){
+    const m = findCloseAgentMatch(form);
+    if(m){ state.regPrompt = {kind:'dup', form, match:m.canonicalName, opts}; state.regFormDraft = form; state.regMsg = null; render(); return; }
+  }
+  const canonical = existing ? existing.canonicalName : form.fullName.trim();
+  const current = rostersContaining(canonical);
+  const wantsOther = form.tlName && current.length && !current.some(r=>namesMatch(r.tlName, form.tlName));
+  if(wantsOther && !opts.move){
+    state.regPrompt = {kind:'move', form, canonical, from: current.map(r=>r.tlName).join(' and '), opts}; state.regFormDraft = form; state.regMsg = null; render(); return;
+  }
+  await registerAgent(Object.assign({}, form, {tlName: wantsOther ? '' : form.tlName}));
+  let msg = {text:`Registered ${canonical}.`, color:'var(--ok)'};
+  if(wantsOther && opts.move==='move'){
+    const r = await transferAgent(canonical, form.tlName);
+    msg = r.ok ? {text:`Registered ${canonical} and moved them to ${form.tlName}.${r.warn ? ' '+r.warn : ''}`, color: r.warn ? 'var(--warn)' : 'var(--ok)'} : {text:`Saved ${canonical}'s details, but the move failed. ${r.error}`, color:'var(--bad)'};
+  } else if(wantsOther){
+    msg = {text:`Saved ${canonical}'s details; they stay on ${current.map(r=>r.tlName).join(' and ')}.`, color:'var(--ok)'};
+  }
+  state.regFormDraft = null; state.regMsg = msg; render();
+}
 async function registerAgent({fullName, chatName, additionalName, tlName, email, slackHandle}){
   const canonicalName = fullName.trim();
   const aliases = [chatName, additionalName].map(a=>(a||'').trim()).filter(Boolean);
@@ -6256,6 +6488,7 @@ async function registerAgent({fullName, chatName, additionalName, tlName, email,
   const prev = existingIdx>=0 ? state.agentDirectory[existingIdx] : null;
   profile.email = email!==undefined ? ((email||'').trim()||null) : (prev ? prev.email||null : null);
   profile.slackHandle = slackHandle!==undefined ? ((slackHandle||'').trim()||null) : (prev ? prev.slackHandle||null : null);
+  if(prev){ if(prev.status!==undefined) profile.status = prev.status; if(prev.statusChangedAt!==undefined) profile.statusChangedAt = prev.statusChangedAt; } // re-registering never reactivates a former agent
   if(existingIdx>=0) state.agentDirectory[existingIdx] = profile;
   else state.agentDirectory.push(profile);
   await upsertAgentDirectoryRemote(profile); // single-profile write - never clobbers another TL's concurrent registration
@@ -6298,11 +6531,190 @@ async function seedZainabRosterIfMissing(){
   // registerAgent is idempotent by canonicalName, so this is always safe to run, even partially.
   const missing = ZAINAB_TEAM_ROSTER.filter(a =>
     !state.agentDirectory.some(existing => (existing.canonicalName||'').trim().toLowerCase() === a.fullName.trim().toLowerCase())
+    && !isDeletedAgentName(a.fullName) // never re-create a hard-deleted agent (Left agents still exist, so they're never touched)
   );
   if(missing.length===0) return;
   for(const a of missing){
     await registerAgent({fullName:a.fullName, chatName:a.chatName, additionalName:a.additionalName, tlName:'Zainab Yahaya'});
   }
+}
+
+
+// ---------- AGENT MANAGEMENT ----------
+// Status instead of delete: profiles carry status (Active | Left | Transferred) and statusChangedAt. A profile with no
+// status is Active. Former agents keep their profile, aliases and every saved attempt; they are only hidden from the
+// assign / manage pickers and from active roster counts. Hard delete is allowed only with zero attempts and zero
+// assignments. Stored agentName values on past records are never rewritten.
+const AGENT_STATUSES = ['Active','Left','Transferred'];
+const DELETED_AGENTS_KEY = 'zteamz_deletedAgents_v1';
+function agentStatus(p){ return (p && AGENT_STATUSES.includes(p.status)) ? p.status : 'Active'; }
+function isActiveAgent(p){ return agentStatus(p)==='Active'; }
+function profileByCanonical(name){ const k=(name||'').trim().toLowerCase(); return k ? (state.agentDirectory.find(a=>(a.canonicalName||'').trim().toLowerCase()===k)||null) : null; }
+function sortedProfiles(list){ return list.slice().sort((a,b)=>(a.canonicalName||'').localeCompare(b.canonicalName||'')); }
+function activeAgentProfiles(){ return sortedProfiles(state.agentDirectory.filter(isActiveAgent)); }
+function formerAgentProfiles(){ return sortedProfiles(state.agentDirectory.filter(p=>!isActiveAgent(p))); }
+function rostersContaining(canonical){ const k=(canonical||'').trim().toLowerCase(); return state.tlRosters.filter(r=>(r.agents||[]).some(ag=>(ag||'').trim().toLowerCase()===k)); }
+function agentsOnMultipleRosters(){ return activeAgentProfiles().map(p=>({profile:p, rosters:rostersContaining(p.canonicalName)})).filter(x=>x.rosters.length>1); }
+function attemptsForAgent(canonical){ return state.teamProgressLog.filter(e=>e && e.type!=='tl-review' && namesMatch(e.agentName, canonical)); }
+function assignmentsForCanonical(canonical){ return state.assignments.filter(a=>namesMatch(a.agentName, canonical)); }
+function agentHasHistory(canonical){ return attemptsForAgent(canonical).length>0 || assignmentsForCanonical(canonical).length>0; }
+function agentStatusSuffix(name){ const p = profileByCanonical(canonicalNameFor(name)); const s = agentStatus(p); return (p && s!=='Active') ? ` (${s.toLowerCase()})` : ''; }
+function loadDeletedAgentsLocal(){ try{ const v=JSON.parse(localStorage.getItem(DELETED_AGENTS_KEY)||'[]'); return Array.isArray(v)?v:[]; }catch(err){ return []; } }
+function isDeletedAgentName(name){
+  const k=(name||'').trim().toLowerCase();
+  return [...(state.deletedAgents||[]), ...loadDeletedAgentsLocal()].some(n=>(n||'').trim().toLowerCase()===k);
+}
+function cacheAgentDirectoryLocally(){ try{ localStorage.setItem(AGENT_DIRECTORY_KEY, JSON.stringify(state.agentDirectory)); }catch(err){} }
+function cacheRostersLocally(){ try{ localStorage.setItem(TL_ROSTERS_KEY, JSON.stringify(state.tlRosters)); }catch(err){} }
+// Calls a backend route and tells "no network" (offline/practice copy: keep the change on this device, like the rest of
+// the app) apart from "the server answered with an error" (e.g. 404: the route doesn't exist yet - revert, never fall
+// back to a whole-array overwrite).
+async function callBackendRoute(path, method, body){
+  try{
+    const resp = await fetch(BACKEND_URL + path, {method, headers:{'Content-Type':'application/json'}, body: body!==undefined ? JSON.stringify(body) : undefined});
+    let data = null; try{ data = await resp.json(); }catch(err){}
+    return {ok:resp.ok, status:resp.status, data, offline:false};
+  }catch(err){ return {ok:false, status:0, data:null, offline:true}; }
+}
+function backendRouteError(route, status){ return `Not saved: the shared backend answered ${status||'with an error'} for ${route}. This route needs to be added to the Render backend first (see the backend notes).`; }
+
+async function setAgentStatus(canonical, status){
+  const p = profileByCanonical(canonical); if(!p) return {ok:false, error:'Agent not found.'};
+  const changedAt = Date.now();
+  const updated = Object.assign({}, p, {status, statusChangedAt: changedAt});
+  Object.assign(p, updated);
+  await upsertAgentDirectoryRemote(updated);
+  const after = profileByCanonical(canonical);
+  if(after && agentStatus(after)!==status){
+    // The server's copy came back without the status field: keep it on this device and say so.
+    Object.assign(after, {status, statusChangedAt: changedAt}); cacheAgentDirectoryLocally();
+    return {ok:true, warn:'Saved on this device only - the shared backend did not keep the status field (see the backend notes).'};
+  }
+  return {ok:true};
+}
+async function transferAgent(canonical, toTlName){
+  const to = (toTlName||'').trim(); if(!to) return {ok:false, error:'Pick a TL.'};
+  const before = JSON.parse(JSON.stringify(state.tlRosters));
+  const k = canonical.trim().toLowerCase();
+  state.tlRosters.forEach(r=>{ if(!namesMatch(r.tlName, to)) r.agents = (r.agents||[]).filter(ag=>(ag||'').trim().toLowerCase()!==k); });
+  let target = state.tlRosters.find(r=>namesMatch(r.tlName, to));
+  if(!target){ target = {tlName:to, agents:[]}; state.tlRosters.push(target); }
+  if(!target.agents.some(ag=>(ag||'').trim().toLowerCase()===k)) target.agents.push(canonical);
+  const r = await callBackendRoute('/api/store/tl-rosters/transfer', 'POST', {agent: canonical, toTlName: to});
+  if(r.ok){
+    if(r.data && Array.isArray(r.data.tlRosters)){ state.tlRosters = r.data.tlRosters; mergeTlContactsIntoRosters(); }
+    cacheRostersLocally(); return {ok:true};
+  }
+  if(r.offline){ cacheRostersLocally(); return {ok:true, warn:'Saved on this device only (the shared backend could not be reached).'}; }
+  state.tlRosters = before; return {ok:false, error: backendRouteError('POST /api/store/tl-rosters/transfer', r.status)};
+}
+async function hardDeleteAgent(canonical){
+  if(agentHasHistory(canonical)) return {ok:false, error:'This agent has attempts or assignments, so they can only be marked as left.'};
+  const beforeDir = state.agentDirectory.slice(), beforeRosters = JSON.parse(JSON.stringify(state.tlRosters));
+  const k = canonical.trim().toLowerCase();
+  const tombstone = ()=>{ const list = loadDeletedAgentsLocal(); if(!list.some(n=>(n||'').trim().toLowerCase()===k)) list.push(canonical); try{ localStorage.setItem(DELETED_AGENTS_KEY, JSON.stringify(list)); }catch(err){} };
+  state.agentDirectory = state.agentDirectory.filter(a=>(a.canonicalName||'').trim().toLowerCase()!==k);
+  state.tlRosters.forEach(r=>{ r.agents = (r.agents||[]).filter(ag=>(ag||'').trim().toLowerCase()!==k); });
+  const r = await callBackendRoute('/api/store/agent-directory/' + encodeURIComponent(canonical), 'DELETE');
+  if(r.ok){
+    if(r.data){
+      if(Array.isArray(r.data.agentDirectory)) state.agentDirectory = r.data.agentDirectory;
+      if(Array.isArray(r.data.tlRosters)){ state.tlRosters = r.data.tlRosters; mergeTlContactsIntoRosters(); }
+      if(Array.isArray(r.data.deletedAgents)) state.deletedAgents = r.data.deletedAgents;
+    }
+    tombstone(); cacheAgentDirectoryLocally(); cacheRostersLocally(); return {ok:true};
+  }
+  if(r.offline){ tombstone(); cacheAgentDirectoryLocally(); cacheRostersLocally(); return {ok:true, warn:'Deleted on this device only (the shared backend could not be reached).'}; }
+  state.agentDirectory = beforeDir; state.tlRosters = beforeRosters;
+  return {ok:false, error: backendRouteError('DELETE /api/store/agent-directory/:canonicalName', r.status)};
+}
+async function addAliasesToProfile(canonical, names){
+  const p = profileByCanonical(canonical); if(!p) return {ok:false, error:'Agent not found.'};
+  const taken = [p.canonicalName, p.fullName, p.chatName, ...(p.aliases||[])].filter(Boolean).map(x=>x.trim().toLowerCase());
+  const add = names.map(n=>(n||'').trim()).filter((n,i,a)=>n && !taken.includes(n.toLowerCase()) && a.findIndex(x=>x.toLowerCase()===n.toLowerCase())===i);
+  if(!add.length) return {ok:true, added:[]};
+  const updated = Object.assign({}, p, {aliases:[...(p.aliases||[]), ...add]});
+  Object.assign(p, updated);
+  await upsertAgentDirectoryRemote(updated);
+  return {ok:true, added:add};
+}
+// Close-match check for new registrations: an exact name/alias match, or the same first name with a surname 1-2 letters
+// off (or the same surname with a first name 1-2 letters off).
+function editDistance(a, b){
+  a=a.toLowerCase(); b=b.toLowerCase(); const m=a.length, n=b.length; if(!m) return n; if(!n) return m;
+  let prev = Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){ const cur=[i]; for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1)); prev=cur; }
+  return prev[n];
+}
+function findCloseAgentMatch(form){
+  const typed = [form.fullName, form.chatName, form.additionalName].map(x=>(x||'').trim()).filter(Boolean);
+  const typedLower = typed.map(x=>x.toLowerCase());
+  for(const p of state.agentDirectory){
+    const known = [p.canonicalName, p.fullName, p.chatName, ...(p.aliases||[])].filter(Boolean).map(x=>x.trim().toLowerCase());
+    if(typedLower.some(t=>known.includes(t))) return p;
+  }
+  const toks = s=>(s||'').trim().split(/\s+/).filter(Boolean);
+  const nt = toks(form.fullName); if(!nt.length) return null;
+  for(const p of state.agentDirectory){
+    const pt = toks(p.fullName||p.canonicalName); if(!pt.length) continue;
+    const [nf, nl] = [nt[0], nt[nt.length-1]], [pf, pl] = [pt[0], pt[pt.length-1]];
+    if(nt.length>1 && pt.length>1){
+      const df = editDistance(nf,pf), dl = editDistance(nl,pl);
+      if((df===0 && dl>=1 && dl<=2) || (dl===0 && df>=1 && df<=2)) return p;
+    } else {
+      const d = editDistance(nt.join(' '), pt.join(' ')); if(d>=1 && d<=2 && nt.join(' ').length>=4) return p;
+    }
+  }
+  return null;
+}
+// One-time data fix requested by the TL: Dhwani Goswami has left. Runs once per device and only while her profile has
+// no status yet, so a later Reactivate is never undone.
+async function applyAgentStatusMigrations(){
+  const FLAG = 'zteamz_migr_dhwani_left_v1';
+  try{ if(localStorage.getItem(FLAG)) return; }catch(err){}
+  const p = profileByCanonical('Dhwani Goswami');
+  if(p && !p.status) await setAgentStatus(p.canonicalName, 'Left');
+  try{ localStorage.setItem(FLAG, '1'); }catch(err){}
+}
+function unmatchedLogNames(log){
+  const counts = {};
+  (log||[]).forEach(e=>{
+    if(!e || e.type==='tl-review') return;
+    const raw = (e.agentName||'').trim(); if(!raw) return;
+    const key = raw.toLowerCase();
+    if(state.manualNameOverrides && state.manualNameOverrides[key]) return;
+    if(resolveAgentName(raw).status!=='unmatched') return;
+    counts[key] = counts[key] || {raw, count:0}; counts[key].count++;
+  });
+  return Object.values(counts).sort((a,b)=>b.count-a.count);
+}
+function agentOptionsHtml(includeFormer){
+  const act = activeAgentProfiles(), former = includeFormer ? formerAgentProfiles() : [];
+  return `<option value="">Add as alias to\u2026</option>${act.map(p=>`<option value="${escapeHtml(p.canonicalName)}">${escapeHtml(p.canonicalName)}</option>`).join('')}${former.length ? `<optgroup label="Former agents">${former.map(p=>`<option value="${escapeHtml(p.canonicalName)}">${escapeHtml(p.canonicalName)} (${agentStatus(p).toLowerCase()})</option>`).join('')}</optgroup>` : ''}`;
+}
+function renderUnmatchedNamesRows(list){
+  return list.map(u=>`<div class="info-row" data-unmatched-row style="align-items:center;flex-wrap:wrap;gap:8px;">
+    <span class="ilabel">"${escapeHtml(u.raw)}" <span style="color:var(--text3);">\u00b7 ${u.count} attempt${u.count===1?'':'s'}</span></span>
+    <span style="display:flex;gap:6px;align-items:center;"><select class="unmatchedAliasSelect" data-raw="${escapeHtml(u.raw)}" aria-label="Agent to add this name to" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-family:inherit;font-size:12.5px;">${agentOptionsHtml(true)}</select><button class="small" data-unmatched-add="${escapeHtml(u.raw)}">Add alias</button></span>
+  </div>`).join('');
+}
+function renderUnmatchedNamesPanel(log){
+  const list = unmatchedLogNames(log); if(!list.length) return '';
+  return `<div class="box" style="margin-bottom:14px;">
+    <div style="font-weight:700;margin-bottom:6px;">Unmatched names (${list.length})</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">These names on saved attempts don't match any registered agent. Adding one as an alias groups those attempts under that agent; the stored name on each attempt is never changed.</div>
+    ${renderUnmatchedNamesRows(list)}
+  </div>`;
+}
+function renderMultiRosterRows(list){
+  return list.map(x=>`<div class="info-row" style="align-items:center;flex-wrap:wrap;gap:8px;">
+    <span class="ilabel"><strong>${escapeHtml(x.profile.canonicalName)}</strong> is on ${x.rosters.length} rosters: ${x.rosters.map(r=>escapeHtml(r.tlName)).join(', ')}</span>
+    <span style="display:flex;gap:6px;flex-wrap:wrap;">${x.rosters.map(r=>`<button class="small" data-keep-on-roster="${escapeHtml(x.profile.canonicalName)}" data-keep-tl="${escapeHtml(r.tlName)}">Keep on ${escapeHtml(r.tlName)}</button>`).join('')}</span>
+  </div>`).join('');
+}
+async function addUnmatchedAlias(raw, canonical){
+  if(!raw || !canonical) return {ok:false, error:'Pick an agent first.'};
+  return addAliasesToProfile(canonical, [raw]);
 }
 
 // ---------- TL SCENARIO ASSIGNMENTS ----------
@@ -6586,7 +6998,7 @@ function renderTLRostersList(){
   const rows = state.tlRosters.map(r=>`<div class="box" style="margin-bottom:8px;max-width:700px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
     <div style="min-width:0;">
       <strong data-open-tl-progress="${escapeHtml(r.tlName)}" style="cursor:pointer;color:var(--accent2);">${escapeHtml(r.tlName)}</strong>
-      <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${r.agents.length} agent${r.agents.length===1?'':'s'}: ${escapeHtml(r.agents.join(', ')) || '(none added yet)'}</div>
+      ${(()=>{ const act=(r.agents||[]).filter(ag=>isActiveAgent(profileByCanonical(ag))), former=(r.agents||[]).filter(ag=>!isActiveAgent(profileByCanonical(ag))); return `<div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${act.length} active agent${act.length===1?'':'s'}: ${escapeHtml(act.join(', ')) || '(none yet)'}${former.length ? ` \u00b7 former: ${escapeHtml(former.join(', '))}` : ''}</div>`; })()}
       ${contactLineHtml(r.email, r.slackHandle)}
     </div>
     <button class="small" data-open-tl-progress="${escapeHtml(r.tlName)}">View their progress</button>
@@ -6595,33 +7007,110 @@ function renderTLRostersList(){
 }
 
 function renderAgentDirectoryList(searchQuery){
-  if(!state.agentDirectory || state.agentDirectory.length===0){
-    return `<div class="empty" style="padding:10px 0;">No agents registered yet.${state.agentDirectoryLoadError ? ` <span style="color:var(--text3);">(Couldn't reach the shared backend just now - retrying automatically next time the app loads.)</span>` : ''}</div>`;
+  const all = activeAgentProfiles();
+  if(!all.length){
+    return `<div class="empty" style="padding:10px 0;">No active agents registered yet.${state.agentDirectoryLoadError ? ` <span style="color:var(--text3);">(Couldn't reach the shared backend just now - retrying automatically next time the app loads.)</span>` : ''}</div>`;
   }
   const q = (searchQuery||'').trim().toLowerCase();
-  let list = [...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName));
-  if(q){
-    list = list.filter(a=>{
-      const haystack = [a.canonicalName, a.fullName, a.chatName, ...(a.aliases||[])].filter(Boolean).join(' ').toLowerCase();
-      return haystack.includes(q);
-    });
-  }
-  if(list.length===0){
-    return `<div class="empty" style="padding:10px 0;">No agents match "${escapeHtml(searchQuery)}".</div>`;
-  }
+  const list = q ? all.filter(a=>[a.canonicalName, a.fullName, a.chatName, ...(a.aliases||[])].filter(Boolean).join(' ').toLowerCase().includes(q)) : all;
+  if(list.length===0) return `<div class="empty" style="padding:10px 0;">No agents match "${escapeHtml(searchQuery)}".</div>`;
+  const tlNames = [...new Set(state.tlRosters.map(r=>r.tlName))].sort();
   const rows = list.map(a=>{
     const names = [a.chatName, ...(a.aliases||[]).filter(al=>al!==a.chatName)].filter(Boolean);
-    return `<div class="box" style="margin-bottom:6px;max-width:700px;cursor:pointer;" data-edit-agent="${escapeHtml(a.canonicalName)}">
-      <strong>${escapeHtml(a.canonicalName)}</strong>
-      ${names.length ? `<span style="color:var(--text3);font-size:12px;"> - also known as ${escapeHtml(names.join(', '))}</span>` : ''}
-      ${contactLineHtml(a.email, a.slackHandle)}
+    const rosters = rostersContaining(a.canonicalName);
+    const attempts = attemptsForAgent(a.canonicalName).length, asg = assignmentsForCanonical(a.canonicalName).length;
+    const act = state.agentAction && state.agentAction.canonical===a.canonicalName ? state.agentAction.kind : null;
+    const tlLine = rosters.length===1 ? `TL: ${escapeHtml(rosters[0].tlName)}` : rosters.length>1 ? `<span style="color:var(--warn);font-weight:700;">On ${rosters.length} rosters - needs resolution</span>` : '<span style="color:var(--warn);">No TL roster</span>';
+    let panel = '';
+    if(act==='transfer') panel = `<div class="box" style="margin-top:8px;" data-stop-row>
+        <label style="font-size:12.5px;color:var(--text2);">Move ${escapeHtml(a.canonicalName)} to
+          <select id="agentTransferSelect" style="margin-left:6px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-family:inherit;font-size:12.5px;">
+            <option value="">Choose a TL\u2026</option>${tlNames.filter(t=>!(rosters.length===1 && namesMatch(t, rosters[0].tlName))).map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}
+          </select></label>
+        <div style="font-size:11.5px;color:var(--text3);margin:6px 0;">Removes them from ${rosters.length ? escapeHtml(rosters.map(r=>r.tlName).join(', ')) : 'any roster'} and adds them to the chosen TL. Their history stays visible to every TL in Team Progress.</div>
+        <button class="small primary" data-agent-confirm="transfer">Move</button> <button class="small" data-agent-cancel>Cancel</button></div>`;
+    if(act==='left') panel = `<div class="box" style="margin-top:8px;border-color:var(--warn);" data-stop-row>
+        <div style="font-size:12.5px;margin-bottom:6px;">Mark ${escapeHtml(a.canonicalName)} as a former agent? Their profile, aliases and all history are kept; they just stop appearing in the assign pickers and active counts. You can reactivate them later.</div>
+        <button class="small primary" data-agent-confirm="Left">Left the company</button> <button class="small" data-agent-confirm="Transferred">Transferred out of the team</button> <button class="small" data-agent-cancel>Cancel</button></div>`;
+    if(act==='delete') panel = `<div class="box" style="margin-top:8px;border-color:var(--bad);" data-stop-row>
+        <div style="font-size:12.5px;color:var(--bad);margin-bottom:6px;">Permanently delete ${escapeHtml(a.canonicalName)}? They have no attempts and no assignments. This removes the profile and their roster place, and they won't be re-created automatically.</div>
+        <button class="small" data-agent-confirm="delete" style="color:var(--bad);">Yes, delete</button> <button class="small" data-agent-cancel>Cancel</button></div>`;
+    return `<div class="box" style="margin-bottom:6px;max-width:760px;cursor:pointer;" data-edit-agent="${escapeHtml(a.canonicalName)}" data-agent-row="${escapeHtml(a.canonicalName)}">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;">
+        <div style="min-width:0;">
+          <strong>${escapeHtml(a.canonicalName)}</strong>
+          ${names.length ? `<span style="color:var(--text3);font-size:12px;"> - also known as ${escapeHtml(names.join(', '))}</span>` : ''}
+          <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${tlLine} \u00b7 ${attempts} attempt${attempts===1?'':'s'} \u00b7 ${asg} assignment${asg===1?'':'s'}</div>
+          ${contactLineHtml(a.email, a.slackHandle)}
+        </div>
+        <span style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="small" data-agent-action="transfer" data-agent="${escapeHtml(a.canonicalName)}">Transfer to another TL</button>
+          <button class="small" data-agent-action="left" data-agent="${escapeHtml(a.canonicalName)}">Mark as left</button>
+          ${agentHasHistory(a.canonicalName) ? '' : `<button class="small" data-agent-action="delete" data-agent="${escapeHtml(a.canonicalName)}" style="color:var(--bad);">Delete</button>`}
+        </span>
+      </div>
+      ${panel}
     </div>`;
   }).join('');
   return `<div style="margin-top:10px;">${rows}</div>`;
 }
+function renderFormerAgentsList(){
+  const list = formerAgentProfiles();
+  if(!list.length) return `<div class="empty" style="padding:8px 0;">No former agents.</div>`;
+  return list.map(a=>`<div class="box" style="margin-bottom:6px;max-width:760px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">
+    <div><strong>${escapeHtml(a.canonicalName)}</strong> <span style="font-size:12px;color:var(--text3);">\u00b7 ${escapeHtml(agentStatus(a))}${a.statusChangedAt ? ' on '+escapeHtml(new Date(a.statusChangedAt).toLocaleDateString()) : ''} \u00b7 ${attemptsForAgent(a.canonicalName).length} attempts</span></div>
+    <button class="small" data-agent-reactivate="${escapeHtml(a.canonicalName)}">Reactivate</button>
+  </div>`).join('');
+}
+function renderRosterTable(){
+  const tlNames = [...new Set(state.tlRosters.map(r=>r.tlName))].sort();
+  const pick = state.rosterTableTL || tlNames.find(t=>namesMatch(t, getLastAssigningTL())) || tlNames[0] || '';
+  const roster = state.tlRosters.find(r=>namesMatch(r.tlName, pick));
+  const sel = `<select id="rosterTableTLSelect" aria-label="Team lead" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;">${tlNames.map(t=>`<option value="${escapeHtml(t)}" ${namesMatch(t,pick)?'selected':''}>${escapeHtml(t)}</option>`).join('')}</select>`;
+  if(!roster) return `<div>${tlNames.length ? sel : ''}<div class="empty" style="padding:10px 0;">No roster yet.</div></div>`;
+  const rows = (roster.agents||[]).map(ag=>{
+    const p = profileByCanonical(ag); const name = p ? p.canonicalName : ag;
+    const atts = attemptsForAgent(name);
+    const last = atts.length ? Math.max(...atts.map(e=>e.timestamp||0)) : null;
+    const scores = atts.filter(e=>e.evaluation || e.pct!==undefined).map(e=>teamEntryScore(e).pct).filter(x=>typeof x==='number');
+    const avg = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : null;
+    const pend = assignmentsForCanonical(name).filter(a=>!a.completed); const od = pend.filter(isAssignmentOverdue).length;
+    const status = agentStatus(p);
+    return {name, status, atts:atts.length, last, avg, pend:pend.length, od, active: status==='Active'};
+  }).sort((a,b)=>(b.active-a.active) || a.name.localeCompare(b.name));
+  const td = 'padding:6px 8px;border-top:1px solid var(--border);';
+  return `<div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;"><span style="font-size:12.5px;color:var(--text2);">Team lead</span>${sel}<span style="font-size:11.5px;color:var(--text3);">Click an agent to open Team Progress for just them. Average uses the TL-reviewed score where one exists.</span></div>
+    <div style="overflow-x:auto;max-width:900px;"><table style="border-collapse:collapse;width:100%;font-size:12.5px;">
+      <thead><tr>${['Agent','TL','Status','Attempts','Last activity','Avg score','Pending'].map(c=>`<th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:600;">${c}</th>`).join('')}</tr></thead>
+      <tbody>${rows.length ? rows.map(r=>`<tr style="${r.active?'':'opacity:.6;'}">
+        <td style="${td}"><a href="#" data-open-agent-progress="${escapeHtml(r.name)}" style="color:var(--accent2);font-weight:600;">${escapeHtml(r.name)}</a></td>
+        <td style="${td}">${escapeHtml(roster.tlName)}</td>
+        <td style="${td}">${escapeHtml(r.status)}</td>
+        <td style="${td}">${r.atts}</td>
+        <td style="${td}">${r.last ? escapeHtml(new Date(r.last).toLocaleDateString()) : '-'}</td>
+        <td style="${td}">${r.avg===null ? '-' : r.avg+'%'}</td>
+        <td style="${td}">${r.pend}${r.od ? ` <span style="color:var(--bad);font-weight:700;">(${r.od} overdue)</span>` : ''}</td>
+      </tr>`).join('') : `<tr><td colspan="7" style="${td}color:var(--text3);">No agents on this roster.</td></tr>`}</tbody>
+    </table></div>
+  </div>`;
+}
+function renderCleanupAudit(){
+  const zero = sortedProfiles(state.agentDirectory.filter(p=>!agentHasHistory(p.canonicalName)));
+  const multi = agentsOnMultipleRosters();
+  const amb = computeAmbiguousLogNames(state.teamProgressLog);
+  const unm = unmatchedLogNames(state.teamProgressLog);
+  const block = (title, n, body, emptyText)=>`<div style="margin-bottom:14px;"><div style="font-weight:600;font-size:13px;margin-bottom:4px;">${title} (${n})</div>${n ? body : `<div class="empty" style="padding:4px 0;text-align:left;">${emptyText}</div>`}</div>`;
+  return `<div style="font-size:12px;color:var(--text2);margin-bottom:10px;">A list only - nothing here changes until you click a fix.</div>
+    ${block('Profiles with no attempts and no assignments (safe to delete)', zero.length, zero.map(p=>`<div class="info-row" style="align-items:center;"><span class="ilabel">${escapeHtml(p.canonicalName)}${isActiveAgent(p)?'':' ('+agentStatus(p).toLowerCase()+')'}</span><button class="small" data-audit-delete="${escapeHtml(p.canonicalName)}" style="color:var(--bad);">Delete\u2026</button></div>`).join(''), 'None.')}
+    ${block('Agents on more than one roster', multi.length, renderMultiRosterRows(multi), 'None.')}
+    ${block('Ambiguous names on saved attempts', amb.length, amb.map(a=>`<div class="info-row" style="align-items:center;flex-wrap:wrap;gap:8px;"><span class="ilabel">"${escapeHtml(a.raw)}" matches ${a.candidates.map(c=>escapeHtml(c.canonicalName)).join(', ')}</span><select class="auditAmbiguousSelect" data-raw="${escapeHtml(a.raw)}" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-family:inherit;font-size:12.5px;"><option value="">It's\u2026</option>${a.candidates.map(c=>`<option value="${escapeHtml(c.canonicalName)}">${escapeHtml(c.canonicalName)}</option>`).join('')}</select></div>`).join(''), 'None.')}
+    ${block('Unmatched names on saved attempts', unm.length, renderUnmatchedNamesRows(unm), 'None.')}`;
+}
 
-function renderAmbiguousNamesPanel(log){
-  const ambiguous = computeAmbiguousLogNames(log);
+function renderAmbiguousNamesPanel(log, filterRoster){
+  // In a TL's filtered view, show the names where at least one candidate is on that TL's roster.
+  const ambiguous = computeAmbiguousLogNames(log).filter(a=>!filterRoster || a.candidates.some(c=>(filterRoster.agents||[]).some(ag=>namesMatch(ag, c.canonicalName))));
   if(ambiguous.length===0) return '';
   return `<div class="box" style="border-color:var(--warn);margin-bottom:14px;">
     <div style="font-weight:700;color:var(--warn);margin-bottom:8px;">\u26a0 ${ambiguous.length} name${ambiguous.length===1?'':'s'} need manual resolution</div>
@@ -7760,12 +8249,31 @@ function enterTLArea(){
   visits[key] = Date.now();
   try{ localStorage.setItem(TL_LAST_VISIT_KEY, JSON.stringify(visits)); }catch(err){}
 }
+// The registered agent profile behind a typed name: a TL's manual resolution wins, otherwise a unique directory match.
+// Returns null for names that aren't registered or match more than one agent.
+function registeredProfileFor(name){
+  const t = (name||'').trim(); if(!t) return null;
+  const override = state.manualNameOverrides && state.manualNameOverrides[t.toLowerCase()];
+  if(override) return state.agentDirectory.find(a=>(a.canonicalName||'').trim().toLowerCase()===override.trim().toLowerCase()) || null;
+  const r = resolveAgentName(t);
+  return r.status==='matched' ? r.profile : null;
+}
+// The agent's TL, found via their registered profile on the TL rosters. Unregistered agents have no TL.
+function tlForAgent(name){
+  const profile = registeredProfileFor(name); if(!profile) return null;
+  const rosters = rostersContaining(profile.canonicalName);
+  return rosters.length===1 ? rosters[0].tlName : null; // on two or more rosters = "needs resolution": no TL until a TL picks one
+}
 function tlActivitySince(name, since){
   if(!name || !since) return null;
-  const done = state.assignments.filter(a=>a.completed && namesMatch(a.assignedByTL||'', name) && (a.completedAt||0) > since);
+  // Only activity by registered agents counts; unrecognized names are skipped entirely.
+  const done = state.assignments.filter(a=>a.completed && namesMatch(a.assignedByTL||'', name) && (a.completedAt||0) > since && registeredProfileFor(a.agentName));
   const doneTs = new Set(done.map(a=>a.attemptTimestamp).filter(Boolean));
-  const roster = state.tlRosters.find(r=>namesMatch(r.tlName, name));
-  const practice = roster ? state.teamProgressLog.filter(e=>e && e.type!=='tl-review' && (e.timestamp||0) > since && !doneTs.has(e.timestamp) && roster.agents.some(ag=>namesMatch(ag, e.agentName))) : [];
+  const practice = state.teamProgressLog.filter(e=>{
+    if(!e || e.type==='tl-review' || (e.timestamp||0) <= since || doneTs.has(e.timestamp)) return false;
+    const tl = tlForAgent(e.agentName);
+    return !!tl && namesMatch(tl, name);
+  });
   return {assignments: done.length, practice: practice.length};
 }
 function renderTLAlertBanner(){
@@ -7910,7 +8418,7 @@ function findTeamProgressEntryForAssignment(a){
 // cancelAssignment - so removing a completed assignment's record can't delete the agent's real
 // attempt, evaluation, or coaching review.
 function renderManageAssignmentsSubsection(){
-  const agentOptions = [...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName));
+  const agentOptions = activeAgentProfiles(); // former agents are hidden here; their assignments still show in the tree below
   const picker = `<select id="manageAssignmentsAgentSelect" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;min-width:220px;">
     <option value="">Select an agent…</option>
     ${agentOptions.map(a=>`<option value="${escapeHtml(a.canonicalName)}" ${state.manageAssignmentsAgent===a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}
@@ -8057,7 +8565,7 @@ function renderAssignScenariosSectionBody(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:760px;">
       <select id="assignAgentName" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <option value="">Select agent…</option>
-        ${[...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName)).map(a=>`<option value="${escapeHtml(a.canonicalName)}" ${selectedAgent===a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}
+        ${activeAgentProfiles().map(a=>`<option value="${escapeHtml(a.canonicalName)}" ${selectedAgent===a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}
       </select>
       <input id="assignedByTLName" placeholder="Your name (assigning TL)" value="${escapeHtml(getLastAssigningTL())}" style="flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
     </div>
@@ -8096,17 +8604,27 @@ function renderAssignScenariosSectionBody(){
 function renderTeamLeadsRosterSectionBody(){
   return `
     <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Register each agent once under their full name, with their chat name and any other name they go by - every attempt or assignment under any of those names then resolves to this one profile automatically, without ever rewriting past records. Assigning a team below is a convenience filter only: every TL always sees everyone's complete, unfiltered Team Progress - there are no separate TL accounts or access levels.</div>
+    ${state.agentMgmtMsg ? `<div class="box" role="status" style="border-color:${state.agentMgmtMsg.color};color:${state.agentMgmtMsg.color};font-size:12.5px;">${escapeHtml(state.agentMgmtMsg.text)}</div>` : ''}
+    ${agentsOnMultipleRosters().length ? `<div class="box" style="border-color:var(--warn);"><div style="font-weight:700;color:var(--warn);margin-bottom:6px;">Needs resolution: ${agentsOnMultipleRosters().length} agent${agentsOnMultipleRosters().length===1?' is':'s are'} on more than one roster</div><div style="font-size:12px;color:var(--text2);margin-bottom:6px;">An active agent should belong to exactly one TL. Pick the right one - nothing is chosen automatically.</div>${renderMultiRosterRows(agentsOnMultipleRosters())}</div>` : ''}
+    ${renderDashSubsection('tl-roster-table', 'Roster', renderRosterTable, true)}
     ${renderDashSubsection('register-agent', 'Register / Edit an Agent', ()=>`
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <input id="regAgentFullName" placeholder="Full name" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <input id="regAgentChatName" placeholder="Chat name" style="flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <input id="regAgentAltName" placeholder="Other recognized name (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <input id="regAgentTLName" placeholder="Reports to (TL name)" value="Zainab Yahaya" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <input id="regAgentEmail" type="email" placeholder="Email (optional)" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <input id="regAgentSlack" placeholder="Slack handle (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <input id="regAgentFullName" value="${escapeHtml((state.regFormDraft||{}).fullName||'')}" placeholder="Full name" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <input id="regAgentChatName" value="${escapeHtml((state.regFormDraft||{}).chatName||'')}" placeholder="Chat name" style="flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <input id="regAgentAltName" value="${escapeHtml((state.regFormDraft||{}).additionalName||'')}" placeholder="Other recognized name (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <input id="regAgentTLName" placeholder="Reports to (TL name)" value="${escapeHtml(state.regFormDraft ? (state.regFormDraft.tlName||'') : 'Zainab Yahaya')}" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <input id="regAgentEmail" value="${escapeHtml((state.regFormDraft||{}).email||'')}" type="email" placeholder="Email (optional)" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        <input id="regAgentSlack" value="${escapeHtml((state.regFormDraft||{}).slackHandle||'')}" placeholder="Slack handle (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <button id="btnRegisterAgent" class="primary">Register agent</button>
       </div>
-      <div id="registerAgentStatus" style="display:none;margin-top:10px;"></div>
+      ${state.regPrompt ? `<div class="box" role="alertdialog" style="margin-top:10px;border-color:var(--warn);">
+        ${state.regPrompt.kind==='dup' ? `<div style="font-size:13px;margin-bottom:8px;">Did you mean <strong>${escapeHtml(state.regPrompt.match)}</strong>?</div>
+          <button class="small primary" data-reg-prompt="yes">Yes, add as alias</button> <button class="small" data-reg-prompt="no">No, this is a different person</button>`
+        : `<div style="font-size:13px;margin-bottom:8px;">Move <strong>${escapeHtml(state.regPrompt.canonical)}</strong> from ${escapeHtml(state.regPrompt.from)} to ${escapeHtml(state.regPrompt.form.tlName)}?</div>
+          <button class="small primary" data-reg-prompt="yes">Yes, move</button> <button class="small" data-reg-prompt="no">No, keep on ${escapeHtml(state.regPrompt.from)}</button>`}
+        <button class="small" data-reg-prompt="cancel">Cancel</button>
+      </div>` : ''}
+      <div id="registerAgentStatus" style="${state.regMsg ? '' : 'display:none;'}margin-top:10px;color:${state.regMsg ? state.regMsg.color : 'inherit'};">${state.regMsg ? escapeHtml(state.regMsg.text) : ''}</div>
     `, true)}
     ${renderDashSubsection('tl-rosters', 'Team Leads', ()=>`
       <div style="color:var(--text3);font-size:11.5px;margin-bottom:8px;">Click a TL's name to view just their team's progress (still fully editable/visible to any TL).</div>
@@ -8126,7 +8644,9 @@ function renderTeamLeadsRosterSectionBody(){
       <input id="agentDirectorySearchInput" placeholder="Search agents…" value="${escapeHtml(state.agentDirectorySearch||'')}" style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;margin-bottom:10px;">
       <div style="color:var(--text3);font-size:11.5px;margin-bottom:4px;">Click an agent to load their profile into the form above for editing.</div>
       ${renderAgentDirectoryList(state.agentDirectorySearch)}
+      ${renderDashSubsection('former-agents', `Former agents (${formerAgentProfiles().length})`, renderFormerAgentsList, false)}
     `, false)}
+    ${renderDashSubsection('cleanup-audit', 'Clean-up audit', renderCleanupAudit, false)}
   `;
 }
 
@@ -8136,7 +8656,7 @@ function renderTeamProgressSectionBody(){
     options.push(`<optgroup label="Team Leads">${state.tlRosters.map(r=>`<option value="tl:${escapeHtml(r.tlName)}" ${state.teamProgressDashFilter==='tl:'+r.tlName?'selected':''}>${escapeHtml(r.tlName)}</option>`).join('')}</optgroup>`);
   }
   if(state.agentDirectory.length){
-    options.push(`<optgroup label="Individual Agents">${[...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName)).map(a=>`<option value="agent:${escapeHtml(a.canonicalName)}" ${state.teamProgressDashFilter==='agent:'+a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}</optgroup>`);
+    options.push(`<optgroup label="Individual Agents">${[...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName)).map(a=>`<option value="agent:${escapeHtml(a.canonicalName)}" ${state.teamProgressDashFilter==='agent:'+a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}${isActiveAgent(a)?'':' ('+agentStatus(a).toLowerCase()+')'}</option>`).join('')}</optgroup>`);
   }
   return `
     <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Named, team-wide attempt summaries - everyone's scores in one place, with the original AI assessment, editable TL score overrides, and coaching notes. This is TL/management-facing only; agents do not have a way to reach this view. Interface changes here never touch saved historical results.</div>
@@ -8687,6 +9207,14 @@ function renderSystemTestsSectionBody(){
     </div>
 
     <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">4. Evaluator prompt A/B: legacy vs consolidated (v2)</h2>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">Scores the same inputs with both prompts and shows the letters side by side: Tests 1 and 3 above, plus the 5 most recent Team Progress attempts that have a full saved record. With the noise check on, the legacy prompt runs twice, so you can tell a real prompt difference (legacy agrees with itself, v2 differs) from the evaluator's normal run-to-run variation. Live scoring currently uses: <strong>${EVAL_PROMPT_VERSION==='v2' ? 'v2 (consolidated)' : 'legacy'}</strong>. Up to 30 scoring calls; takes several minutes.</div>
+      <label style="font-size:12.5px;color:var(--text2);display:flex;align-items:center;gap:6px;margin-top:8px;"><input type="checkbox" id="abNoiseCheck" ${(state.abTest && state.abTest.noFlag) ? '' : 'checked'}> Noise check (run legacy twice)</label>
+      <button id="runABTest" style="margin-top:8px;" ${(state.abTest && state.abTest.running) ? 'disabled' : ''}>${(state.abTest && state.abTest.running) ? 'Running\u2026' : 'Run A/B comparison'}</button>
+      <div id="abResult">${renderABTestResults()}</div>
+    </div>
+
+    <div class="diag-section">
       <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">Not automated in this prototype</h2>
       <div style="color:var(--text2);font-size:13px;line-height:1.6;">
         <strong>Hidden-information discipline</strong> (does the player over-reveal facts) and <strong>player-sentiment independence</strong> (can a well-handled chat still end with an unhappy player) are best verified by actually playing a scenario live and reviewing the transcript against the scorecard citations. Personal <strong>Attempt History</strong> persists per-device via browser storage. <strong>Team Progress and TL Assignments are shared</strong> across every device using this link, via the backend server - a TL assigning a scenario, or an agent completing one, is visible to anyone else using the tool, not just on the same device. <strong>Authorization</strong> is still informal (name-based, no real accounts or passwords) - that remains intentionally out of scope for Phase 1.
@@ -8717,7 +9245,7 @@ function renderDiagnostics(){
 
     ${renderDashSection('assign-scenarios', 'Assign Scenarios', `${pendingCount} pending assignment${pendingCount===1?'':'s'}`, renderAssignScenariosSectionBody, 'bolt', '#5b7cff')}
     ${renderDashSection('create-scenario', 'Create Scenario', `${customScenariosCreatedBy(state.scenarioBuilderTLName||getLastAssigningTL()).length} created by you`, renderCreateScenarioSectionBody, 'chat', '#e05a8e')}
-    ${renderDashSection('tl-agent-roster', 'Team Leads & Agent Roster', 'Manage registered teams', renderTeamLeadsRosterSectionBody, 'users', '#a06bd6')}
+    ${renderDashSection('tl-agent-roster', 'Team Leads & Agent Roster', agentsOnMultipleRosters().length ? `${agentsOnMultipleRosters().length} agent${agentsOnMultipleRosters().length===1?'':'s'} need resolution` : `${activeAgentProfiles().length} active agents`, renderTeamLeadsRosterSectionBody, 'users', '#a06bd6')}
     ${renderDashSection('team-progress', 'Team Progress', 'View and review attempts', renderTeamProgressSectionBody, 'chart', '#3ecf8e')}
     ${renderDashSection('feedback', 'Feedback & Suggestions', `${unresolvedCount} unresolved suggestion${unresolvedCount===1?'':'s'}`, renderFeedbackManagementSectionBody, 'chat', '#e2a33d')}
     ${renderDashSection('scenario-library', 'Scenario Library', `Browse ${SCENARIOS.length} scenarios`, renderScenarioLibrarySectionBody, 'grid', '#5bc0be')}
@@ -8893,6 +9421,109 @@ async function runDiagnostic3(){
   }
 }
 
+// ---------- EVALUATOR PROMPT A/B HARNESS ----------
+// Runs identical inputs through buildEvalPromptLegacy and buildEvalPromptV2 so a prompt change can be checked before
+// EVAL_PROMPT_VERSION is switched. Uses the normal scoring path (callClaudeJson + enforceAFDutyBoundary).
+async function scoreWithBuilder(builder, sc, inp){
+  const prompt = builder(sc, inp.transcript, inp.actionLog||[], inp.docNote||'', inp.docTag||null, inp.docSecondaryTag||null, inp.chatStartedAt||null, !!inp.playerLeftEarly, inp.playerLeftReason||null, !!inp.ahtModeOn);
+  return enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex'));
+}
+function scenarioForSavedAttempt(e){
+  const s = scenarioById(e.scenarioId); if(!s) return null;
+  if(s.review && e.reviewOutcome && Array.isArray(s.review.outcomes)){ const idx = s.review.outcomes.indexOf(e.reviewOutcome); if(idx>=0) return resolveScenarioForAttempt(s, idx); }
+  return resolveScenarioForAttempt(s, 0);
+}
+function abLetters(ev){ if(!ev || !ev.questions) return null; const g=id=>{ const q=ev.questions.find(x=>x.id===id); return q ? q.letter : '?'; }; return [g('q1'),g('q2'),g('q3')]; }
+function abItems(){
+  const items = [
+    {id:'t1-strong', group:'Test 1', label:'Test 1 - strong (noc-1)', sc: scenarioById('noc-1'), inp:{transcript:DIAG1_STRONG_TRANSCRIPT}},
+    {id:'t1-weak', group:'Test 1', label:'Test 1 - weak (noc-1)', sc: scenarioById('noc-1'), inp:{transcript:DIAG1_WEAK_TRANSCRIPT}},
+    {id:'t3-missed', group:'Test 3', label:'Test 3 - missed (rg-1)', sc: scenarioById('rg-1'), inp:{transcript:DIAG3_MISSED_TRANSCRIPT}},
+    {id:'t3-complete', group:'Test 3', label:'Test 3 - complete (rg-1)', sc: scenarioById('rg-1'), inp:{transcript:DIAG3_COMPLETE_TRANSCRIPT}},
+    {id:'t3-incomplete', group:'Test 3', label:'Test 3 - incomplete (rg-1)', sc: scenarioById('rg-1'), inp:{transcript:DIAG3_INCOMPLETE_TRANSCRIPT}},
+  ];
+  const saved = state.teamProgressLog.filter(e=>e && e.type!=='tl-review' && e.evaluation && Array.isArray(e.evaluation.questions) && Array.isArray(e.transcript) && e.transcript.length && scenarioForSavedAttempt(e))
+    .sort((a,b)=>(b.timestamp||0)-(a.timestamp||0)).slice(0,5);
+  saved.forEach((e,k)=>{
+    const firstTs = (e.transcript.find(m=>m.ts)||{}).ts || null;
+    const aht = e.ahtElapsedMinutes!==null && e.ahtElapsedMinutes!==undefined;
+    items.push({id:'saved-'+k, group:'Saved', label:`${e.agentName||'Unnamed'} - ${e.scenarioTitle||e.scenarioId} (${new Date(e.timestamp).toLocaleDateString()})`, sc: scenarioForSavedAttempt(e), saved: abLetters(e.evaluation),
+      inp:{transcript:e.transcript, actionLog:e.actionLog, docNote:e.docNote, docTag:e.docTag, docSecondaryTag:e.docSecondaryTag, chatStartedAt: aht ? firstTs : null, playerLeftEarly:e.playerLeftEarly, playerLeftReason:e.playerLeftReason, ahtModeOn: aht}});
+  });
+  return items;
+}
+function abDiag1Pass(strong, weak){ if(!strong||!weak) return null; const s=computeQAScore(strong.questions), w=computeQAScore(weak.questions); return s.pass && !w.pass && s.pct>w.pct; }
+function abDiag3Pass(m, c, i){
+  if(!m||!c||!i) return null;
+  const ms=computeQAScore(m.questions), cs=computeQAScore(c.questions), is=computeQAScore(i.questions);
+  const iq1=i.questions.find(q=>q.id==='q1');
+  return !!(ms.af && ms.afDuty && ms.afDuty.toLowerCase().includes('responsible gambling')) && cs.pass && !cs.af && !is.af && iq1 && iq1.letter==='D' && !is.pass;
+}
+async function runABComparison(){
+  const noise = !!(document.getElementById('abNoiseCheck')||{}).checked;
+  const runs = noise ? [['legacy',buildEvalPromptLegacy],['legacy2',buildEvalPromptLegacy],['v2',buildEvalPromptV2]] : [['legacy',buildEvalPromptLegacy],['v2',buildEvalPromptV2]];
+  const items = abItems();
+  state.abTest = {running:true, noFlag:!noise, noise, items: items.map(it=>({id:it.id, group:it.group, label:it.label, saved:it.saved||null, res:{}, err:{}})), progress:'', startedAt:Date.now()};
+  render();
+  const total = items.length*runs.length; let n=0;
+  for(const [key, builder] of runs){
+    for(let k=0;k<items.length;k++){
+      n++; state.abTest.progress = `Scoring ${n} of ${total}: ${items[k].label} (${key==='v2'?'v2':key==='legacy2'?'legacy, run 2':'legacy'})`; render();
+      try{ state.abTest.items[k].res[key] = await scoreWithBuilder(builder, items[k].sc, items[k].inp); }
+      catch(err){ state.abTest.items[k].err[key] = err.message || String(err); }
+    }
+  }
+  state.abTest.running = false; state.abTest.progress = ''; state.abTest.finishedAt = Date.now();
+  render();
+}
+function abVerdict(it, noise){
+  const L=abLetters(it.res.legacy), L2=abLetters(it.res.legacy2), V=abLetters(it.res.v2);
+  if(!L || !V || (noise && !L2)) return {text:'incomplete', color:'var(--text3)'};
+  const same=(a,b)=>a.join()===b.join();
+  if(same(L,V) && (!noise || same(L,L2))) return {text:'same', color:'var(--ok)'};
+  if(noise && !same(L,L2)) return {text: same(L,V)||same(L2,V) ? 'noisy (v2 matches one legacy run)' : 'noisy - rerun', color:'var(--warn)'};
+  return {text:'CHANGED by prompt', color:'var(--bad)'};
+}
+function abSummaryText(t){
+  if(!t || !t.items) return '';
+  const fmt = ev => { const l=abLetters(ev); return l ? l.join('/') : 'error'; };
+  const by = id => t.items.find(x=>x.id===id) || {res:{}};
+  const pass = (fn, keys, key) => { const r = fn(...keys.map(id=>by(id).res[key])); return r===null ? 'n/a' : (r ? 'PASS' : 'FAIL'); };
+  const runKeys = t.noise ? ['legacy','legacy2','v2'] : ['legacy','v2'];
+  const lines = [`Evaluator A/B (${new Date(t.finishedAt||Date.now()).toLocaleString()})`, `Columns: ${t.noise?'legacy | legacy run 2 | v2':'legacy | v2'} (letters Q1/Q2/Q3)`];
+  lines.push('Test 1: '+runKeys.map(k=>k+' '+pass(abDiag1Pass,['t1-strong','t1-weak'],k)).join(', '));
+  lines.push('Test 3: '+runKeys.map(k=>k+' '+pass(abDiag3Pass,['t3-missed','t3-complete','t3-incomplete'],k)).join(', '));
+  t.items.forEach(it=>{
+    lines.push(`- ${it.label}${it.saved?' [saved '+it.saved.join('/')+']':''}: ${runKeys.map(k=>fmt(it.res[k])).join(' | ')} -> ${abVerdict(it,t.noise).text}`);
+    const L=it.res.legacy, V=it.res.v2;
+    if(L && V && L.questions && V.questions) ['q1','q2','q3'].forEach(q=>{
+      const a=L.questions.find(x=>x.id===q), b=V.questions.find(x=>x.id===q);
+      if(a && b && a.letter!==b.letter) lines.push(`    ${q.toUpperCase()} legacy ${a.letter}: ${a.citation}\n    ${q.toUpperCase()} v2 ${b.letter}: ${b.citation}`);
+    });
+  });
+  return lines.join('\n');
+}
+function renderABTestResults(){
+  const t = state.abTest; if(!t || !t.items) return '';
+  const runKeys = t.noise ? ['legacy','legacy2','v2'] : ['legacy','v2'];
+  const head = runKeys.map(k=>`<th style="text-align:left;padding:4px 8px;">${k==='legacy2'?'Legacy run 2':k==='v2'?'V2':'Legacy'}</th>`).join('');
+  const cell = (it,k) => it.err[k] ? `<span style="color:var(--bad);" title="${escapeHtml(it.err[k])}">error</span>` : (abLetters(it.res[k])||['\u2026']).join(' / ');
+  const by = id => t.items.find(x=>x.id===id) || {res:{}};
+  const passCell = (fn, ids, k) => { const r = fn(...ids.map(id=>by(id).res[k])); return r===null ? '\u2026' : `<span class="${r?'diag-pass':'diag-fail'}">${r?'PASS':'FAIL'}</span>`; };
+  const rows = t.items.map(it=>{ const v=abVerdict(it,t.noise); return `<tr style="border-top:1px solid var(--border);">
+    <td style="padding:4px 8px;">${escapeHtml(it.label)}</td>
+    <td style="padding:4px 8px;color:var(--text3);">${it.saved ? it.saved.join(' / ') : '-'}</td>
+    ${runKeys.map(k=>`<td style="padding:4px 8px;font-variant-numeric:tabular-nums;">${cell(it,k)}</td>`).join('')}
+    <td style="padding:4px 8px;color:${v.color};font-weight:700;">${t.running && v.text==='incomplete' ? '' : escapeHtml(v.text)}</td></tr>`; }).join('');
+  return `<div class="diag-result">
+    ${t.running ? `<div style="margin-bottom:6px;">${escapeHtml(t.progress)}</div>` : ''}
+    <div style="margin-bottom:6px;">Test 1: ${runKeys.map(k=>`${k==='legacy2'?'legacy run 2':k} ${passCell(abDiag1Pass,['t1-strong','t1-weak'],k)}`).join(' \u00b7 ')}<br>Test 3: ${runKeys.map(k=>`${k==='legacy2'?'legacy run 2':k} ${passCell(abDiag3Pass,['t3-missed','t3-complete','t3-incomplete'],k)}`).join(' \u00b7 ')}</div>
+    <div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:12.5px;width:100%;"><thead><tr><th style="text-align:left;padding:4px 8px;">Item</th><th style="text-align:left;padding:4px 8px;">Saved</th>${head}<th style="text-align:left;padding:4px 8px;">Verdict</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="font-size:11.5px;color:var(--text3);margin-top:6px;">Letters are Q1 / Q2 / Q3. "Saved" is the letter set from when the attempt was originally scored (any older prompt version).</div>
+    ${!t.running ? `<div style="margin-top:8px;font-size:12px;">Copy this and paste it back to Claude - any changed letter is listed with both citations, so the rule behind it can be identified:</div><textarea readonly id="abSummaryText" style="width:100%;min-height:140px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px;font-family:monospace;font-size:11.5px;">${escapeHtml(abSummaryText(t))}</textarea>` : ''}
+  </div>`;
+}
+
 // ---------- INIT ----------
 function hasUncopiedResults(){
   // Attempts ARE saved to persistent storage automatically now. This just tracks whether
@@ -8978,10 +9609,17 @@ function renderNameModal(){
   input.focus();
   input.addEventListener('input', ()=>{
     const resolved = resolveAgentName(input.value);
-    if(resolved.status==='matched'){
-      const count = pendingAssignmentsFor(resolved.profile.canonicalName).length;
-      recognizedEl.style.display = 'block';
-      recognizedEl.textContent = `Recognized: ${resolved.profile.canonicalName}${count ? ' \u00b7 '+count+' outstanding assignment'+(count===1?'':'s') : ''}`;
+    const profile = registeredProfileFor(input.value); // same lookup the TL alert uses, incl. TL manual resolutions
+    if(profile){
+      const count = pendingAssignmentsFor(profile.canonicalName).length;
+      recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--ok)';
+      recognizedEl.textContent = `Recognized: ${profile.canonicalName}${count ? ' \u00b7 '+count+' outstanding assignment'+(count===1?'':'s') : ''}`;
+    } else if(input.value.trim() && resolved.status==='ambiguous'){
+      recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--warn)';
+      recognizedEl.textContent = 'That name matches more than one registered agent - please use your full name.';
+    } else if(input.value.trim()){
+      recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--warn)';
+      recognizedEl.textContent = 'Name not recognized - ask your TL to register you';
     } else {
       recognizedEl.style.display = 'none';
     }
@@ -9058,6 +9696,7 @@ async function init(){
   await loadAgentDirectory();
   await loadTLRosters();
   await seedZainabRosterIfMissing();
+  await applyAgentStatusMigrations();
   await loadCustomScenarios();
   state.scenarioBuilderTLName = getLastAssigningTL();
   state.scenarioLibraryViewingTLName = getLastAssigningTL();
