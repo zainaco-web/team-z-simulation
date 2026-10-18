@@ -2020,7 +2020,7 @@ let state = {
   agentDirectory:[], // [{canonicalName, fullName, chatName, aliases:[...]}] - canonical agent profiles for name resolution
   agentDirectoryLoadError:null,
   allFeedback:[],
-  patternSummaries:[], patternLoading:{}, patternError:{}, // TL pattern summaries (see TL PATTERN SUMMARIES)
+  patternSummaries:[], patternLoading:{}, patternError:{}, linkDismissals:[], // TL pattern summaries (see TL PATTERN SUMMARIES)
   feedbackLoadError:null,
   currentAttemptContext:null, // self-contained snapshot of the attempt currently being scored - see runEvaluation/archiveAttempt
   activeAssignmentId:null, // set only when the live scenario was launched via a My Assignments "Start Scenario" button
@@ -3846,10 +3846,12 @@ function wireEvents(){
     });
   });
 
+  const regAgentTLSelect=document.getElementById('regAgentTLSelect');
+  if(regAgentTLSelect) regAgentTLSelect.addEventListener('change', e=>{ const t=document.getElementById('regAgentTLName'); if(t){ const on = e.target.value==='__new__'; t.style.display = on ? '' : 'none'; if(on) t.focus(); } });
   const btnRegisterAgent=document.getElementById('btnRegisterAgent');
   if(btnRegisterAgent) btnRegisterAgent.addEventListener('click', ()=>{
     const v = id=>(document.getElementById(id).value||'').trim();
-    const form = {fullName:v('regAgentFullName'), chatName:v('regAgentChatName'), additionalName:v('regAgentAltName'), tlName:v('regAgentTLName'), email:v('regAgentEmail'), slackHandle:v('regAgentSlack')};
+    const form = {fullName:v('regAgentFullName'), chatName:v('regAgentChatName'), additionalName:v('regAgentAltName'), tlName:(()=>{ const s=document.getElementById('regAgentTLSelect'); return !s ? '' : s.value==='__new__' ? v('regAgentTLName') : s.value; })(), email:v('regAgentEmail'), slackHandle:v('regAgentSlack')};
     if(!form.fullName){ state.regMsg = {text:'Full name is required.', color:'var(--bad)'}; state.regFormDraft = form; render(); return; }
     if(form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)){ state.regMsg = {text:'That email address doesn\u2019t look right.', color:'var(--bad)'}; state.regFormDraft = form; render(); return; }
     continueAgentRegistration(form, {});
@@ -3900,7 +3902,7 @@ function wireEvents(){
   document.querySelectorAll('[data-audit-delete]').forEach(el=>{
     el.addEventListener('click', ()=>{ const c=el.getAttribute('data-audit-delete'); const p=profileByCanonical(c);
       if(p && !isActiveAgent(p)){ state.agentMgmtMsg = {text:`Reactivate ${c} first, then delete from All Registered Agents.`, color:'var(--warn)'}; render(); return; }
-      state.agentAction = {canonical:c, kind:'delete'}; state.diagSubsectionsOpen['agent-directory']=true; state.agentDirectorySearch = c; render();
+      state.agentAction = {canonical:c, kind:'delete'}; state.diagSectionsOpen['tl-agent-roster']=true; state.diagSubsectionsOpen['agent-directory']=true; state.agentDirectorySearch = c; render();
       setTimeout(()=>{ const row=document.querySelector('[data-agent-row]'); if(row && row.scrollIntoView) row.scrollIntoView({behavior:'smooth', block:'center'}); },0); });
   });
   document.querySelectorAll('.auditAmbiguousSelect').forEach(sel=>{
@@ -3910,6 +3912,16 @@ function wireEvents(){
     btn.addEventListener('click', async ()=>{ const row=btn.closest('[data-unmatched-row]'); const sel=row && row.querySelector('.unmatchedAliasSelect'); const raw=btn.getAttribute('data-unmatched-add');
       const r = await addUnmatchedAlias(raw, sel ? sel.value : ''); if(!r.ok){ if(sel) sel.focus(); return; }
       state.agentMgmtMsg = {text:`"${raw}" added as an alias of ${sel.value}.`, color:'var(--ok)'}; render(); });
+  });
+  document.querySelectorAll('[data-link-yes]').forEach(el=>{
+    el.addEventListener('click', async e=>{ e.stopPropagation(); const raw=el.getAttribute('data-link-yes'), c=el.getAttribute('data-link-agent');
+      const r = await addAliasesToProfile(c, [raw]);
+      state.agentMgmtMsg = r.ok ? {text:`Linked "${raw}" to ${c}. Their earlier attempts and assignments now count under ${c}.`, color:'var(--ok)'} : {text:r.error, color:'var(--bad)'}; render(); });
+  });
+  document.querySelectorAll('[data-link-no]').forEach(el=>{
+    el.addEventListener('click', async e=>{ e.stopPropagation(); const raw=el.getAttribute('data-link-no'), c=el.getAttribute('data-link-agent');
+      const shared = await dismissLinkSuggestion(raw, c);
+      state.agentMgmtMsg = {text:`Won't suggest "${raw}" for ${c} again${shared ? '' : ' on this device'}.`, color:'var(--ok)'}; render(); });
   });
   const rosterTableTLSelect=document.getElementById('rosterTableTLSelect');
   if(rosterTableTLSelect) rosterTableTLSelect.addEventListener('change', e=>{ state.rosterTableTL = e.target.value; render(); });
@@ -3924,12 +3936,14 @@ function wireEvents(){
       const fullNameInput = document.getElementById('regAgentFullName');
       const chatNameInput = document.getElementById('regAgentChatName');
       const altNameInput = document.getElementById('regAgentAltName');
-      const tlNameInput = document.getElementById('regAgentTLName');
+      const tlSelect = document.getElementById('regAgentTLSelect');
+      const tlNewInput = document.getElementById('regAgentTLName');
       if(fullNameInput) fullNameInput.value = profile.fullName || profile.canonicalName;
       if(chatNameInput) chatNameInput.value = profile.chatName || '';
       if(altNameInput) altNameInput.value = (profile.aliases||[]).find(a=>a!==profile.chatName) || '';
-      const owningRoster = state.tlRosters.find(r=>r.agents.some(a=>namesMatch(a, canonicalName)));
-      if(tlNameInput) tlNameInput.value = owningRoster ? owningRoster.tlName : (tlNameInput.value||'');
+      const owning = rostersContaining(profile.canonicalName); // preselect only when there is exactly one current TL
+      if(tlSelect) tlSelect.value = owning.length===1 ? owning[0].tlName : '';
+      if(tlNewInput){ tlNewInput.value = ''; tlNewInput.style.display = 'none'; }
       const emailInput = document.getElementById('regAgentEmail'); if(emailInput) emailInput.value = profile.email || '';
       const slackInput = document.getElementById('regAgentSlack'); if(slackInput) slackInput.value = profile.slackHandle || '';
       if(fullNameInput) fullNameInput.scrollIntoView({behavior:'smooth', block:'center'});
@@ -4070,11 +4084,6 @@ function wireEvents(){
   const scenarioLibrarySearchInput=document.getElementById('scenarioLibrarySearchInput');
   if(scenarioLibrarySearchInput) scenarioLibrarySearchInput.addEventListener('input', e=>{
     state.scenarioLibrarySearch = e.target.value;
-    render();
-  });
-  const scenarioLibraryReadinessSelect=document.getElementById('scenarioLibraryReadinessSelect');
-  if(scenarioLibraryReadinessSelect) scenarioLibraryReadinessSelect.addEventListener('change', e=>{
-    state.scenarioLibraryReadinessFilter = e.target.value;
     render();
   });
 
@@ -4522,10 +4531,11 @@ function loadLocalTlReviews(){
 }
 function applyTlReviews(list){
   const attempts = [], reviews = {};
-  const summaries = {};
+  const summaries = {}; const dismissals = new Set();
   loadLocalPatternSummaries().forEach(s=>{ if(s && s.id) summaries[s.id] = s; });
   (list||[]).forEach(r=>{
-    if(r && r.type==='pattern-summary'){ if(r.id) summaries[r.id] = r; return; } // TL pattern summaries ride along in the same shared list; never treated as attempts
+    if(r && r.type==='pattern-summary'){ if(r.id) summaries[r.id] = r; return; }
+    if(r && r.type==='link-dismissal'){ if(r.key) dismissals.add(r.key); return; } // 'Not the same person' choices, shared // TL pattern summaries ride along in the same shared list; never treated as attempts
     if(r && r.type==='tl-review' && r.reviewKey){
       const prev = reviews[r.reviewKey];
       if(!prev || (r.tlReviewedAt||0) >= (prev.tlReviewedAt||0)) reviews[r.reviewKey] = r;
@@ -4535,6 +4545,7 @@ function applyTlReviews(list){
   Object.keys(local).forEach(k=>{ const prev = reviews[k]; if(!prev || (local[k].tlReviewedAt||0) > (prev.tlReviewedAt||0)) reviews[k] = local[k]; });
   attempts.forEach(e=>{ const r = reviews[reviewKeyFor(e)]; if(r && r.tlOverrides){ e.tlOverrides = r.tlOverrides; e.tlReviewedAt = r.tlReviewedAt; } });
   state.patternSummaries = Object.values(summaries).sort((a,b)=>(b.generatedAt||0)-(a.generatedAt||0));
+  state.linkDismissals = [...dismissals];
   return attempts;
 }
 
@@ -6853,6 +6864,36 @@ function agentOptionsHtml(includeFormer){
   const act = activeAgentProfiles(), former = includeFormer ? formerAgentProfiles() : [];
   return `<option value="">Add as alias to\u2026</option>${act.map(p=>`<option value="${escapeHtml(p.canonicalName)}">${escapeHtml(p.canonicalName)}</option>`).join('')}${former.length ? `<optgroup label="Former agents">${former.map(p=>`<option value="${escapeHtml(p.canonicalName)}">${escapeHtml(p.canonicalName)} (${agentStatus(p).toLowerCase()})</option>`).join('')}</optgroup>` : ''}`;
 }
+// Suggests linking an unmatched historical name to an active profile that has no attempts yet - only when the name is a
+// close match to that one profile and to no other. Linking adds the raw name as an alias; saved records are never changed.
+const LINK_DISMISSALS_KEY = 'zteamz_linkDismissals_v1';
+function loadLocalLinkDismissals(){ try{ const v=JSON.parse(localStorage.getItem(LINK_DISMISSALS_KEY)||'[]'); return Array.isArray(v)?v:[]; }catch(err){ return []; } }
+function linkDismissalKey(raw, canonical){ return (raw||'').trim().toLowerCase()+'|'+(canonical||'').trim().toLowerCase(); }
+function isLinkDismissed(raw, canonical){ const k = linkDismissalKey(raw, canonical); return (state.linkDismissals||[]).includes(k) || loadLocalLinkDismissals().includes(k); }
+function isCloseNameMatch(raw, profile){
+  const full = (profile.fullName || profile.canonicalName || '').trim().toLowerCase(); const r = (raw||'').trim().toLowerCase();
+  if(!full || !r || r===full) return false;
+  const rt = r.split(/\s+/), ft = full.split(/\s+/);
+  if(rt.every(t=>ft.includes(t))) return true;          // e.g. "Donald Ambrose" inside "Donald Ambrose Jr"
+  return editDistance(r, full) <= 2;                     // or the whole name within 2 letters
+}
+function linkSuggestionsFor(profile){
+  if(!profile || !isActiveAgent(profile) || attemptsForAgent(profile.canonicalName).length) return [];
+  return unmatchedLogNames(state.teamProgressLog).filter(u=>
+    isCloseNameMatch(u.raw, profile) && !isLinkDismissed(u.raw, profile.canonicalName)
+    && !state.agentDirectory.some(o=>o!==profile && isCloseNameMatch(u.raw, o)));
+}
+function linkSuggestionHtml(u, profile){
+  return `<div class="box" data-stop-row style="margin-top:6px;border-color:var(--accent);font-size:12.5px;">Possible existing activity found under "${escapeHtml(u.raw)}" (${u.count} attempt${u.count===1?'':'s'}). Link to ${escapeHtml(profile.canonicalName)}?
+    <span style="display:inline-flex;gap:6px;margin-left:6px;"><button class="small primary" data-link-yes="${escapeHtml(u.raw)}" data-link-agent="${escapeHtml(profile.canonicalName)}">Link</button><button class="small" data-link-no="${escapeHtml(u.raw)}" data-link-agent="${escapeHtml(profile.canonicalName)}">Not the same person</button></span></div>`;
+}
+async function dismissLinkSuggestion(raw, canonical){
+  const key = linkDismissalKey(raw, canonical);
+  state.linkDismissals = [...new Set([...(state.linkDismissals||[]), key])];
+  try{ const l = loadLocalLinkDismissals(); if(!l.includes(key)) l.push(key); localStorage.setItem(LINK_DISMISSALS_KEY, JSON.stringify(l)); }catch(err){}
+  // Shared via the existing team-progress append route, tagged like TL reviews and pattern summaries (never counted as an attempt).
+  try{ const resp = await fetch(BACKEND_URL + '/api/store/team-progress', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type:'link-dismissal', key, raw, agentName:canonical, dismissedAt:Date.now()})}); return resp.ok; }catch(err){ return false; }
+}
 function renderUnmatchedNamesRows(list){
   return list.map(u=>`<div class="info-row" data-unmatched-row style="align-items:center;flex-wrap:wrap;gap:8px;">
     <span class="ilabel">"${escapeHtml(u.raw)}" <span style="color:var(--text3);">\u00b7 ${u.count} attempt${u.count===1?'':'s'}</span></span>
@@ -7203,6 +7244,7 @@ function renderAgentDirectoryList(searchQuery){
           ${names.length ? `<span style="color:var(--text3);font-size:12px;"> - also known as ${escapeHtml(names.join(', '))}</span>` : ''}
           <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${tlLine} \u00b7 ${attempts} attempt${attempts===1?'':'s'} \u00b7 ${asg} assignment${asg===1?'':'s'}</div>
           ${contactLineHtml(a.email, a.slackHandle)}
+          ${linkSuggestionsFor(a).map(u=>linkSuggestionHtml(u, a)).join('')}
         </div>
         <span style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="small" data-agent-action="transfer" data-agent="${escapeHtml(a.canonicalName)}">Transfer to another TL</button>
@@ -7225,10 +7267,11 @@ function renderFormerAgentsList(){
 }
 function renderRosterTable(){
   const tlNames = [...new Set(state.tlRosters.map(r=>r.tlName))].sort();
-  const pick = state.rosterTableTL || tlNames.find(t=>namesMatch(t, getLastAssigningTL())) || tlNames[0] || '';
-  const roster = state.tlRosters.find(r=>namesMatch(r.tlName, pick));
-  const sel = `<select id="rosterTableTLSelect" aria-label="Team lead" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;">${tlNames.map(t=>`<option value="${escapeHtml(t)}" ${namesMatch(t,pick)?'selected':''}>${escapeHtml(t)}</option>`).join('')}</select>`;
-  if(!roster) return `<div>${tlNames.length ? sel : ''}<div class="empty" style="padding:10px 0;">No roster yet.</div></div>`;
+  const pick = state.rosterTableTL || ''; // never auto-picked; session-only, so a fresh load starts at the placeholder
+  const roster = pick ? state.tlRosters.find(r=>namesMatch(r.tlName, pick)) : null;
+  const sel = `<select id="rosterTableTLSelect" aria-label="Team lead" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;"><option value="" ${pick?'':'selected'}>Select a Team Lead</option>${tlNames.map(t=>`<option value="${escapeHtml(t)}" ${pick && namesMatch(t,pick)?'selected':''}>${escapeHtml(t)}</option>`).join('')}</select>`;
+  if(!tlNames.length) return `<div class="empty" style="padding:10px 0;">No team leads registered yet.</div>`;
+  if(!roster) return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><span style="font-size:12.5px;color:var(--text2);">Team lead</span>${sel}<span style="font-size:11.5px;color:var(--text3);">Choose a team lead to see their roster.</span></div>`;
   const rows = (roster.agents||[]).map(ag=>{
     const p = profileByCanonical(ag); const name = p ? p.canonicalName : ag;
     const atts = attemptsForAgent(name);
@@ -7252,7 +7295,7 @@ function renderRosterTable(){
         <td style="${td}">${r.last ? escapeHtml(new Date(r.last).toLocaleDateString()) : '-'}</td>
         <td style="${td}">${r.avg===null ? '-' : r.avg+'%'}</td>
         <td style="${td}">${r.pend}${r.od ? ` <span style="color:var(--bad);font-weight:700;">(${r.od} overdue)</span>` : ''}</td>
-      </tr>`).join('') : `<tr><td colspan="7" style="${td}color:var(--text3);">No agents on this roster.</td></tr>`}</tbody>
+      </tr>${(()=>{ const p=profileByCanonical(r.name); const s = p ? linkSuggestionsFor(p) : []; return s.length ? `<tr><td colspan="7" style="padding:0 8px 8px;">${s.map(x=>linkSuggestionHtml(x, p)).join('')}</td></tr>` : ''; })()}`).join('') : `<tr><td colspan="7" style="${td}color:var(--text3);">No agents on this roster.</td></tr>`}</tbody>
     </table></div>
   </div>`;
 }
@@ -8795,7 +8838,13 @@ function renderTeamLeadsRosterSectionBody(){
         <input id="regAgentFullName" value="${escapeHtml((state.regFormDraft||{}).fullName||'')}" placeholder="Full name" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentChatName" value="${escapeHtml((state.regFormDraft||{}).chatName||'')}" placeholder="Chat name" style="flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentAltName" value="${escapeHtml((state.regFormDraft||{}).additionalName||'')}" placeholder="Other recognized name (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <input id="regAgentTLName" placeholder="Reports to (TL name)" value="${escapeHtml(state.regFormDraft ? (state.regFormDraft.tlName||'') : 'Zainab Yahaya')}" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        ${(()=>{ const tls=[...new Set(state.tlRosters.map(r=>r.tlName))].sort(); const d=(state.regFormDraft&&state.regFormDraft.tlName)||''; const known=tls.find(t=>namesMatch(t,d)); const isNew=!!d && !known;
+          return `<select id="regAgentTLSelect" aria-label="Reports to" style="flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+            <option value="" ${!d?'selected':''}>Select Team Lead</option>
+            ${tls.map(t=>`<option value="${escapeHtml(t)}" ${known===t?'selected':''}>${escapeHtml(t)}</option>`).join('')}
+            <option value="__new__" ${isNew?'selected':''}>+ New Team Lead\u2026</option>
+          </select>
+          <input id="regAgentTLName" placeholder="New Team Lead's name" value="${escapeHtml(isNew?d:'')}" style="${isNew?'':'display:none;'}flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">`; })()}
         <input id="regAgentEmail" value="${escapeHtml((state.regFormDraft||{}).email||'')}" type="email" placeholder="Email (optional)" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentSlack" value="${escapeHtml((state.regFormDraft||{}).slackHandle||'')}" placeholder="Slack handle (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <button id="btnRegisterAgent" class="primary">Register agent</button>
@@ -8829,7 +8878,6 @@ function renderTeamLeadsRosterSectionBody(){
       ${renderAgentDirectoryList(state.agentDirectorySearch)}
       ${renderDashSubsection('former-agents', `Former agents (${formerAgentProfiles().length})`, renderFormerAgentsList, false)}
     `, false)}
-    ${renderDashSubsection('cleanup-audit', 'Clean-up audit', renderCleanupAudit, false)}
   `;
 }
 
@@ -8853,21 +8901,15 @@ function renderTeamProgressSectionBody(){
 }
 
 function renderScenarioLibrarySectionBody(){
-  const readinessColor = {PILOT_READY:'var(--ok)', PRACTICE_ONLY:'var(--warn)', ENGINE_TEST_ONLY:'var(--bad)'};
-  const readinessLevels = [...new Set(SCENARIOS.map(s=>s.readiness).filter(Boolean))];
   const lf = state.scenarioFilters.library;
   const q = (state.scenarioLibrarySearch||'').trim().toLowerCase();
-  let list = SCENARIOS.slice();
+  const libraryPool = SCENARIOS.filter(s=>s.readiness!=='ENGINE_TEST_ONLY'); // engine-test scenarios live under System Tests > Maintenance
+  let list = libraryPool.slice();
   if(q) list = list.filter(s=>[s.internalTitle, s.title, s.skill, ...scenarioKbCategories(s), ...scenarioKbArticles(s)].filter(Boolean).join(' ').toLowerCase().includes(q));
-  if(state.scenarioLibraryReadinessFilter) list = list.filter(s=>s.readiness===state.scenarioLibraryReadinessFilter);
   list = filterScenariosByTags(list, lf);
   const controls = `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
     <input id="scenarioLibrarySearchInput" placeholder="Search scenarios or KB articles\u2026" value="${escapeHtml(state.scenarioLibrarySearch||'')}" style="flex:1;min-width:180px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-    <select id="scenarioLibraryReadinessSelect" aria-label="Filter by readiness" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-      <option value="">All readiness</option>
-      ${readinessLevels.map(r=>`<option value="${escapeHtml(r)}" ${state.scenarioLibraryReadinessFilter===r?'selected':''}>${escapeHtml(r)}</option>`).join('')}
-    </select>
-  </div>${renderScenarioFilterBar('library', lf, SCENARIOS, list.length)}`;
+  </div>${renderScenarioFilterBar('library', lf, libraryPool, list.length)}`;
   const refRows = list.map(s=>{
     const initial = s.playerName.charAt(0).toUpperCase();
     const open = !!state.libraryExpanded[s.id];
@@ -8877,7 +8919,6 @@ function renderScenarioLibrarySectionBody(){
         <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
           <div style="font-weight:700;font-size:13.5px;">${escapeHtml(s.title)}</div>
           <span style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-            <span style="font-size:10px;font-weight:700;color:${readinessColor[s.readiness]||'var(--text3)'};border:1px solid ${readinessColor[s.readiness]||'var(--text3)'};border-radius:20px;padding:2px 7px;white-space:nowrap;">${s.readiness||'UNCLASSIFIED'}</span>
             <button class="small" data-library-expand="${s.id}" aria-expanded="${open}" title="Show KB articles">${open?'Less':'More'}</button>
           </span>
         </div>
@@ -9398,6 +9439,13 @@ function renderSystemTestsSectionBody(){
     </div>
 
     <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">Maintenance</h2>
+      ${state.agentMgmtMsg ? `<div class="box" role="status" style="border-color:${state.agentMgmtMsg.color};color:${state.agentMgmtMsg.color};font-size:12.5px;">${escapeHtml(state.agentMgmtMsg.text)}</div>` : ''}
+      ${renderDashSubsection('cleanup-audit', 'Clean-up audit', renderCleanupAudit, false)}
+      ${renderDashSubsection('engine-test-scenarios', `Engine test scenarios (${SCENARIOS.filter(s=>s.readiness==='ENGINE_TEST_ONLY').length})`, ()=>`<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Scenarios with fictional system mechanics, kept out of agent practice, assignments and Challenge Mode. Click one to run it.</div>${SCENARIOS.filter(s=>s.readiness==='ENGINE_TEST_ONLY').map(s=>`<div class="category-scenario-card" data-scenario="${s.id}" title="${escapeHtml(complexityTitle(s))}" style="max-width:760px;${complexityBorderStyle(s)}"><div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13.5px;">${escapeHtml(s.title)} <span style="font-weight:400;font-size:11px;color:var(--text3);">${escapeHtml(s.id)}</span></div><div style="font-size:12px;color:var(--text2);margin-top:2px;">${escapeHtml(s.internalTitle||'')}</div><div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${scenarioTagChipsHtml(s)}</div></div></div>`).join('') || '<div class="empty">None.</div>'}`, false)}
+    </div>
+
+    <div class="diag-section">
       <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">Not automated in this prototype</h2>
       <div style="color:var(--text2);font-size:13px;line-height:1.6;">
         <strong>Hidden-information discipline</strong> (does the player over-reveal facts) and <strong>player-sentiment independence</strong> (can a well-handled chat still end with an unhappy player) are best verified by actually playing a scenario live and reviewing the transcript against the scorecard citations. Personal <strong>Attempt History</strong> persists per-device via browser storage. <strong>Team Progress and TL Assignments are shared</strong> across every device using this link, via the backend server - a TL assigning a scenario, or an agent completing one, is visible to anyone else using the tool, not just on the same device. <strong>Authorization</strong> is still informal (name-based, no real accounts or passwords) - that remains intentionally out of scope for Phase 1.
@@ -9431,7 +9479,7 @@ function renderDiagnostics(){
     ${renderDashSection('tl-agent-roster', 'Team Leads & Agent Roster', agentsOnMultipleRosters().length ? `${agentsOnMultipleRosters().length} agent${agentsOnMultipleRosters().length===1?'':'s'} need resolution` : `${activeAgentProfiles().length} active agents`, renderTeamLeadsRosterSectionBody, 'users', '#a06bd6')}
     ${renderDashSection('team-progress', 'Team Progress', 'View and review attempts', renderTeamProgressSectionBody, 'chart', '#3ecf8e')}
     ${renderDashSection('feedback', 'Feedback & Suggestions', `${unresolvedCount} unresolved suggestion${unresolvedCount===1?'':'s'}`, renderFeedbackManagementSectionBody, 'chat', '#e2a33d')}
-    ${renderDashSection('scenario-library', 'Scenario Library', `Browse ${SCENARIOS.length} scenarios`, renderScenarioLibrarySectionBody, 'grid', '#5bc0be')}
+    ${renderDashSection('scenario-library', 'Scenario Library', `Browse ${SCENARIOS.filter(s=>s.readiness!=='ENGINE_TEST_ONLY').length} scenarios`, renderScenarioLibrarySectionBody, 'grid', '#5bc0be')}
     ${renderDashSection('kb-coverage', 'KB Coverage', (()=>{ const z = KB_CATEGORIES.filter(c=>!PILOT_SCENARIOS.some(s=>scenarioKbCategories(s).includes(c.name)) && !state.customScenarios.some(cs=>cs.visibility==='library'&&cs.reviewStatus==='approved'&&scenarioKbCategories(cs).includes(c.name))).length; return z ? `${z} of ${KB_CATEGORIES.length} KB categories have no scenarios` : `All ${KB_CATEGORIES.length} KB categories covered`; })(), renderKbCoverageSectionBody, 'check', '#3ecf8e')}
     ${renderDashSection('system-tests', 'System Tests', 'Development diagnostics', renderSystemTestsSectionBody, 'gear', '#8a919c')}
   </div>`;
@@ -9782,7 +9830,7 @@ function renderNameModal(){
   overlay.innerHTML = `<div class="modal" style="max-width:420px;">
     <h2>What\u2019s your name?</h2>
     <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Use your full name so your TL can see your practice results.</div>
-    <input id="nameModalInput" type="text" placeholder="e.g. Poojan Solanki" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
+    <input id="nameModalInput" type="text" placeholder="e.g. Jordan Smith" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
     <div id="nameModalRecognized" style="margin-top:10px;font-size:12.5px;color:var(--ok);display:none;"></div>
     <div style="margin-top:16px;"><button id="btnSaveName" class="primary">Continue</button></div>
   </div>`;
@@ -9878,7 +9926,7 @@ async function init(){
   await loadAssignments();
   await loadAgentDirectory();
   await loadTLRosters();
-  await seedZainabRosterIfMissing();
+  // seedZainabRosterIfMissing() is kept but no longer runs on load - rosters come only from TLs' own registrations.
   await applyAgentStatusMigrations();
   await loadCustomScenarios();
   state.scenarioBuilderTLName = getLastAssigningTL();
