@@ -2020,7 +2020,7 @@ let state = {
   agentDirectory:[], // [{canonicalName, fullName, chatName, aliases:[...]}] - canonical agent profiles for name resolution
   agentDirectoryLoadError:null,
   allFeedback:[],
-  patternSummaries:[], patternLoading:{}, patternError:{}, linkDismissals:[], // TL pattern summaries (see TL PATTERN SUMMARIES)
+  patternSummaries:[], patternLoading:{}, patternError:{}, // TL pattern summaries (see TL PATTERN SUMMARIES)
   feedbackLoadError:null,
   currentAttemptContext:null, // self-contained snapshot of the attempt currently being scored - see runEvaluation/archiveAttempt
   activeAssignmentId:null, // set only when the live scenario was launched via a My Assignments "Start Scenario" button
@@ -2059,6 +2059,9 @@ let state = {
   historicalView:null,    // {scenarioId, attempt} when viewing a past attempt read-only
   historyExpanded:false,
   historicalTranscriptExpanded:false,
+  teamProgressReturn:null,   // {filterRoster, scrollTop}: the Team Progress view a TL review was opened from, so Back returns there
+  tlCopy:null,               // {attempt, kind, text}: last Copy transcript / Copy full review output shown in the TL review
+  replyBurst:null,           // single-chat player-reply burst window (see AGENT BURST WINDOW)
   openingToken:0,          // bumps on every startScenario so a stale opening-message response from a previous attempt is ignored
   ahtMode:false,           // global toggle: when on, any scenario run also tracks/scores handling time
   ahtStartTime:null,       // Date.now() when the current attempt started, only set if ahtMode was on
@@ -2087,6 +2090,7 @@ let state = {
   challengeSessions:[],       // completed Challenge sessions (per device, localStorage CHALLENGE_SESSIONS_KEY) - written the moment all chats have results
   sessionEvalRunning:{},      // sessionId -> true while that session's AI summary is being generated in THIS page
   historySessionView:null,    // sessionId when a saved Challenge session report is open on the History page
+  composerToken:0,  // identifies which scenario the on-screen single-chat composer belongs to (see captureComposerDraft)
   composerDraft:'', // preserves an unsent message in the single-chat composer across re-renders (e.g. a silence nudge arriving mid-sentence)
   historyDrilldownScenario:null, // scenario id when drilled into one scenario's attempts on the History page
   feedbackText:'',
@@ -3058,9 +3062,21 @@ function pickRandomScenario(pool){
 // read-only viewer, a confirmation you can cancel). Modals that collect required input with no
 // cancel option (documentation after a chat, the first-time name prompt) are deliberately left out,
 // since a stray click there would silently drop something the agent needed to submit.
+// A browser fires 'click' on the nearest common ancestor of where the press STARTED and where it ENDED.
+// So selecting transcript text inside the modal and releasing the mouse over the dark backdrop produced
+// a click whose target was the overlay itself - which used to close the review. Now the press must both
+// start AND end on the backdrop, and a click that lands while text inside the modal is selected never closes.
 function wireBackdropClose(overlay, closeBtnId){
+  let pressStartedOnBackdrop = false;
+  overlay.addEventListener('mousedown', e=>{ pressStartedOnBackdrop = (e.target === overlay); });
   overlay.addEventListener('click', e=>{
-    if(e.target !== overlay) return;
+    const intentional = pressStartedOnBackdrop && e.target === overlay;
+    pressStartedOnBackdrop = false;
+    if(!intentional) return;
+    try{
+      const sel = window.getSelection && window.getSelection();
+      if(sel && !sel.isCollapsed && sel.anchorNode && overlay.contains(sel.anchorNode)) return;
+    }catch(err){}
     const btn = document.getElementById(closeBtnId);
     if(btn) btn.click();
   });
@@ -3158,6 +3174,7 @@ function render(){
   const prevSideScroll = document.querySelector('.side');
   const prevSideScrollTop = prevSideScroll ? prevSideScroll.scrollTop : null;
   captureChallengeScroll();
+  const composerSnap = captureComposerDraft();   // read straight from the DOM: an unsent agent draft must survive EVERY rebuild
   app.innerHTML = renderTopbarGlobal() + `<div class="body-grid">${renderIconRail()}${renderScenarioList()}${renderMain()}${renderSide()}</div>`;
   wireEvents();
   if(activeId){
@@ -3180,6 +3197,43 @@ function render(){
   }
   restoreChallengeScroll();
   scrollChatToBottom();
+  restoreComposerFocus(composerSnap);
+}
+
+// ---------- COMPOSER DRAFT SAFETY ----------
+// Every render() replaces the whole DOM. Before that happens, whatever is in the visible composer is copied into the
+// draft state of the chat it belongs to (state.composerDraft for the single chat, slot.draftText for the Challenge slot
+// the textarea was rendered for), so a player reply, typing indicator, nudge, background Challenge activity, tab switch
+// or investigation click can never erase unsent text. Drafts are only cleared by a successful send or by leaving the scenario.
+function captureComposerDraft(){
+  const active = document.activeElement;
+  const pick = el => ({ focused: active===el, start: el.selectionStart, end: el.selectionEnd, dir: el.selectionDirection, scrollTop: el.scrollTop });
+  const single = document.getElementById('composerInput');
+  if(single && single.getAttribute('data-draft-token')===String(state.composerToken||0)){
+    state.composerDraft = single.value;
+    return Object.assign({kind:'single'}, pick(single));
+  }
+  const ch = document.getElementById('challengeComposerInput');
+  if(ch && state.challenge && ch.getAttribute('data-session')===String(state.challenge.sessionId)){
+    const idx = parseInt(ch.getAttribute('data-slot'), 10);
+    const slot = state.challenge.slots[idx];
+    if(slot){
+      slot.draftText = ch.value;
+      return Object.assign({kind:'challenge', slotIndex: idx}, pick(ch));
+    }
+  }
+  return null;
+}
+function restoreComposerFocus(snap){
+  if(!snap || !snap.focused) return;
+  const el = document.getElementById(snap.kind==='single' ? 'composerInput' : 'challengeComposerInput');
+  if(!el || el.disabled) return;
+  const sameChat = snap.kind==='single' || parseInt(el.getAttribute('data-slot'),10)===snap.slotIndex;
+  try{
+    el.focus({preventScroll:true});
+    if(sameChat && snap.start!=null){ el.setSelectionRange(snap.start, snap.end, snap.dir||'none'); el.scrollTop = snap.scrollTop; }
+    else { const n = el.value.length; el.setSelectionRange(n, n); }   // switched to another chat's composer: cursor at the end of its own draft
+  }catch(err){}
 }
 
 // ---------- CHALLENGE TRANSCRIPT SCROLL (per slot) ----------
@@ -3387,7 +3441,7 @@ function renderMain(){
     const who = m.speaker==='player' ? s.playerName : 'You (Agent)';
     msgs += `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${escapeHtml(m.text)}</div>`;
   });
-  if(state.simStatus==='opening') msgs += `<div class="typing">${escapeHtml(s.playerName)} is typing...</div>`;
+  if(state.simStatus==='opening' || (state.simStatus==='active' && playerIsTyping(state))) msgs += `<div class="typing">${escapeHtml(s.playerName)} is typing...</div>`;
   const composerDisabled = state.simStatus!=='active' ? 'disabled' : '';
   const hasCompletedEval = state.evaluation && !state.evaluation.loading && !state.evaluation.error;
   return `<div class="main">
@@ -3405,7 +3459,7 @@ function renderMain(){
     </div>
     <div class="chatlog" id="chatlog">${msgs}</div>
     <div class="composer">
-      <textarea id="composerInput" placeholder="Type a message, the customer will see this" ${composerDisabled}>${escapeHtml(state.composerDraft||'')}</textarea>
+      <textarea id="composerInput" data-draft-token="${state.composerToken||0}" placeholder="Type a message, the customer will see this" ${composerDisabled}>${escapeHtml(state.composerDraft||'')}</textarea>
       <button id="btnSend" class="primary" ${composerDisabled}>Send</button>
     </div>
   </div>`;
@@ -3656,7 +3710,7 @@ function wireEvents(){
     // silently wipe whatever you were typing. Drafts are kept per-slot so switching tabs doesn't lose one either.
     challengeComposerInput.addEventListener('input', e=>{
       const slot = state.challenge.slots[state.challenge.activeSlotIndex];
-      if(slot) slot.draftText = e.target.value;
+      if(slot){ slot.draftText = e.target.value; noteAgentBurstTyping(slot); }   // extends only THIS chat's burst window
     });
     challengeComposerInput.addEventListener('keydown', e=>{
       if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendChallengeMessage(state.challenge.activeSlotIndex); }
@@ -3798,7 +3852,7 @@ function wireEvents(){
   const input=document.getElementById('composerInput');
   if(send) send.addEventListener('click', sendAgentMessage);
   if(input){
-    input.addEventListener('input', e=>{ state.composerDraft = e.target.value; });
+    input.addEventListener('input', e=>{ state.composerDraft = e.target.value; noteAgentBurstTyping(state); });
     input.addEventListener('keydown', e=>{
       if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendAgentMessage(); }
     });
@@ -3846,12 +3900,10 @@ function wireEvents(){
     });
   });
 
-  const regAgentTLSelect=document.getElementById('regAgentTLSelect');
-  if(regAgentTLSelect) regAgentTLSelect.addEventListener('change', e=>{ const t=document.getElementById('regAgentTLName'); if(t){ const on = e.target.value==='__new__'; t.style.display = on ? '' : 'none'; if(on) t.focus(); } });
   const btnRegisterAgent=document.getElementById('btnRegisterAgent');
   if(btnRegisterAgent) btnRegisterAgent.addEventListener('click', ()=>{
     const v = id=>(document.getElementById(id).value||'').trim();
-    const form = {fullName:v('regAgentFullName'), chatName:v('regAgentChatName'), additionalName:v('regAgentAltName'), tlName:(()=>{ const s=document.getElementById('regAgentTLSelect'); return !s ? '' : s.value==='__new__' ? v('regAgentTLName') : s.value; })(), email:v('regAgentEmail'), slackHandle:v('regAgentSlack')};
+    const form = {fullName:v('regAgentFullName'), chatName:v('regAgentChatName'), additionalName:v('regAgentAltName'), tlName:v('regAgentTLName'), email:v('regAgentEmail'), slackHandle:v('regAgentSlack')};
     if(!form.fullName){ state.regMsg = {text:'Full name is required.', color:'var(--bad)'}; state.regFormDraft = form; render(); return; }
     if(form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)){ state.regMsg = {text:'That email address doesn\u2019t look right.', color:'var(--bad)'}; state.regFormDraft = form; render(); return; }
     continueAgentRegistration(form, {});
@@ -3902,7 +3954,7 @@ function wireEvents(){
   document.querySelectorAll('[data-audit-delete]').forEach(el=>{
     el.addEventListener('click', ()=>{ const c=el.getAttribute('data-audit-delete'); const p=profileByCanonical(c);
       if(p && !isActiveAgent(p)){ state.agentMgmtMsg = {text:`Reactivate ${c} first, then delete from All Registered Agents.`, color:'var(--warn)'}; render(); return; }
-      state.agentAction = {canonical:c, kind:'delete'}; state.diagSectionsOpen['tl-agent-roster']=true; state.diagSubsectionsOpen['agent-directory']=true; state.agentDirectorySearch = c; render();
+      state.agentAction = {canonical:c, kind:'delete'}; state.diagSubsectionsOpen['agent-directory']=true; state.agentDirectorySearch = c; render();
       setTimeout(()=>{ const row=document.querySelector('[data-agent-row]'); if(row && row.scrollIntoView) row.scrollIntoView({behavior:'smooth', block:'center'}); },0); });
   });
   document.querySelectorAll('.auditAmbiguousSelect').forEach(sel=>{
@@ -3912,16 +3964,6 @@ function wireEvents(){
     btn.addEventListener('click', async ()=>{ const row=btn.closest('[data-unmatched-row]'); const sel=row && row.querySelector('.unmatchedAliasSelect'); const raw=btn.getAttribute('data-unmatched-add');
       const r = await addUnmatchedAlias(raw, sel ? sel.value : ''); if(!r.ok){ if(sel) sel.focus(); return; }
       state.agentMgmtMsg = {text:`"${raw}" added as an alias of ${sel.value}.`, color:'var(--ok)'}; render(); });
-  });
-  document.querySelectorAll('[data-link-yes]').forEach(el=>{
-    el.addEventListener('click', async e=>{ e.stopPropagation(); const raw=el.getAttribute('data-link-yes'), c=el.getAttribute('data-link-agent');
-      const r = await addAliasesToProfile(c, [raw]);
-      state.agentMgmtMsg = r.ok ? {text:`Linked "${raw}" to ${c}. Their earlier attempts and assignments now count under ${c}.`, color:'var(--ok)'} : {text:r.error, color:'var(--bad)'}; render(); });
-  });
-  document.querySelectorAll('[data-link-no]').forEach(el=>{
-    el.addEventListener('click', async e=>{ e.stopPropagation(); const raw=el.getAttribute('data-link-no'), c=el.getAttribute('data-link-agent');
-      const shared = await dismissLinkSuggestion(raw, c);
-      state.agentMgmtMsg = {text:`Won't suggest "${raw}" for ${c} again${shared ? '' : ' on this device'}.`, color:'var(--ok)'}; render(); });
   });
   const rosterTableTLSelect=document.getElementById('rosterTableTLSelect');
   if(rosterTableTLSelect) rosterTableTLSelect.addEventListener('change', e=>{ state.rosterTableTL = e.target.value; render(); });
@@ -3936,14 +3978,12 @@ function wireEvents(){
       const fullNameInput = document.getElementById('regAgentFullName');
       const chatNameInput = document.getElementById('regAgentChatName');
       const altNameInput = document.getElementById('regAgentAltName');
-      const tlSelect = document.getElementById('regAgentTLSelect');
-      const tlNewInput = document.getElementById('regAgentTLName');
+      const tlNameInput = document.getElementById('regAgentTLName');
       if(fullNameInput) fullNameInput.value = profile.fullName || profile.canonicalName;
       if(chatNameInput) chatNameInput.value = profile.chatName || '';
       if(altNameInput) altNameInput.value = (profile.aliases||[]).find(a=>a!==profile.chatName) || '';
-      const owning = rostersContaining(profile.canonicalName); // preselect only when there is exactly one current TL
-      if(tlSelect) tlSelect.value = owning.length===1 ? owning[0].tlName : '';
-      if(tlNewInput){ tlNewInput.value = ''; tlNewInput.style.display = 'none'; }
+      const owningRoster = state.tlRosters.find(r=>r.agents.some(a=>namesMatch(a, canonicalName)));
+      if(tlNameInput) tlNameInput.value = owningRoster ? owningRoster.tlName : (tlNameInput.value||'');
       const emailInput = document.getElementById('regAgentEmail'); if(emailInput) emailInput.value = profile.email || '';
       const slackInput = document.getElementById('regAgentSlack'); if(slackInput) slackInput.value = profile.slackHandle || '';
       if(fullNameInput) fullNameInput.scrollIntoView({behavior:'smooth', block:'center'});
@@ -4009,6 +4049,7 @@ function wireEvents(){
       const a = state.assignments.find(x=>x.id===id);
       const entry = a && findTeamProgressEntryForAssignment(a);
       if(!entry) return; // button only ever renders when a linked entry genuinely exists
+      state.teamProgressReturn = null; state.tlCopy = null;
       state.historicalView = { scenarioId: entry.scenarioId, attempt: entry, standalone: true, fromTeamProgress: true };
       state.tlReviewDraft = buildReviewDraft(entry);
       state.tlReviewStatus = '';
@@ -4084,6 +4125,11 @@ function wireEvents(){
   const scenarioLibrarySearchInput=document.getElementById('scenarioLibrarySearchInput');
   if(scenarioLibrarySearchInput) scenarioLibrarySearchInput.addEventListener('input', e=>{
     state.scenarioLibrarySearch = e.target.value;
+    render();
+  });
+  const scenarioLibraryReadinessSelect=document.getElementById('scenarioLibraryReadinessSelect');
+  if(scenarioLibraryReadinessSelect) scenarioLibraryReadinessSelect.addEventListener('change', e=>{
+    state.scenarioLibraryReadinessFilter = e.target.value;
     render();
   });
 
@@ -4531,11 +4577,10 @@ function loadLocalTlReviews(){
 }
 function applyTlReviews(list){
   const attempts = [], reviews = {};
-  const summaries = {}; const dismissals = new Set();
+  const summaries = {};
   loadLocalPatternSummaries().forEach(s=>{ if(s && s.id) summaries[s.id] = s; });
   (list||[]).forEach(r=>{
-    if(r && r.type==='pattern-summary'){ if(r.id) summaries[r.id] = r; return; }
-    if(r && r.type==='link-dismissal'){ if(r.key) dismissals.add(r.key); return; } // 'Not the same person' choices, shared // TL pattern summaries ride along in the same shared list; never treated as attempts
+    if(r && r.type==='pattern-summary'){ if(r.id) summaries[r.id] = r; return; } // TL pattern summaries ride along in the same shared list; never treated as attempts
     if(r && r.type==='tl-review' && r.reviewKey){
       const prev = reviews[r.reviewKey];
       if(!prev || (r.tlReviewedAt||0) >= (prev.tlReviewedAt||0)) reviews[r.reviewKey] = r;
@@ -4545,7 +4590,6 @@ function applyTlReviews(list){
   Object.keys(local).forEach(k=>{ const prev = reviews[k]; if(!prev || (local[k].tlReviewedAt||0) > (prev.tlReviewedAt||0)) reviews[k] = local[k]; });
   attempts.forEach(e=>{ const r = reviews[reviewKeyFor(e)]; if(r && r.tlOverrides){ e.tlOverrides = r.tlOverrides; e.tlReviewedAt = r.tlReviewedAt; } });
   state.patternSummaries = Object.values(summaries).sort((a,b)=>(b.generatedAt||0)-(a.generatedAt||0));
-  state.linkDismissals = [...dismissals];
   return attempts;
 }
 
@@ -4842,6 +4886,7 @@ function startScenario(id, assignmentId){
   }
   state.activeScenario=resolveScenarioForAttempt(s, (state.attemptHistory[s.id]||[]).length);
   state.activePersonaTrait = pickPersonaTrait(s);
+  clearReplyBurst(state);
   state.transcript=[];
   state.turnCounter=0;
   state.simStatus='opening';   // the player is connecting and writing their first message; the agent cannot act yet
@@ -4865,6 +4910,7 @@ function startScenario(id, assignmentId){
   state.playerLeftEarly = false;
   state.playerLeftReason = null;
   state.composerDraft = '';
+  state.composerToken = (state.composerToken||0) + 1;   // a composer still on screen from the PREVIOUS scenario is never captured into this one
   state.view='sim';
   state.openingToken = (state.openingToken||0) + 1;
   render();
@@ -5281,7 +5327,11 @@ function enforceAFDutyBoundary(result){
 function transcriptToApiMessages(transcript){
   const msgs = (transcript||state.transcript)
     .filter(m=>m.speaker!=='system')
-    .map(m=>({ role: m.speaker==='agent'?'user':'assistant', content:m.text }));
+    .map(m=>({ role: m.speaker==='agent'?'user':'assistant', content:m.text }))
+    // Agents often send one thought as 2-3 short consecutive bubbles. The transcript keeps them as separate
+    // messages (exactly as sent, in order); for the player model they are one grouped turn, so the reply
+    // answers the whole burst rather than only its first line.
+    .reduce((acc, m)=>{ const last = acc[acc.length-1]; if(last && last.role===m.role) last.content += '\n' + m.content; else acc.push({...m}); return acc; }, []);
   // The player always speaks first, so the transcript starts with the player's (assistant-role) opener. The API wants the
   // list to start with a user turn, so a synthetic connect marker is placed first. It is never shown in the UI.
   if(msgs.length && msgs[0].role==='assistant') msgs.unshift({role:'user', content:'(the chat has just connected)'});
@@ -5338,47 +5388,163 @@ function formatTimingSignalsForEval(sig){
   return `Time to first response: ${fmt(sig.firstResponseMs)}. Gaps between a player message and the agent's next reply: ${sig.gapCount} total, ${sig.longGapCount} of them over 90s (longest: ${fmt(sig.longestGapMs)}). Filler phrases ("one moment", "bear with me", "let me take a look", etc.) detected ${sig.fillerHits} time(s)${sig.fillerExamples.length?': "'+sig.fillerExamples.join('" / "')+'"':''}.`;
 }
 
-async function sendAgentMessage(){
+// ---------- AGENT BURST WINDOW (realistic player-response timing) ----------
+// Real agents often send one response as 2-3 short consecutive messages. The player therefore does NOT
+// start replying the instant the first bubble lands: each agent message opens a short quiet window, and
+// only when the agent has stopped sending (and typing) for that long does the player reply - once, to the
+// whole burst. Each chat owns its own burst state (state.replyBurst for the single chat, slot.replyBurst for
+// each Challenge slot), so one chat's window never delays, blocks or cancels another's.
+// The transcript itself is untouched by this: every agent bubble is stored separately, with its own turn and
+// timestamp, in the order sent - which is exactly the chronological order the evaluator reads.
+const AGENT_BURST_WINDOW_MS = 2500;      // quiet time after an agent message before the player starts replying
+const AGENT_TYPING_IDLE_MS = 1750;       // agent counts as "actively typing" until this long after their last keystroke
+const AGENT_BURST_CAP_MS = 4500;         // burst protection ends this long after the most recent SENT agent message, typing or not -
+                                         // after that the player may reply even while the agent is still composing (real chats cross)
+function armReplyBurst(b, delayMs){
+  if(b.timer) clearTimeout(b.timer);
+  b.timer = setTimeout(()=>{
+    b.timer = null;
+    if(b.pending){ b.fireAfterPending = true; return; }   // a committed reply is still on its way - reply to this burst after it lands
+    if(typeof b.fire==='function') b.fire();
+  }, Math.max(0, delayMs));
+}
+function burstProtectionActive(b){ return !!b && (Date.now() - b.lastSentAt) < AGENT_BURST_CAP_MS; }
+// How much longer the player should hold back because the agent is typing a follow-up in THIS chat. Never extends
+// past AGENT_BURST_CAP_MS after the last sent message: typing can delay the player a little, never indefinitely.
+function agentTypingHoldMs(b){
+  if(!b || !b.lastTypedAt || !burstProtectionActive(b)) return 0;
+  const now = Date.now();
+  const idleLeft = AGENT_TYPING_IDLE_MS - (now - b.lastTypedAt);
+  if(idleLeft <= 0) return 0;
+  return Math.min(idleLeft, (b.lastSentAt + AGENT_BURST_CAP_MS) - now);
+}
+// Agent sent a message into this chat: (re)start ONLY this chat's window.
+// - Sent INSIDE the previous message's burst protection -> it continues the same thought, so any reply generated against
+//   the incomplete burst is discarded and a fresh one is generated from all sent messages.
+// - Sent AFTER protection expired -> the player was already answering; that reply is kept and lands in true chronological
+//   order, and this message starts a new burst that the player answers afterwards.
+function noteAgentBurstMessage(holder, fire){
+  const b = holder.replyBurst || (holder.replyBurst = {timer:null, holdTimer:null, pending:null, fireAfterPending:false, lastSentAt:0, lastTypedAt:0, fire:null});
+  if(b.pending){
+    if(burstProtectionActive(b)){
+      b.pending.cancelled = true;
+      if(b.holdTimer){ clearTimeout(b.holdTimer); b.holdTimer = null; }
+      b.pending = null;
+    }else{
+      b.pending.committed = true;
+    }
+  }
+  b.lastSentAt = Date.now();
+  b.lastTypedAt = 0;
+  b.fire = fire;
+  armReplyBurst(b, AGENT_BURST_WINDOW_MS);
+}
+// Agent keystroke in this chat's composer: only matters while burst protection is still active.
+function noteAgentBurstTyping(holder){
+  const b = holder && holder.replyBurst;
+  if(!b || !burstProtectionActive(b)) return;
+  b.lastTypedAt = Date.now();
+  if(b.timer){
+    const baseRemaining = (b.lastSentAt + AGENT_BURST_WINDOW_MS) - Date.now();
+    armReplyBurst(b, Math.max(baseRemaining, agentTypingHoldMs(b)));
+  }
+}
+// Starts one reply job for this chat. The job is what gets cancelled if the burst continues.
+function beginReplyJob(b){ const job = {cancelled:false, committed:false}; b.pending = job; return job; }
+// A reply is ready: hold it only while burst protection is active and the agent is typing; then deliver.
+// Unsent composer text never suppresses it - the draft itself is preserved by render() (captureComposerDraft).
+function deliverWhenAgentIdle(b, job, deliver){
+  const attempt = ()=>{
+    b.holdTimer = null;
+    if(job.cancelled || b.pending!==job) return;
+    const wait = job.committed ? 0 : agentTypingHoldMs(b);
+    if(wait > 0){ b.holdTimer = setTimeout(attempt, wait); return; }
+    finishReplyJob(b, job);
+    deliver();
+  };
+  attempt();
+}
+// Clears the job; if a newer burst's window already ran out while this reply was in flight, answer it now.
+function finishReplyJob(b, job){
+  if(b.pending===job) b.pending = null;
+  if(b.fireAfterPending){
+    b.fireAfterPending = false;
+    setTimeout(()=>{ if(!b.pending && !b.timer && typeof b.fire==='function') b.fire(); }, 0);
+  }
+}
+function clearReplyBurst(holder){
+  const b = holder && holder.replyBurst;
+  if(b){ if(b.timer) clearTimeout(b.timer); if(b.holdTimer) clearTimeout(b.holdTimer); if(b.pending) b.pending.cancelled = true; b.pending = null; }
+  if(holder) holder.replyBurst = null;
+}
+// Messages for a burst reply. Normally they end with the agent's turn. If the player's previous reply crossed with the
+// agent's latest message (it was delivered after that message was sent, which is the real chronological order), the list
+// ends with the player's own turn - so a marker explains the crossing and asks for a reply to what is still unanswered.
+// The transcript itself is never reordered.
+function apiMessagesForPlayerReply(transcript){
+  const msgs = transcriptToApiMessages(transcript);
+  if(msgs.length && msgs[msgs.length-1].role==='assistant'){
+    msgs.push({role:'user', content:'(Your last message crossed with the agent\u2019s most recent message(s) above - you sent it before you had read them. Now reply naturally to anything in those agent message(s) you have not already addressed.)'});
+  }
+  return msgs;
+}
+function playerIsTyping(holder){ return !!(holder && holder.replyBurst && holder.replyBurst.pending); }
+
+function sendAgentMessage(){
   const input=document.getElementById('composerInput');
   const text=input.value.trim();
   if(!text || state.simStatus!=='active') return;
   state.turnCounter++;
   state.transcript.push({speaker:'agent', text, turn:state.turnCounter, ts:Date.now()});
   state.silenceNudgeCount = 0; // agent just spoke - clears any pending silence window immediately
-  state.silenceActionInFlight = true; // guard: don't let the silence watcher fire mid-reply
+  state.silenceActionInFlight = true; // guard: don't let the silence watcher fire while a reply is pending
   state.composerDraft = '';
   input.value='';
+  const transcriptRef = state.transcript;
+  noteAgentBurstMessage(state, ()=>generateSinglePlayerReply(transcriptRef));
   render();
+}
 
-  const chatlog=document.getElementById('chatlog');
-  const typing=document.createElement('div');
-  typing.className='typing';
-  typing.textContent=`${state.activeScenario.playerName} is typing...`;
-  chatlog.appendChild(typing);
+async function generateSinglePlayerReply(transcriptRef){
+  if(state.transcript!==transcriptRef || state.simStatus!=='active') return; // restarted / ended before the burst finished
+  const b = state.replyBurst;
+  if(!b || b.pending) return;
+  const job = beginReplyJob(b);
+  const stillCurrent = ()=> state.transcript===transcriptRef && state.replyBurst===b && !job.cancelled;
+  render();
   scrollChatToBottom();
-
+  let rawReply;
   try{
     const sys = buildPlayerSystemPrompt(state.activeScenario, state.activePersonaTrait);
-    const {text:rawReply} = await callClaude(sys, transcriptToApiMessages(), 'default');
+    ({text:rawReply} = await callClaude(sys, apiMessagesForPlayerReply(transcriptRef), 'default'));
+  }catch(err){
+    console.error(err);
+    if(!stillCurrent()) return;
+    finishReplyJob(b, job);
+    state.transcript.push({speaker:'system', text:`\u26a0 DEBUG - real error: ${err.message}`, ts:Date.now()});
+    state.silenceActionInFlight = false;
+    render();
+    return;
+  }
+  if(!stillCurrent()) return; // the agent continued this burst meanwhile - a fresh reply covering all of it is already scheduled
+  deliverWhenAgentIdle(b, job, ()=>{
+    if(state.transcript!==transcriptRef) return;
     const endedByPlayer = /\[END_CHAT\]\s*$/.test(rawReply);
     const reply = rawReply.replace(/\[END_CHAT\]\s*$/, '').trim();
     state.turnCounter++;
     state.transcript.push({speaker:'player', text:reply, turn:state.turnCounter, ts:Date.now()});
-    state.silenceActionInFlight = false;
+    if(!b.timer && !b.pending) state.silenceActionInFlight = false;
     if(endedByPlayer){
       state.playerLeftEarly = true;
       state.playerLeftReason = 'conversational';
       state.transcript.push({speaker:'system', text:'(Player left the chat)', ts:Date.now()});
+      clearReplyBurst(state);
       render();
       finalizeChatEnd();
       return;
     }
-  }catch(err){
-    console.error(err);
-    state.transcript.push({speaker:'system', text:`\u26a0 DEBUG - real error: ${err.message}`, ts:Date.now()});
-    state.silenceActionInFlight = false;
-  }
-  render();
+    render();   // composer draft is captured from the DOM and restored - never cleared by a player reply
+  });
 }
 
 function formatTranscriptForEval(transcript, s){
@@ -5801,6 +5967,10 @@ function wireTeamProgressModal(overlay, filterRoster){
       const idx = parseInt(el.getAttribute('data-view-team-attempt'), 10);
       const entry = state.teamProgressLog[idx];
       if(!entry) return;
+      // Remember exactly where the TL was, so "Back" from the review lands them on the same row.
+      const tpModal = overlay.querySelector('.modal');
+      state.teamProgressReturn = { filterRoster, scrollTop: tpModal ? tpModal.scrollTop : 0 };
+      state.tlCopy = null;
       state.teamProgressOpen=false;
       overlay.remove();
       state.historicalView = { scenarioId: entry.scenarioId, attempt: entry, standalone: true, fromTeamProgress: true };
@@ -5816,7 +5986,7 @@ function wireTeamProgressModal(overlay, filterRoster){
     btn.addEventListener('click', async ()=>{
       const c = btn.getAttribute('data-pattern-generate');
       state.patternLoading[c] = true; state.patternError[c] = null;
-      const redraw = ()=>{ if(state.teamProgressOpen && document.body.contains(overlay)){ overlay.innerHTML = renderTeamProgressModal(filterRoster); wireTeamProgressModal(overlay, filterRoster); } };
+      const redraw = ()=>{ if(state.teamProgressOpen && document.body.contains(overlay)) redrawTeamProgress(overlay, filterRoster); };
       redraw();
       try{ const r = await generatePatternSummary(c); if(!r.ok) state.patternError[c] = r.error; else if(!r.shared) state.patternError[c] = 'Saved on this device only - the shared server didn\u2019t accept it.'; }
       catch(err){ state.patternError[c] = 'Could not generate: ' + (err.message||String(err)); }
@@ -5828,8 +5998,7 @@ function wireTeamProgressModal(overlay, filterRoster){
       const row = btn.closest('[data-unmatched-row]'); const sel = row && row.querySelector('.unmatchedAliasSelect');
       const r = await addUnmatchedAlias(btn.getAttribute('data-unmatched-add'), sel ? sel.value : '');
       if(!r.ok){ if(sel) sel.focus(); return; }
-      overlay.innerHTML = renderTeamProgressModal(filterRoster);
-      wireTeamProgressModal(overlay, filterRoster);
+      redrawTeamProgress(overlay, filterRoster);
     });
   });
   document.querySelectorAll('.ambiguousResolveSelect').forEach(sel=>{
@@ -5838,8 +6007,7 @@ function wireTeamProgressModal(overlay, filterRoster){
       const chosen = e.target.value;
       if(!chosen) return;
       await resolveAmbiguousName(raw, chosen);
-      overlay.innerHTML = renderTeamProgressModal(filterRoster);
-      wireTeamProgressModal(overlay, filterRoster);
+      redrawTeamProgress(overlay, filterRoster);
     });
   });
 }
@@ -5847,7 +6015,16 @@ function wireTeamProgressModal(overlay, filterRoster){
 // filterRoster, when given ({tlName, agents:[canonicalName,...]}), scopes the view to just that TL's
 // agents as a CONVENIENCE ONLY - every TL can always reach the complete, unfiltered list via "Show
 // everyone" (or by opening Team Progress with no filter). No TL account or access level is gated here.
-function openTeamProgress(filterRoster){
+// Re-renders the Team Progress list in place, keeping the TL's scroll position in the list.
+function redrawTeamProgress(overlay, filterRoster){
+  const prev = overlay.querySelector('.modal');
+  const top = prev ? prev.scrollTop : 0;
+  overlay.innerHTML = renderTeamProgressModal(filterRoster);
+  wireTeamProgressModal(overlay, filterRoster);
+  const next = overlay.querySelector('.modal');
+  if(next) next.scrollTop = top;
+}
+function openTeamProgress(filterRoster, opts){
   if(!state.tlUnlocked) return; // TL / Management only
   let existing=document.getElementById('evalModalOverlay');
   if(existing) existing.remove();
@@ -5859,12 +6036,12 @@ function openTeamProgress(filterRoster){
   state.teamProgressOpen=true;
   wireBackdropClose(overlay, 'closeEvalModal');
   wireTeamProgressModal(overlay, filterRoster);
+  if(opts && opts.scrollTop){ const m = overlay.querySelector('.modal'); if(m) m.scrollTop = opts.scrollTop; }
   // Pull the latest shared attempts and reviews in the background so a TL sees teammates' newest work
   // and other TLs' reviews; re-render in place only if this list is still what's on screen.
   loadTeamProgressLog().then(()=>{
     if(!state.teamProgressOpen || !document.body.contains(overlay)) return;
-    overlay.innerHTML = renderTeamProgressModal(filterRoster);
-    wireTeamProgressModal(overlay, filterRoster);
+    redrawTeamProgress(overlay, filterRoster);
   }).catch(()=>{});
 }
 
@@ -6030,14 +6207,49 @@ function renderHistoryListModal(scenarioId){
   </div>`;
 }
 
+// What the eval modal is currently showing. A re-render of the SAME view (same attempt, same live
+// evaluation object) keeps the reader exactly where they were; switching to a different view starts at the top.
+function evalModalViewKey(){
+  if(state.historicalView) return state.historicalView.attempt || state.historicalView;
+  return state.evaluation || null;
+}
+// Snapshot of the modal's reading position: the .modal's own scrollTop (the modal is the scroll container,
+// not the window), any open <details>, the inner transcript scroll, and which control had focus.
+function captureEvalModalUi(overlay){
+  const modal = overlay && overlay.querySelector('.modal');
+  if(!modal) return null;
+  const snap = { scrollTop: modal.scrollTop, openDetails: [], innerScroll: [], focus: null };
+  modal.querySelectorAll('details').forEach((d,i)=>{ if(d.open) snap.openDetails.push(i); });
+  modal.querySelectorAll('.chatlog').forEach((c,i)=>{ snap.innerScroll[i] = c.scrollTop; });
+  const a = document.activeElement;
+  if(a && modal.contains(a)){
+    if(a.id) snap.focus = '#'+a.id;
+    else if(a.getAttribute('data-id') && a.classList.length) snap.focus = '.'+a.classList[a.classList.length-1]+'[data-id="'+a.getAttribute('data-id')+'"]';
+  }
+  return snap;
+}
+function restoreEvalModalUi(overlay, snap){
+  const modal = overlay && overlay.querySelector('.modal');
+  if(!modal || !snap) return;
+  const details = modal.querySelectorAll('details');
+  snap.openDetails.forEach(i=>{ if(details[i]) details[i].open = true; });
+  modal.querySelectorAll('.chatlog').forEach((c,i)=>{ if(snap.innerScroll[i]!=null) c.scrollTop = snap.innerScroll[i]; });
+  if(snap.focus){ try{ const f = modal.querySelector(snap.focus); if(f) f.focus({preventScroll:true}); }catch(err){} }
+  modal.scrollTop = snap.scrollTop;
+}
+
 function renderEvalModal(){
   let existing=document.getElementById('evalModalOverlay');
+  const viewKey = evalModalViewKey();
+  const keepUi = (existing && existing._evalViewKey !== undefined && existing._evalViewKey === viewKey) ? captureEvalModalUi(existing) : null;
   if(existing) existing.remove();
   const overlay=document.createElement('div');
   overlay.id='evalModalOverlay';
   overlay.className='modal-overlay';
+  overlay._evalViewKey = viewKey;
   overlay.innerHTML = evalModalContent();
   document.body.appendChild(overlay);
+  if(keepUi) restoreEvalModalUi(overlay, keepUi);
   wireBackdropClose(overlay, 'closeEvalModal');
 
   const closeBtn=document.getElementById('closeEvalModal');
@@ -6058,8 +6270,10 @@ function renderEvalModal(){
   const backToListBtn=document.getElementById('btnBackToHistoryList');
   if(backToListBtn) backToListBtn.addEventListener('click', e=>{
     if(e.target.getAttribute('data-from-team-progress')==='true'){
+      // Return to the SAME Team Progress view the TL clicked in from: same filter, same scroll position.
+      const ret = state.teamProgressReturn;
       state.historicalView=null;
-      openTeamProgress();
+      openTeamProgress(ret ? ret.filterRoster : undefined, ret ? {scrollTop: ret.scrollTop} : undefined);
     } else {
       openHistoryList(e.target.getAttribute('data-hist-scenario'));
     }
@@ -6069,7 +6283,37 @@ function renderEvalModal(){
   if(toggleHistBtn) toggleHistBtn.addEventListener('click', ()=>{ state.historyExpanded=!state.historyExpanded; renderEvalModal(); });
 
   const toggleTranscriptBtn=document.getElementById('btnToggleTranscript');
-  if(toggleTranscriptBtn) toggleTranscriptBtn.addEventListener('click', ()=>{ state.historicalTranscriptExpanded=!state.historicalTranscriptExpanded; renderEvalModal(); });
+  // Expanded/collapsed IN PLACE - no modal rebuild, so the reader stays exactly where they were.
+  if(toggleTranscriptBtn) toggleTranscriptBtn.addEventListener('click', e=>{
+    e.preventDefault();
+    state.historicalTranscriptExpanded=!state.historicalTranscriptExpanded;
+    const body = document.getElementById('histTranscriptBody');
+    const hv = state.historicalView;
+    if(body && hv){
+      const s = historyScenarioFor(hv.scenarioId);
+      body.innerHTML = state.historicalTranscriptExpanded ? renderHistoricalTranscriptHtml(hv.attempt.transcript, s.playerName) : '';
+    }
+    toggleTranscriptBtn.textContent = (state.historicalTranscriptExpanded?'▾':'▸') + ' Full Transcript';
+    toggleTranscriptBtn.setAttribute('aria-expanded', String(state.historicalTranscriptExpanded));
+    // Collapsing a long transcript shrinks the modal; if that pushed the toggle out of view, bring just it back.
+    const modal = overlay.querySelector('.modal');
+    if(modal && !state.historicalTranscriptExpanded){
+      const mr = modal.getBoundingClientRect(), br = toggleTranscriptBtn.getBoundingClientRect();
+      if(br.top < mr.top || br.bottom > mr.bottom) modal.scrollTop += (br.top - mr.top) - 40;
+    }
+  });
+
+  const copyTranscriptBtn=document.getElementById('btnTlCopyTranscript');
+  if(copyTranscriptBtn) copyTranscriptBtn.addEventListener('click', e=>{ e.preventDefault(); copyTlReviewText('transcript'); });
+  const copyReviewBtn=document.getElementById('btnTlCopyReview');
+  if(copyReviewBtn) copyReviewBtn.addEventListener('click', e=>{ e.preventDefault(); copyTlReviewText('review'); });
+  const tlSelectAllBtn=document.getElementById('btnTlCopySelectAll');
+  if(tlSelectAllBtn) tlSelectAllBtn.addEventListener('click', e=>{
+    e.preventDefault();
+    const ta=document.getElementById('tlCopyTextarea'); if(!ta) return;
+    ta.focus({preventScroll:true}); ta.select(); try{ ta.setSelectionRange(0, ta.value.length); }catch(err){}
+    const st=document.getElementById('tlCopyStatus'); if(st) st.textContent='Text selected - press Ctrl/Cmd+C to copy.';
+  });
 
   document.querySelectorAll('[data-view-attempt]').forEach(btn=>{
     btn.addEventListener('click', e=>{
@@ -6864,36 +7108,6 @@ function agentOptionsHtml(includeFormer){
   const act = activeAgentProfiles(), former = includeFormer ? formerAgentProfiles() : [];
   return `<option value="">Add as alias to\u2026</option>${act.map(p=>`<option value="${escapeHtml(p.canonicalName)}">${escapeHtml(p.canonicalName)}</option>`).join('')}${former.length ? `<optgroup label="Former agents">${former.map(p=>`<option value="${escapeHtml(p.canonicalName)}">${escapeHtml(p.canonicalName)} (${agentStatus(p).toLowerCase()})</option>`).join('')}</optgroup>` : ''}`;
 }
-// Suggests linking an unmatched historical name to an active profile that has no attempts yet - only when the name is a
-// close match to that one profile and to no other. Linking adds the raw name as an alias; saved records are never changed.
-const LINK_DISMISSALS_KEY = 'zteamz_linkDismissals_v1';
-function loadLocalLinkDismissals(){ try{ const v=JSON.parse(localStorage.getItem(LINK_DISMISSALS_KEY)||'[]'); return Array.isArray(v)?v:[]; }catch(err){ return []; } }
-function linkDismissalKey(raw, canonical){ return (raw||'').trim().toLowerCase()+'|'+(canonical||'').trim().toLowerCase(); }
-function isLinkDismissed(raw, canonical){ const k = linkDismissalKey(raw, canonical); return (state.linkDismissals||[]).includes(k) || loadLocalLinkDismissals().includes(k); }
-function isCloseNameMatch(raw, profile){
-  const full = (profile.fullName || profile.canonicalName || '').trim().toLowerCase(); const r = (raw||'').trim().toLowerCase();
-  if(!full || !r || r===full) return false;
-  const rt = r.split(/\s+/), ft = full.split(/\s+/);
-  if(rt.every(t=>ft.includes(t))) return true;          // e.g. "Donald Ambrose" inside "Donald Ambrose Jr"
-  return editDistance(r, full) <= 2;                     // or the whole name within 2 letters
-}
-function linkSuggestionsFor(profile){
-  if(!profile || !isActiveAgent(profile) || attemptsForAgent(profile.canonicalName).length) return [];
-  return unmatchedLogNames(state.teamProgressLog).filter(u=>
-    isCloseNameMatch(u.raw, profile) && !isLinkDismissed(u.raw, profile.canonicalName)
-    && !state.agentDirectory.some(o=>o!==profile && isCloseNameMatch(u.raw, o)));
-}
-function linkSuggestionHtml(u, profile){
-  return `<div class="box" data-stop-row style="margin-top:6px;border-color:var(--accent);font-size:12.5px;">Possible existing activity found under "${escapeHtml(u.raw)}" (${u.count} attempt${u.count===1?'':'s'}). Link to ${escapeHtml(profile.canonicalName)}?
-    <span style="display:inline-flex;gap:6px;margin-left:6px;"><button class="small primary" data-link-yes="${escapeHtml(u.raw)}" data-link-agent="${escapeHtml(profile.canonicalName)}">Link</button><button class="small" data-link-no="${escapeHtml(u.raw)}" data-link-agent="${escapeHtml(profile.canonicalName)}">Not the same person</button></span></div>`;
-}
-async function dismissLinkSuggestion(raw, canonical){
-  const key = linkDismissalKey(raw, canonical);
-  state.linkDismissals = [...new Set([...(state.linkDismissals||[]), key])];
-  try{ const l = loadLocalLinkDismissals(); if(!l.includes(key)) l.push(key); localStorage.setItem(LINK_DISMISSALS_KEY, JSON.stringify(l)); }catch(err){}
-  // Shared via the existing team-progress append route, tagged like TL reviews and pattern summaries (never counted as an attempt).
-  try{ const resp = await fetch(BACKEND_URL + '/api/store/team-progress', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type:'link-dismissal', key, raw, agentName:canonical, dismissedAt:Date.now()})}); return resp.ok; }catch(err){ return false; }
-}
 function renderUnmatchedNamesRows(list){
   return list.map(u=>`<div class="info-row" data-unmatched-row style="align-items:center;flex-wrap:wrap;gap:8px;">
     <span class="ilabel">"${escapeHtml(u.raw)}" <span style="color:var(--text3);">\u00b7 ${u.count} attempt${u.count===1?'':'s'}</span></span>
@@ -7244,7 +7458,6 @@ function renderAgentDirectoryList(searchQuery){
           ${names.length ? `<span style="color:var(--text3);font-size:12px;"> - also known as ${escapeHtml(names.join(', '))}</span>` : ''}
           <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${tlLine} \u00b7 ${attempts} attempt${attempts===1?'':'s'} \u00b7 ${asg} assignment${asg===1?'':'s'}</div>
           ${contactLineHtml(a.email, a.slackHandle)}
-          ${linkSuggestionsFor(a).map(u=>linkSuggestionHtml(u, a)).join('')}
         </div>
         <span style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="small" data-agent-action="transfer" data-agent="${escapeHtml(a.canonicalName)}">Transfer to another TL</button>
@@ -7267,11 +7480,10 @@ function renderFormerAgentsList(){
 }
 function renderRosterTable(){
   const tlNames = [...new Set(state.tlRosters.map(r=>r.tlName))].sort();
-  const pick = state.rosterTableTL || ''; // never auto-picked; session-only, so a fresh load starts at the placeholder
-  const roster = pick ? state.tlRosters.find(r=>namesMatch(r.tlName, pick)) : null;
-  const sel = `<select id="rosterTableTLSelect" aria-label="Team lead" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;"><option value="" ${pick?'':'selected'}>Select a Team Lead</option>${tlNames.map(t=>`<option value="${escapeHtml(t)}" ${pick && namesMatch(t,pick)?'selected':''}>${escapeHtml(t)}</option>`).join('')}</select>`;
-  if(!tlNames.length) return `<div class="empty" style="padding:10px 0;">No team leads registered yet.</div>`;
-  if(!roster) return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><span style="font-size:12.5px;color:var(--text2);">Team lead</span>${sel}<span style="font-size:11.5px;color:var(--text3);">Choose a team lead to see their roster.</span></div>`;
+  const pick = state.rosterTableTL || tlNames.find(t=>namesMatch(t, getLastAssigningTL())) || tlNames[0] || '';
+  const roster = state.tlRosters.find(r=>namesMatch(r.tlName, pick));
+  const sel = `<select id="rosterTableTLSelect" aria-label="Team lead" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;">${tlNames.map(t=>`<option value="${escapeHtml(t)}" ${namesMatch(t,pick)?'selected':''}>${escapeHtml(t)}</option>`).join('')}</select>`;
+  if(!roster) return `<div>${tlNames.length ? sel : ''}<div class="empty" style="padding:10px 0;">No roster yet.</div></div>`;
   const rows = (roster.agents||[]).map(ag=>{
     const p = profileByCanonical(ag); const name = p ? p.canonicalName : ag;
     const atts = attemptsForAgent(name);
@@ -7295,7 +7507,7 @@ function renderRosterTable(){
         <td style="${td}">${r.last ? escapeHtml(new Date(r.last).toLocaleDateString()) : '-'}</td>
         <td style="${td}">${r.avg===null ? '-' : r.avg+'%'}</td>
         <td style="${td}">${r.pend}${r.od ? ` <span style="color:var(--bad);font-weight:700;">(${r.od} overdue)</span>` : ''}</td>
-      </tr>${(()=>{ const p=profileByCanonical(r.name); const s = p ? linkSuggestionsFor(p) : []; return s.length ? `<tr><td colspan="7" style="padding:0 8px 8px;">${s.map(x=>linkSuggestionHtml(x, p)).join('')}</td></tr>` : ''; })()}`).join('') : `<tr><td colspan="7" style="${td}color:var(--text3);">No agents on this roster.</td></tr>`}</tbody>
+      </tr>`).join('') : `<tr><td colspan="7" style="${td}color:var(--text3);">No agents on this roster.</td></tr>`}</tbody>
     </table></div>
   </div>`;
 }
@@ -7646,7 +7858,7 @@ function switchChallengeSlot(idx){
   render();
 }
 
-async function sendChallengeMessage(slotIndex){
+function sendChallengeMessage(slotIndex){
   const slot = state.challenge.slots[slotIndex];
   if(!slot || slot.status!=='active') return;
   const inputEl = document.getElementById('challengeComposerInput');
@@ -7659,28 +7871,51 @@ async function sendChallengeMessage(slotIndex){
   slot.scroll = {top:0, atBottom:true};   // the agent just sent a message themselves - show it (all OTHER renders preserve position)
   slot.draftText = '';
   if(inputEl) inputEl.value='';
+  // This slot's own burst window - other slots' pending replies are untouched.
+  noteAgentBurstMessage(slot, ()=>generateChallengePlayerReply(slotIndex, slot));
   render();
+}
+
+async function generateChallengePlayerReply(slotIndex, slot){
+  const live = ()=> state.challenge && state.challenge.slots[slotIndex]===slot;
+  if(!live() || slot.status!=='active') return;   // session exited / chat ended before the burst finished
+  const b = slot.replyBurst;
+  if(!b || b.pending) return;
+  const job = beginReplyJob(b);
+  const stillCurrent = ()=> live() && slot.replyBurst===b && !job.cancelled;
+  render();
+  let rawReply;
   try{
     const sys = buildPlayerSystemPrompt(slot.scenario, slot.personaTrait);
-    const {text:rawReply} = await callClaude(sys, transcriptToApiMessages(slot.transcript), 'default');
+    ({text:rawReply} = await callClaude(sys, apiMessagesForPlayerReply(slot.transcript), 'default'));
+  }catch(err){
+    console.error(err);
+    if(!stillCurrent()) return;
+    finishReplyJob(b, job);
+    slot.transcript.push({speaker:'system', text:`\u26a0 DEBUG - real error: ${err.message}`, ts:Date.now()});
+    slot.silenceActionInFlight = false;
+    render();
+    return;
+  }
+  if(!stillCurrent()) return; // the agent continued this chat's burst meanwhile - a fresh reply is already scheduled
+  // Burst protection is per slot: typing in another slot never affects this one.
+  deliverWhenAgentIdle(b, job, ()=>{
+    if(!live()) return;
     const endedByPlayer = /\[END_CHAT\]\s*$/.test(rawReply);
     const reply = rawReply.replace(/\[END_CHAT\]\s*$/, '').trim();
     slot.turnCounter++;
     slot.transcript.push({speaker:'player', text:reply, turn:slot.turnCounter, ts:Date.now()});
-    slot.silenceActionInFlight = false;
+    if(!b.timer && !b.pending) slot.silenceActionInFlight = false;
     if(endedByPlayer){
       slot.playerLeftEarly = true;
       slot.playerLeftReason = 'conversational';
       slot.transcript.push({speaker:'system', text:'(Player left the chat)', ts:Date.now()});
+      clearReplyBurst(slot);
       finalizeChallengeSlotChat(slotIndex);
       return;
     }
-  }catch(err){
-    console.error(err);
-    slot.transcript.push({speaker:'system', text:`\u26a0 DEBUG - real error: ${err.message}`, ts:Date.now()});
-    slot.silenceActionInFlight = false;
-  }
-  render();
+    render();   // composer draft is captured from the DOM and restored - never cleared by a player reply
+  });
 }
 
 function checkChallengeSilence(){
@@ -7991,7 +8226,7 @@ function renderChallengeMain(){
         if(m.speaker==='system') return `<div class="msg system">${escapeHtml(m.text)}</div>`;
         const who = m.speaker==='player' ? activeSlot.scenario.playerName : 'You (Agent)';
         return `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${escapeHtml(m.text)}</div>`;
-      }).join('');
+      }).join('') + ((activeSlot.status==='active' && playerIsTyping(activeSlot)) ? `<div class="typing">${escapeHtml(activeSlot.scenario.playerName)} is typing...</div>` : '');
 
   return `<div class="main">
     <div style="display:flex;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0;">${tabs}</div>
@@ -8006,7 +8241,7 @@ function renderChallengeMain(){
     </div>
     <div class="chatlog" id="challengeChatlog">${msgs}</div>
     <div class="composer">
-      <textarea id="challengeComposerInput" placeholder="${activeIsWaiting?'This player hasn\u2019t joined yet':'Type a message'}" ${composerDisabled}>${escapeHtml(activeSlot.draftText||'')}</textarea>
+      <textarea id="challengeComposerInput" data-session="${escapeHtml(c.sessionId)}" data-slot="${c.activeSlotIndex}" placeholder="${activeIsWaiting?'This player hasn\u2019t joined yet':'Type a message'}" ${composerDisabled}>${escapeHtml(activeSlot.draftText||'')}</textarea>
       <button id="btnSendChallenge" class="primary" ${composerDisabled}>Send</button>
     </div>
   </div>`;
@@ -8238,14 +8473,23 @@ function evalModalContent(){
         Note: ${escapeHtml(att.docNote||'(none)')}<br>Primary tag: ${escapeHtml(att.docTag||'(none)')}${att.docSecondaryTag && att.docSecondaryTag!=='None' ? `<br>Secondary RG flag: ${escapeHtml(att.docSecondaryTag)}` : ''}
       </div>
       <div class="diag-section">
-        <button id="btnToggleTranscript" style="width:100%;text-align:left;">${state.historicalTranscriptExpanded?'\u25be':'\u25b8'} Full Transcript</button>
-        ${state.historicalTranscriptExpanded ? renderHistoricalTranscriptHtml(att.transcript, s.playerName) : ''}
+        <button type="button" id="btnToggleTranscript" aria-expanded="${state.historicalTranscriptExpanded}" style="width:100%;text-align:left;">${state.historicalTranscriptExpanded?'\u25be':'\u25b8'} Full Transcript</button>
+        <div id="histTranscriptBody">${state.historicalTranscriptExpanded ? renderHistoricalTranscriptHtml(att.transcript, s.playerName) : ''}</div>
       </div>
-      <div style="margin-top:20px;display:flex;gap:10px;">
+      <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
         ${standalone
-          ? `<button id="btnBackToHistoryList" data-hist-scenario="${s.id}" data-from-team-progress="${!!state.historicalView.fromTeamProgress}">\u2190 Back</button><button id="closeEvalModal">Close</button>`
-          : `<button id="btnBackToCurrent">\u2190 Back to current attempt</button>`}
+          ? `<button type="button" id="btnBackToHistoryList" data-hist-scenario="${s.id}" data-from-team-progress="${!!state.historicalView.fromTeamProgress}">\u2190 Back</button><button type="button" id="closeEvalModal">Close</button>`
+          : `<button type="button" id="btnBackToCurrent">\u2190 Back to current attempt</button>`}
+        ${tlMode ? `<button type="button" id="btnTlCopyTranscript">Copy transcript</button><button type="button" id="btnTlCopyReview" class="primary">Copy full review</button>` : ''}
       </div>
+      ${tlMode ? `<div id="tlCopyBox" style="display:${(state.tlCopy && state.tlCopy.attempt===att)?'block':'none'};margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span id="tlCopyLabel" style="font-size:12.5px;color:var(--text3);">Select and copy manually if the button didn\u2019t copy automatically:</span>
+          <button type="button" id="btnTlCopySelectAll" class="small">Select All</button>
+        </div>
+        <textarea id="tlCopyTextarea" readonly style="width:100%;min-height:160px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:monospace;font-size:11.5px;resize:vertical;">${(state.tlCopy && state.tlCopy.attempt===att) ? escapeHtml(state.tlCopy.text) : ''}</textarea>
+        <div id="tlCopyStatus" style="font-size:12px;color:var(--text3);margin-top:6px;"></div>
+      </div>` : ''}
     </div>`;
   }
 
@@ -8416,6 +8660,94 @@ function selectAllResultsText(){
   hideUnsavedWarning();
   const statusEl = document.getElementById('copyStatusMsg');
   if(statusEl) statusEl.textContent = 'Text selected - press Ctrl/Cmd+C to copy.';
+}
+
+// ---------- TL / MANAGEMENT REVIEW: COPY ----------
+// Read-only text builders for the attempt the TL has open. They only READ the stored attempt record -
+// nothing here changes the evaluation, the score or the TL draft.
+function buildTlTranscriptText(att, s){
+  return formatTranscriptForEval(att.transcript || [], s);
+}
+function buildTlReviewText(att, s){
+  const ev = att.evaluation || {};
+  const aiScore = computeQAScore(ev.questions);
+  const fmtScore = sc => sc.af ? `AF (${sc.afDuty}) → 0% - FAIL` : `${sc.pct}% - ${sc.pass?'PASS':'FAIL'}`;
+  const savedTl = att.tlReviewedAt && att.tlOverrides ? att.tlOverrides : null;
+  let out = `TEAM Z COACHING PILOT - TL / MANAGEMENT REVIEW (Betty Real QA Chat Scorecard)\n`;
+  out += `Agent: ${att.agentName || '(unnamed)'}\n`;
+  out += `Scenario: ${s.internalTitle || s.title}${s.skill ? ` (${s.skill}${s.difficulty ? ', '+s.difficulty : ''})` : ''}\n`;
+  out += `Attempt: ${att.attemptNum || ''} - ${new Date(att.timestamp).toLocaleString()}\n`;
+  out += `AI Score: ${fmtScore(aiScore)} (${aiScore.totalPts}/20 pts, pass line 85%)\n`;
+  if(savedTl){
+    const tlScore = computeQAScore(QA_SCORECARD.questions.map(q=>{
+      const t = savedTl[q.id]; const ai = (ev.questions||[]).find(x=>x.id===q.id) || {};
+      return {id:q.id, letter: t && t.letter ? t.letter : ai.letter, afDuty: t ? t.afDuty : ai.afDuty};
+    }));
+    out += `TL-validated Score: ${fmtScore(tlScore)}\n`;
+  }
+  if(att.ahtElapsedMinutes!==null && att.ahtElapsedMinutes!==undefined && att.ahtTargetMinutes){
+    out += `Handling Time: ${formatElapsed(att.ahtElapsedMinutes*60000)} (target: ${att.ahtTargetMinutes} min)${att.ahtLateStart?' - AHT Mode started mid-chat':''}\n`;
+  }
+  if(att.playerLeftEarly) out += `Player left early: ${att.playerLeftReason || 'yes'}\n`;
+  if(ev.efficiencyNarrative) out += `\nEFFICIENCY COACHING (not part of the score):\n${ev.efficiencyNarrative}\n`;
+  if(ev.coachingSignals){
+    const rows = Object.keys(COACHING_SIGNAL_LABELS).filter(k=>ev.coachingSignals[k]).map(k=>{
+      const sig = ev.coachingSignals[k];
+      return `- ${COACHING_SIGNAL_LABELS[k]}: ${COACHING_RATING_LABEL[sig.rating]||sig.rating}${sig.note?' - '+sig.note:''}`;
+    });
+    if(rows.length) out += `\nCOACHING SIGNALS (not part of the score):\n${rows.join('\n')}\n`;
+  }
+  out += `\nOVERALL SUMMARY:\n${ev.overallSummary || '(none)'}\n`;
+  if(hasFindings(ev)){
+    out += `\nFINDINGS:\n`;
+    ev.findings.forEach(f=>{ out += `- [${f.type==='coaching'?'How it was said':'Process (KB)'}${f.strength?', strength':', '+f.severity}] ${f.kbSays}${f.agentDid?' | Agent: '+f.agentDid:''}${f.impact?' | Impact: '+f.impact:''}${f.nextTime?' | Next time: '+f.nextTime:''}\n`; });
+  }
+  out += `\nAI ASSESSMENT:\n`;
+  QA_SCORECARD.questions.forEach(qDef=>{
+    const q = (ev.questions||[]).find(x=>x.id===qDef.id) || {};
+    out += `- ${qDef.id.toUpperCase()} ${qDef.label} (${qDef.weightPct}%): ${q.letter||''}${q.afDuty?' ('+q.afDuty+')':''}\n  Citation: ${q.citation||''}\n`;
+    if(qDef.id==='q1' && q.recognitionCheck && q.recognitionCheck.trim().toUpperCase()!=='N/A') out += `  RG recognition check: ${q.recognitionCheck}\n`;
+  });
+  if(savedTl){
+    out += `\nTL REVIEW (saved ${new Date(att.tlReviewedAt).toLocaleString()}):\n`;
+    QA_SCORECARD.questions.forEach(qDef=>{
+      const t = savedTl[qDef.id]; if(!t) return;
+      const ai = (ev.questions||[]).find(x=>x.id===qDef.id) || {};
+      const changed = t.letter!==ai.letter || (t.afDuty||null)!==(ai.afDuty||null);
+      out += `- ${qDef.id.toUpperCase()}: ${t.letter||''}${t.afDuty?' ('+t.afDuty+')':''}${changed?` (overrides AI ${ai.letter||''})`:' (agrees with AI)'}${t.notes?`\n  TL note: ${t.notes}`:''}\n`;
+    });
+  }
+  if(state.tlReviewStatus==='Unsaved changes') out += `\n(Unsaved TL edits on screen are not included - save the review first to include them.)\n`;
+  out += `\nDOCUMENTATION SUBMITTED:\nNote: ${att.docNote||'(none)'}\nPrimary tag: ${att.docTag||'(none)'}${att.docSecondaryTag && att.docSecondaryTag!=='None' ? `\nSecondary RG flag: ${att.docSecondaryTag}` : ''}\n`;
+  out += `\nTRANSCRIPT:\n${buildTlTranscriptText(att, s)}\n`;
+  return out;
+}
+// Fills the in-modal fallback box and tries the clipboard. Never re-renders, closes or scrolls the modal.
+function copyTlReviewText(kind){
+  const hv = state.historicalView;
+  if(!hv || !hv.attempt) return;
+  const att = hv.attempt, s = historyScenarioFor(hv.scenarioId);
+  const text = kind==='transcript' ? buildTlTranscriptText(att, s) : buildTlReviewText(att, s);
+  state.tlCopy = {attempt: att, kind, text};
+  const box = document.getElementById('tlCopyBox');
+  const ta = document.getElementById('tlCopyTextarea');
+  const label = document.getElementById('tlCopyLabel');
+  const st = document.getElementById('tlCopyStatus');
+  if(ta) ta.value = text;
+  if(label) label.textContent = (kind==='transcript' ? 'Transcript' : 'Full review') + ' - select and copy manually if the button didn’t copy automatically:';
+  if(box) box.style.display = 'block';
+  if(st) st.textContent = '';
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>{
+      const el=document.getElementById('tlCopyStatus');
+      if(el) el.textContent = '✓ ' + (kind==='transcript' ? 'Transcript' : 'Full review') + ' copied to clipboard.';
+    }).catch(()=>{
+      const el=document.getElementById('tlCopyStatus');
+      if(el) el.textContent = 'Clipboard access isn’t available in this view - use Select All above, then Ctrl/Cmd+C.';
+    });
+  }else if(st){
+    st.textContent = 'Clipboard access isn’t available in this view - use Select All above, then Ctrl/Cmd+C.';
+  }
 }
 
 // ---------- DIAGNOSTICS (Phase 1 required test coverage) ----------
@@ -8838,13 +9170,7 @@ function renderTeamLeadsRosterSectionBody(){
         <input id="regAgentFullName" value="${escapeHtml((state.regFormDraft||{}).fullName||'')}" placeholder="Full name" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentChatName" value="${escapeHtml((state.regFormDraft||{}).chatName||'')}" placeholder="Chat name" style="flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentAltName" value="${escapeHtml((state.regFormDraft||{}).additionalName||'')}" placeholder="Other recognized name (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        ${(()=>{ const tls=[...new Set(state.tlRosters.map(r=>r.tlName))].sort(); const d=(state.regFormDraft&&state.regFormDraft.tlName)||''; const known=tls.find(t=>namesMatch(t,d)); const isNew=!!d && !known;
-          return `<select id="regAgentTLSelect" aria-label="Reports to" style="flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-            <option value="" ${!d?'selected':''}>Select Team Lead</option>
-            ${tls.map(t=>`<option value="${escapeHtml(t)}" ${known===t?'selected':''}>${escapeHtml(t)}</option>`).join('')}
-            <option value="__new__" ${isNew?'selected':''}>+ New Team Lead\u2026</option>
-          </select>
-          <input id="regAgentTLName" placeholder="New Team Lead's name" value="${escapeHtml(isNew?d:'')}" style="${isNew?'':'display:none;'}flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">`; })()}
+        <input id="regAgentTLName" placeholder="Reports to (TL name)" value="${escapeHtml(state.regFormDraft ? (state.regFormDraft.tlName||'') : 'Zainab Yahaya')}" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentEmail" value="${escapeHtml((state.regFormDraft||{}).email||'')}" type="email" placeholder="Email (optional)" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentSlack" value="${escapeHtml((state.regFormDraft||{}).slackHandle||'')}" placeholder="Slack handle (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <button id="btnRegisterAgent" class="primary">Register agent</button>
@@ -8878,6 +9204,7 @@ function renderTeamLeadsRosterSectionBody(){
       ${renderAgentDirectoryList(state.agentDirectorySearch)}
       ${renderDashSubsection('former-agents', `Former agents (${formerAgentProfiles().length})`, renderFormerAgentsList, false)}
     `, false)}
+    ${renderDashSubsection('cleanup-audit', 'Clean-up audit', renderCleanupAudit, false)}
   `;
 }
 
@@ -8901,15 +9228,21 @@ function renderTeamProgressSectionBody(){
 }
 
 function renderScenarioLibrarySectionBody(){
+  const readinessColor = {PILOT_READY:'var(--ok)', PRACTICE_ONLY:'var(--warn)', ENGINE_TEST_ONLY:'var(--bad)'};
+  const readinessLevels = [...new Set(SCENARIOS.map(s=>s.readiness).filter(Boolean))];
   const lf = state.scenarioFilters.library;
   const q = (state.scenarioLibrarySearch||'').trim().toLowerCase();
-  const libraryPool = SCENARIOS.filter(s=>s.readiness!=='ENGINE_TEST_ONLY'); // engine-test scenarios live under System Tests > Maintenance
-  let list = libraryPool.slice();
+  let list = SCENARIOS.slice();
   if(q) list = list.filter(s=>[s.internalTitle, s.title, s.skill, ...scenarioKbCategories(s), ...scenarioKbArticles(s)].filter(Boolean).join(' ').toLowerCase().includes(q));
+  if(state.scenarioLibraryReadinessFilter) list = list.filter(s=>s.readiness===state.scenarioLibraryReadinessFilter);
   list = filterScenariosByTags(list, lf);
   const controls = `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
     <input id="scenarioLibrarySearchInput" placeholder="Search scenarios or KB articles\u2026" value="${escapeHtml(state.scenarioLibrarySearch||'')}" style="flex:1;min-width:180px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-  </div>${renderScenarioFilterBar('library', lf, libraryPool, list.length)}`;
+    <select id="scenarioLibraryReadinessSelect" aria-label="Filter by readiness" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+      <option value="">All readiness</option>
+      ${readinessLevels.map(r=>`<option value="${escapeHtml(r)}" ${state.scenarioLibraryReadinessFilter===r?'selected':''}>${escapeHtml(r)}</option>`).join('')}
+    </select>
+  </div>${renderScenarioFilterBar('library', lf, SCENARIOS, list.length)}`;
   const refRows = list.map(s=>{
     const initial = s.playerName.charAt(0).toUpperCase();
     const open = !!state.libraryExpanded[s.id];
@@ -8919,6 +9252,7 @@ function renderScenarioLibrarySectionBody(){
         <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
           <div style="font-weight:700;font-size:13.5px;">${escapeHtml(s.title)}</div>
           <span style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+            <span style="font-size:10px;font-weight:700;color:${readinessColor[s.readiness]||'var(--text3)'};border:1px solid ${readinessColor[s.readiness]||'var(--text3)'};border-radius:20px;padding:2px 7px;white-space:nowrap;">${s.readiness||'UNCLASSIFIED'}</span>
             <button class="small" data-library-expand="${s.id}" aria-expanded="${open}" title="Show KB articles">${open?'Less':'More'}</button>
           </span>
         </div>
@@ -9439,13 +9773,6 @@ function renderSystemTestsSectionBody(){
     </div>
 
     <div class="diag-section">
-      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">Maintenance</h2>
-      ${state.agentMgmtMsg ? `<div class="box" role="status" style="border-color:${state.agentMgmtMsg.color};color:${state.agentMgmtMsg.color};font-size:12.5px;">${escapeHtml(state.agentMgmtMsg.text)}</div>` : ''}
-      ${renderDashSubsection('cleanup-audit', 'Clean-up audit', renderCleanupAudit, false)}
-      ${renderDashSubsection('engine-test-scenarios', `Engine test scenarios (${SCENARIOS.filter(s=>s.readiness==='ENGINE_TEST_ONLY').length})`, ()=>`<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Scenarios with fictional system mechanics, kept out of agent practice, assignments and Challenge Mode. Click one to run it.</div>${SCENARIOS.filter(s=>s.readiness==='ENGINE_TEST_ONLY').map(s=>`<div class="category-scenario-card" data-scenario="${s.id}" title="${escapeHtml(complexityTitle(s))}" style="max-width:760px;${complexityBorderStyle(s)}"><div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13.5px;">${escapeHtml(s.title)} <span style="font-weight:400;font-size:11px;color:var(--text3);">${escapeHtml(s.id)}</span></div><div style="font-size:12px;color:var(--text2);margin-top:2px;">${escapeHtml(s.internalTitle||'')}</div><div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${scenarioTagChipsHtml(s)}</div></div></div>`).join('') || '<div class="empty">None.</div>'}`, false)}
-    </div>
-
-    <div class="diag-section">
       <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">Not automated in this prototype</h2>
       <div style="color:var(--text2);font-size:13px;line-height:1.6;">
         <strong>Hidden-information discipline</strong> (does the player over-reveal facts) and <strong>player-sentiment independence</strong> (can a well-handled chat still end with an unhappy player) are best verified by actually playing a scenario live and reviewing the transcript against the scorecard citations. Personal <strong>Attempt History</strong> persists per-device via browser storage. <strong>Team Progress and TL Assignments are shared</strong> across every device using this link, via the backend server - a TL assigning a scenario, or an agent completing one, is visible to anyone else using the tool, not just on the same device. <strong>Authorization</strong> is still informal (name-based, no real accounts or passwords) - that remains intentionally out of scope for Phase 1.
@@ -9479,7 +9806,7 @@ function renderDiagnostics(){
     ${renderDashSection('tl-agent-roster', 'Team Leads & Agent Roster', agentsOnMultipleRosters().length ? `${agentsOnMultipleRosters().length} agent${agentsOnMultipleRosters().length===1?'':'s'} need resolution` : `${activeAgentProfiles().length} active agents`, renderTeamLeadsRosterSectionBody, 'users', '#a06bd6')}
     ${renderDashSection('team-progress', 'Team Progress', 'View and review attempts', renderTeamProgressSectionBody, 'chart', '#3ecf8e')}
     ${renderDashSection('feedback', 'Feedback & Suggestions', `${unresolvedCount} unresolved suggestion${unresolvedCount===1?'':'s'}`, renderFeedbackManagementSectionBody, 'chat', '#e2a33d')}
-    ${renderDashSection('scenario-library', 'Scenario Library', `Browse ${SCENARIOS.filter(s=>s.readiness!=='ENGINE_TEST_ONLY').length} scenarios`, renderScenarioLibrarySectionBody, 'grid', '#5bc0be')}
+    ${renderDashSection('scenario-library', 'Scenario Library', `Browse ${SCENARIOS.length} scenarios`, renderScenarioLibrarySectionBody, 'grid', '#5bc0be')}
     ${renderDashSection('kb-coverage', 'KB Coverage', (()=>{ const z = KB_CATEGORIES.filter(c=>!PILOT_SCENARIOS.some(s=>scenarioKbCategories(s).includes(c.name)) && !state.customScenarios.some(cs=>cs.visibility==='library'&&cs.reviewStatus==='approved'&&scenarioKbCategories(cs).includes(c.name))).length; return z ? `${z} of ${KB_CATEGORIES.length} KB categories have no scenarios` : `All ${KB_CATEGORIES.length} KB categories covered`; })(), renderKbCoverageSectionBody, 'check', '#3ecf8e')}
     ${renderDashSection('system-tests', 'System Tests', 'Development diagnostics', renderSystemTestsSectionBody, 'gear', '#8a919c')}
   </div>`;
@@ -9830,7 +10157,7 @@ function renderNameModal(){
   overlay.innerHTML = `<div class="modal" style="max-width:420px;">
     <h2>What\u2019s your name?</h2>
     <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Use your full name so your TL can see your practice results.</div>
-    <input id="nameModalInput" type="text" placeholder="e.g. Jordan Smith" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
+    <input id="nameModalInput" type="text" placeholder="e.g. Poojan Solanki" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
     <div id="nameModalRecognized" style="margin-top:10px;font-size:12.5px;color:var(--ok);display:none;"></div>
     <div style="margin-top:16px;"><button id="btnSaveName" class="primary">Continue</button></div>
   </div>`;
@@ -9926,7 +10253,7 @@ async function init(){
   await loadAssignments();
   await loadAgentDirectory();
   await loadTLRosters();
-  // seedZainabRosterIfMissing() is kept but no longer runs on load - rosters come only from TLs' own registrations.
+  await seedZainabRosterIfMissing();
   await applyAgentStatusMigrations();
   await loadCustomScenarios();
   state.scenarioBuilderTLName = getLastAssigningTL();
