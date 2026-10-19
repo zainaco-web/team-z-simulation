@@ -3900,10 +3900,12 @@ function wireEvents(){
     });
   });
 
+  const regTLSel=document.getElementById('regAgentTLName');
+  if(regTLSel) regTLSel.addEventListener('change', ()=>{ const nw=document.getElementById('regAgentTLNew'); if(nw){ nw.style.display = regTLSel.value==='__new__' ? '' : 'none'; if(regTLSel.value==='__new__') nw.focus(); } });
   const btnRegisterAgent=document.getElementById('btnRegisterAgent');
   if(btnRegisterAgent) btnRegisterAgent.addEventListener('click', ()=>{
     const v = id=>(document.getElementById(id).value||'').trim();
-    const form = {fullName:v('regAgentFullName'), chatName:v('regAgentChatName'), additionalName:v('regAgentAltName'), tlName:v('regAgentTLName'), email:v('regAgentEmail'), slackHandle:v('regAgentSlack')};
+    const form = {fullName:v('regAgentFullName'), chatName:v('regAgentChatName'), additionalName:v('regAgentAltName'), tlName:regAgentTLValue(), email:v('regAgentEmail'), slackHandle:v('regAgentSlack')};
     if(!form.fullName){ state.regMsg = {text:'Full name is required.', color:'var(--bad)'}; state.regFormDraft = form; render(); return; }
     if(form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)){ state.regMsg = {text:'That email address doesn\u2019t look right.', color:'var(--bad)'}; state.regFormDraft = form; render(); return; }
     continueAgentRegistration(form, {});
@@ -3983,9 +3985,12 @@ function wireEvents(){
       if(chatNameInput) chatNameInput.value = profile.chatName || '';
       if(altNameInput) altNameInput.value = (profile.aliases||[]).find(a=>a!==profile.chatName) || '';
       const owningRoster = state.tlRosters.find(r=>r.agents.some(a=>namesMatch(a, canonicalName)));
-      if(tlNameInput) tlNameInput.value = owningRoster ? owningRoster.tlName : (tlNameInput.value||'');
+      // Only the agent's ACTUAL current TL is preselected; an agent with no roster shows the blank placeholder.
+      if(tlNameInput){ tlNameInput.value = owningRoster ? owningRoster.tlName : ''; const nw=document.getElementById('regAgentTLNew'); if(nw){ nw.value=''; nw.style.display='none'; } }
       const emailInput = document.getElementById('regAgentEmail'); if(emailInput) emailInput.value = profile.email || '';
       const slackInput = document.getElementById('regAgentSlack'); if(slackInput) slackInput.value = profile.slackHandle || '';
+      // Keep the loaded profile in the form's draft too, so any re-render (e.g. the row click itself) can't reset Reports To.
+      state.regFormDraft = {fullName: profile.fullName || profile.canonicalName, chatName: profile.chatName || '', additionalName: (profile.aliases||[]).find(a=>a!==profile.chatName) || '', tlName: owningRoster ? owningRoster.tlName : '', email: profile.email || '', slackHandle: profile.slackHandle || ''};
       if(fullNameInput) fullNameInput.scrollIntoView({behavior:'smooth', block:'center'});
     });
   });
@@ -4780,6 +4785,8 @@ function archiveAttempt(attemptContext){
     ahtTargetMinutes: attemptContext.scenario.ahtTargetMinutes,
     playerLeftEarly: attemptContext.playerLeftEarly,
     playerLeftReason: attemptContext.playerLeftReason,
+    playerRating: attemptContext.playerRating || null,
+    playerRatingReason: attemptContext.playerRatingReason || null,
     scenarioMeta: scenarioMetaOf(attemptContext.scenario),
   });
   attemptContext.archived = true;
@@ -4804,6 +4811,8 @@ function archiveAttempt(attemptContext){
     ahtTargetMinutes: attemptContext.scenario.ahtTargetMinutes,
     playerLeftEarly: attemptContext.playerLeftEarly,
     playerLeftReason: attemptContext.playerLeftReason,
+    playerRating: attemptContext.playerRating || null,
+    playerRatingReason: attemptContext.playerRatingReason || null,
     // Full record below - safe to include now that Team Progress is TL-facing only, not agent-visible.
     // Lets a TL click into any teammate's attempt and see exactly what happened, not just the score.
     attemptNum,
@@ -5177,6 +5186,82 @@ function finalizeChatEnd(){
   state.simStatus='documenting';
   render();
   renderDocModal();
+}
+
+// ---------- SIMULATED PLAYER SATISFACTION (post-chat 👍 / 👎) ----------
+// A separate simulation signal: how THIS simulated player personally felt about the chat. Completely independent of
+// Betty QA scoring - it is never passed to computeQAScore, never changes a Q1/Q2/Q3 letter, PASS/FAIL, the KB/process
+// evaluation or AHT. Prompt isolation: built ONLY from the player's persona (same persona + trait as the attempt), what the
+// player knows, and the final transcript. No Case Data, Process Grounding, Action Log, documentation or QA result.
+// Nothing here is fixed per scenario or per persona - the rating comes from the actual interaction.
+function formatTranscriptForPlayerRating(transcript, s){
+  return (transcript||[]).map(m=>{
+    if(m.speaker==='system') return /left the chat/i.test(m.text||'') ? '(You left the chat.)' : null;
+    return `${m.speaker==='agent' ? 'AGENT' : 'YOU ('+s.playerName+')'}: ${m.text}`;
+  }).filter(Boolean).join('\n');
+}
+function buildPlayerRatingSystemPrompt(s, personaTrait){
+  const traitDef = personaTrait && PERSONA_TRAITS[personaTrait];
+  return `You are ${s.playerName}, the customer ("player") from a live-chat conversation with a customer support agent, in a TRAINING SIMULATION. Stay fully in character as this person.
+
+WHAT YOU (THE PLAYER) KNOW - your own situation, the only information you have:
+${s.playerKnowledge && s.playerKnowledge.situation ? s.playerKnowledge.situation : ''}
+
+${s.personaPrompt||''}
+${traitDef ? `\n${traitDef.promptModifier}\n` : ''}
+The chat has now ended and you are shown the usual post-chat survey: "How would you rate this chat? Thumbs up or thumbs down?"
+
+Answer as YOURSELF, based on how this conversation actually went for you, the way a real customer fills in that survey:
+- Did you feel heard? Was your actual question answered? Did you feel helped?
+- Did the agent seem engaged and respectful toward you?
+- Did the outcome feel satisfactory to YOU, given your personality and what you were hoping for?
+- How did you feel and react at different points in the conversation, and how did it end?
+
+You do not know or care about the company's internal rules, procedures, tools or how staff are graded - do not try to judge any of that. Only your own experience counts. Getting what you wanted can feel good even if it took a while; hearing an answer you don't like can feel bad even if it was explained well. Decide honestly from this specific conversation.
+
+Reply with ONLY a JSON object, nothing before or after it:
+{"rating":"up" or "down","reason":"one or two short sentences in your own casual voice, first person, like a survey comment"}
+The reason must sound like you, the customer - plain everyday words, no business or support-team jargon.`;
+}
+// Never throws. Returns {playerRating:'up'|'down'|null, playerRatingReason:string|null}.
+async function generatePlayerRating(s, personaTrait, transcript){
+  try{
+    if(!s || !(transcript||[]).some(m=>m.speaker==='agent')) return {playerRating:null, playerRatingReason:null};
+    const sys = buildPlayerRatingSystemPrompt(s, personaTrait);
+    const user = `Here is the full chat as you experienced it:\n\n${formatTranscriptForPlayerRating(transcript, s)}\n\nHow would you rate this chat - thumbs up or thumbs down? Reply with the JSON only.`;
+    const {text} = await callClaudeRaw(sys, [{role:'user', content:user}], 300, 60000);
+    const j = parseModelJson(text) || {};
+    const r = String(j.rating||'').toLowerCase().trim();
+    const rating = (r==='up'||r==='thumbs up'||r==='\u{1F44D}') ? 'up' : (r==='down'||r==='thumbs down'||r==='\u{1F44E}') ? 'down' : null;
+    const reason = String(j.reason||'').trim().replace(/^["\u201c]|["\u201d]$/g,'');
+    return rating ? {playerRating:rating, playerRatingReason: reason || null} : {playerRating:null, playerRatingReason:null};
+  }catch(err){
+    console.error('Simulated player rating failed (non-fatal - QA scoring is unaffected):', err);
+    return {playerRating:null, playerRatingReason:null};
+  }
+}
+// Separate box, deliberately styled apart from the QA score so it can't be read as part of PASS/FAIL.
+function playerRatingBoxHtml(rec, pending){
+  const has = rec && (rec.playerRating==='up' || rec.playerRating==='down');
+  let body;
+  if(has){
+    const up = rec.playerRating==='up';
+    body = `<div style="font-size:16px;font-weight:700;color:${up?'var(--ok)':'var(--bad)'};">${up?'\u{1F44D} Positive':'\u{1F44E} Negative'}</div>
+      ${rec.playerRatingReason ? `<div style="font-size:13px;color:var(--text2);font-style:italic;margin-top:4px;line-height:1.5;">\u201c${escapeHtml(rec.playerRatingReason)}\u201d</div>` : ''}`;
+  }else{
+    body = `<div style="font-size:13px;color:var(--text3);">${pending ? 'Player rating: generating\u2026' : 'Player rating: Not available'}</div>`;
+  }
+  return `<div class="box" id="playerRatingBox" style="border-style:dashed;margin-top:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+      <strong style="font-size:13.5px;">Player Rating</strong>
+      <span style="font-size:10.5px;color:var(--text3);">How the simulated player felt - separate from the QA Practice Score, not part of PASS/FAIL</span>
+    </div>
+    ${body}
+  </div>`;
+}
+function playerRatingText(rec){
+  if(!rec || (rec.playerRating!=='up' && rec.playerRating!=='down')) return 'Player rating: Not available';
+  return `Player rating (simulated player satisfaction - not part of the QA score): ${rec.playerRating==='up'?'\u{1F44D} Positive':'\u{1F44E} Negative'}${rec.playerRatingReason?` - "${rec.playerRatingReason}"`:''}`;
 }
 
 function buildPlayerSystemPrompt(s, personaTrait){
@@ -5916,7 +6001,10 @@ function renderDocModal(){
       evaluation: {loading:true},
       tlOverrides: {},
       archived: false,
+      playerRating: null, playerRatingReason: null,
     };
+    // Simulated player satisfaction runs in parallel with (and isolated from) QA scoring - same persona as this attempt.
+    attemptContext.playerRatingPromise = generatePlayerRating(state.activeScenario, state.activePersonaTrait, state.transcript);
     state.currentAttemptContext = attemptContext;
     state.evaluation = attemptContext.evaluation; // same object reference - live UI reflects it immediately
     render();
@@ -5940,6 +6028,7 @@ async function runEvaluation(attemptContext){
     attemptContext.evaluation = result;
     attemptContext.tlOverrides = {};
     result.questions.forEach(q=>{ attemptContext.tlOverrides[q.id] = {letter:q.letter, afDuty:q.afDuty||null, notes:''}; });
+    if(attemptContext.playerRatingPromise){ Object.assign(attemptContext, await attemptContext.playerRatingPromise); } // never throws; saved with the attempt
     archiveAttempt(attemptContext); // save into history right away, regardless of what's live by now
   }catch(err){
     console.error(err);
@@ -6083,7 +6172,7 @@ function renderTeamProgressModal(filterRoster){
       const hasFullData = !!e.evaluation;
       const es = teamEntryScore(e);
       return `<div class="info-row" style="${hasFullData?'cursor:pointer;':''}" ${hasFullData?`data-view-team-attempt="${globalIdx}"`:''}>
-        <span class="ilabel">${escapeHtml(e.scenarioTitle)}<br><span style="font-size:10.5px;">${new Date(e.timestamp).toLocaleString()} \u00b7 ${ahtCell}${hasFullData?' \u00b7 <span style="color:var(--accent);">review attempt</span>':''}${es.reviewed?' \u00b7 <span style="color:var(--ok);">TL-reviewed</span>':''}</span></span>
+        <span class="ilabel">${escapeHtml(e.scenarioTitle)}<br><span style="font-size:10.5px;">${new Date(e.timestamp).toLocaleString()} \u00b7 ${ahtCell}${hasFullData?' \u00b7 <span style="color:var(--accent);">review attempt</span>':''}${es.reviewed?' \u00b7 <span style="color:var(--ok);">TL-reviewed</span>':''}${hasFullData ? ' \u00b7 <span title="Simulated player rating - not part of the QA score">Player '+(e.playerRating==='up'?'\u{1F44D}':e.playerRating==='down'?'\u{1F44E}':'n/a')+'</span>' : ''}</span></span>
         <span class="ival" style="color:${es.af?'var(--bad)':es.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${es.af?`AF (${es.afDuty})`:es.pct+'%'} \u00b7 ${es.af||!es.pass?'FAIL':'PASS'}</span>
       </div>`;
     }).join('');
@@ -7325,8 +7414,13 @@ function assignmentStatusColor(a){
   return 'var(--warn)';
 }
 const LAST_ASSIGNING_TL_KEY = 'zteamz_lastAssigningTL_v1';
-function getLastAssigningTL(){ try{ return localStorage.getItem(LAST_ASSIGNING_TL_KEY) || ''; }catch(err){ return ''; } }
-function setLastAssigningTL(name){ try{ localStorage.setItem(LAST_ASSIGNING_TL_KEY, name||''); }catch(err){} }
+// The TL's own name, as typed in a TL workflow (assign, review, contact details, create scenario) DURING THIS SESSION.
+// Deliberately in-memory only: a fresh load never prefills or selects a TL from this device's earlier activity, so no
+// TL (Zainab or anyone) becomes an automatic default on a shared device. The old persisted value is cleared on load.
+let sessionTLName = '';
+function getLastAssigningTL(){ return sessionTLName; }
+function setLastAssigningTL(name){ sessionTLName = (name||'').trim(); }
+try{ localStorage.removeItem(LAST_ASSIGNING_TL_KEY); }catch(err){}
 
 // ---------- TL ROSTERS (which agents belong to which TL) ----------
 // Same shared-backend pattern as assignments: any TL adding/editing a roster from their device is
@@ -7478,11 +7572,35 @@ function renderFormerAgentsList(){
     <button class="small" data-agent-reactivate="${escapeHtml(a.canonicalName)}">Reactivate</button>
   </div>`).join('');
 }
+// "Reports to" for Register / Edit an Agent: a dropdown of registered TL roster names, blank by default - no TL is ever
+// preselected for a new agent. "New Team Lead..." keeps the old ability to register an agent under a TL with no roster yet.
+function regAgentTLFieldHtml(){
+  const tlNames = [...new Set(state.tlRosters.map(r=>r.tlName))].sort();
+  const draftTL = ((state.regFormDraft||{}).tlName||'').trim();
+  const known = draftTL ? tlNames.find(t=>namesMatch(t, draftTL)) : '';
+  const isNew = !!draftTL && !known;
+  const style = 'flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;';
+  return `<select id="regAgentTLName" aria-label="Reports to (TL name)" style="${style}">
+      <option value="" ${(!known && !isNew)?'selected':''}>Select a Team Lead</option>
+      ${tlNames.map(t=>`<option value="${escapeHtml(t)}" ${known===t?'selected':''}>${escapeHtml(t)}</option>`).join('')}
+      <option value="__new__" ${isNew?'selected':''}>New Team Lead\u2026</option>
+    </select>
+    <input id="regAgentTLNew" placeholder="New TL\u2019s full name" value="${escapeHtml(isNew?draftTL:'')}" style="${style}${isNew?'':'display:none;'}">`;
+}
+function regAgentTLValue(){
+  const sel = document.getElementById('regAgentTLName');
+  if(!sel) return '';
+  if(sel.value==='__new__'){ const n = document.getElementById('regAgentTLNew'); return ((n&&n.value)||'').trim(); }
+  return (sel.value||'').trim();
+}
 function renderRosterTable(){
   const tlNames = [...new Set(state.tlRosters.map(r=>r.tlName))].sort();
-  const pick = state.rosterTableTL || tlNames.find(t=>namesMatch(t, getLastAssigningTL())) || tlNames[0] || '';
+  // Neutral until a TL deliberately picks a name: no default to the last-assigning TL, the first TL, or anyone else.
+  // state.rosterTableTL is in-memory only, so a deliberate pick survives navigation within the session, never a reload.
+  const pick = state.rosterTableTL || '';
   const roster = state.tlRosters.find(r=>namesMatch(r.tlName, pick));
-  const sel = `<select id="rosterTableTLSelect" aria-label="Team lead" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;">${tlNames.map(t=>`<option value="${escapeHtml(t)}" ${namesMatch(t,pick)?'selected':''}>${escapeHtml(t)}</option>`).join('')}</select>`;
+  const sel = `<select id="rosterTableTLSelect" aria-label="Team lead" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;"><option value="" ${pick?'':'selected'}>Select a Team Lead</option>${tlNames.map(t=>`<option value="${escapeHtml(t)}" ${(pick && namesMatch(t,pick))?'selected':''}>${escapeHtml(t)}</option>`).join('')}</select>`;
+  if(!pick) return `<div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;"><span style="font-size:12.5px;color:var(--text2);">Team lead</span>${sel}</div><div class="empty" style="padding:10px 0;">${tlNames.length ? 'Select a Team Lead to view their roster.' : 'No roster yet.'}</div></div>`;
   if(!roster) return `<div>${tlNames.length ? sel : ''}<div class="empty" style="padding:10px 0;">No roster yet.</div></div>`;
   const rows = (roster.agents||[]).map(ag=>{
     const p = profileByCanonical(ag); const name = p ? p.canonicalName : ag;
@@ -7997,12 +8115,15 @@ async function submitChallengeSlotDoc(slotIndex){
   if(!slot) return;
   slot.status = 'scoring'; // distinct from 'ended' - only becomes 'ended' once a real result (or a clean error) is in hand
   slot.evaluation = {loading:true};
+  // One independent simulated player rating per chat, in parallel with (and isolated from) this chat's QA scoring.
+  const ratingPromise = generatePlayerRating(slot.scenario, slot.personaTrait, slot.transcript);
   render();
   try{
     const prompt = buildEvalPrompt(slot.scenario, slot.transcript, slot.actionLog, slot.docNote, slot.docTag, slot.docSecondaryTag, slot.ahtModeUsed ? slot.chatStartedAt : null, slot.playerLeftEarly, slot.playerLeftReason, !!slot.ahtModeUsed);
     const result = normalizeEvalFindings(enforceAFDutyBoundary(await callClaudeJson(prompt, 'complex')));
     slot.evaluation = result;
     QA_SCORECARD.questions.forEach(q=>{ const aiQ=result.questions.find(x=>x.id===q.id); slot.tlOverrides[q.id] = {letter:aiQ.letter, afDuty:aiQ.afDuty||null, notes:''}; });
+    Object.assign(slot, await ratingPromise);   // never throws
     archiveChallengeSlotAttempt(slot);
   }catch(err){
     console.error(err);
@@ -8040,6 +8161,8 @@ function archiveChallengeSlotAttempt(slot){
     playerLeftReason: slot.playerLeftReason,
     challengeTier: state.challenge.tier,
     challengeSessionId: state.challenge.sessionId,
+    playerRating: slot.playerRating || null,
+    playerRatingReason: slot.playerRatingReason || null,
     scenarioMeta: scenarioMetaOf(slot.scenario),
   };
   state.attemptHistory[sid].push(record);
@@ -8054,6 +8177,7 @@ function archiveChallengeSlotAttempt(slot){
     timestamp: completionTimestamp, pct: score.af?0:score.pct, af: score.af, afDuty: score.afDuty, pass: score.pass,
     ahtElapsedMinutes: record.ahtElapsedMinutes, ahtTargetMinutes: slot.scenario.ahtTargetMinutes,
     playerLeftEarly: slot.playerLeftEarly, playerLeftReason: slot.playerLeftReason,
+    playerRating: slot.playerRating || null, playerRatingReason: slot.playerRatingReason || null,
     challengeTier: state.challenge.tier,
     attemptNum, transcript: slot.transcript, actionLog: slot.actionLog,
     reviewOutcome: (slot.scenario && slot.scenario.reviewOutcome)||null, evaluation: slot.evaluation,
@@ -8453,6 +8577,7 @@ function evalModalContent(){
       <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">${escapeHtml((s.internalTitle||s.title))} - ${new Date(att.timestamp).toLocaleString()}${att.agentName ? ' - '+escapeHtml(att.agentName) : ''}</div>
       ${kbBannerFor(s)}
       ${scoreHeaderHtml(ev, reviewDraft, att.ahtElapsedMinutes, att.ahtTargetMinutes, att.ahtLateStart, tlMode)}
+      ${playerRatingBoxHtml(att, false)}
       ${hasFindings(ev) ? `
       ${tlMode ? `<div class="box" style="border-color:var(--accent);"><strong>TL / Management review.</strong> The AI\u2019s assessment stays on record as-is. Use the override and note on each question below where the AI got something wrong or the case deserves leniency, then save.${att.tlReviewedAt ? `<div style="color:var(--text3);font-size:12px;margin-top:4px;">Last reviewed ${new Date(att.tlReviewedAt).toLocaleString()}</div>` : ''}</div>` : ''}
       ${scorecardRowsHtml(ev, reviewDraft, tlMode ? 'tl' : 'agent', {compact:true})}
@@ -8555,6 +8680,7 @@ function evalModalContent(){
     <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">${escapeHtml(s.title)} - scored against Betty's real QA Chat Scorecard</div>
     ${kbBannerFor(s)}
     ${scoreHeaderHtml(ev, null, state.ahtElapsedMinutes, s.ahtTargetMinutes, state.ahtLateStart, false)}
+    ${(()=>{ const ctx = state.currentAttemptContext && state.currentAttemptContext.transcript===state.transcript ? state.currentAttemptContext : null; return playerRatingBoxHtml(ctx, false); })()}
     ${hasFindings(ev) ? `
     ${scorecardRowsHtml(ev, null, 'agent', {compact:true})}
     ${renderFindingsSection(ev)}
@@ -8598,6 +8724,7 @@ function buildResultsText(){
   if(state.ahtElapsedMinutes!==null && s.ahtTargetMinutes){
     out += `Handling Time: ${formatElapsed(state.ahtElapsedMinutes*60000)} (target: ${s.ahtTargetMinutes} min)\n`;
   }
+  { const ctx = state.currentAttemptContext && state.currentAttemptContext.transcript===state.transcript ? state.currentAttemptContext : null; out += `${playerRatingText(ctx)}\n`; }
   out += `\n`;
   out += `SUMMARY: ${ev.overallSummary}\n\n`;
   if(hasFindings(ev)){
@@ -8697,6 +8824,7 @@ function buildTlReviewText(att, s){
     });
     if(rows.length) out += `\nCOACHING SIGNALS (not part of the score):\n${rows.join('\n')}\n`;
   }
+  out += `${playerRatingText(att)}\n`;
   out += `\nOVERALL SUMMARY:\n${ev.overallSummary || '(none)'}\n`;
   if(hasFindings(ev)){
     out += `\nFINDINGS:\n`;
@@ -9170,7 +9298,7 @@ function renderTeamLeadsRosterSectionBody(){
         <input id="regAgentFullName" value="${escapeHtml((state.regFormDraft||{}).fullName||'')}" placeholder="Full name" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentChatName" value="${escapeHtml((state.regFormDraft||{}).chatName||'')}" placeholder="Chat name" style="flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentAltName" value="${escapeHtml((state.regFormDraft||{}).additionalName||'')}" placeholder="Other recognized name (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
-        <input id="regAgentTLName" placeholder="Reports to (TL name)" value="${escapeHtml(state.regFormDraft ? (state.regFormDraft.tlName||'') : 'Zainab Yahaya')}" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+        ${regAgentTLFieldHtml()}
         <input id="regAgentEmail" value="${escapeHtml((state.regFormDraft||{}).email||'')}" type="email" placeholder="Email (optional)" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <input id="regAgentSlack" value="${escapeHtml((state.regFormDraft||{}).slackHandle||'')}" placeholder="Slack handle (optional)" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
         <button id="btnRegisterAgent" class="primary">Register agent</button>
