@@ -10296,7 +10296,14 @@ function renderNameModal(){
   input.addEventListener('input', ()=>{
     const resolved = resolveAgentName(input.value);
     const profile = registeredProfileFor(input.value); // same lookup the TL alert uses, incl. TL manual resolutions
-    if(profile){
+    // Team leads aren't in the agent directory - they're the owners of rosters - so check roster
+    // owner names too, otherwise a TL trying a scenario gets told to "ask your TL to register you".
+    const typedKey = input.value.trim().toLowerCase();
+    const tlRoster = typedKey ? (state.tlRosters||[]).find(r=>(r.tlName||'').trim().toLowerCase()===typedKey) : null;
+    if(!profile && tlRoster){
+      recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--ok)';
+      recognizedEl.textContent = `Recognized: ${tlRoster.tlName} · Team Lead`;
+    } else if(profile){
       const count = pendingAssignmentsFor(profile.canonicalName).length;
       recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--ok)';
       recognizedEl.textContent = `Recognized: ${profile.canonicalName}${count ? ' \u00b7 '+count+' outstanding assignment'+(count===1?'':'s') : ''}`;
@@ -10305,7 +10312,7 @@ function renderNameModal(){
       recognizedEl.textContent = 'That name matches more than one registered agent - please use your full name.';
     } else if(input.value.trim()){
       recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--warn)';
-      recognizedEl.textContent = 'Name not recognized - ask your TL to register you';
+      recognizedEl.textContent = 'You’re not on a team roster yet - you can still practice. If you’re an agent, ask your TL to add you so your results show up in Team Progress.';
     } else {
       recognizedEl.style.display = 'none';
     }
