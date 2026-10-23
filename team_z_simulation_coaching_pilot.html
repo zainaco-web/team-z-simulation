@@ -344,6 +344,7 @@ const KB_CONDUCT_RULE = `PROFANITY ABOUT THE ISSUE IS NOT ABUSE ON ITS OWN (real
 
 const KB_LONG_CHAT_RULE = `MANAGING LONG CHATS (real Chat Guidelines). Only in these four situations - (a) the case is escalated or under review and the player insists on waiting in chat; (b) the player refuses to accept an outcome that cannot change, after everything has been explained and there is no further step; (c) the issue is resolved and the player keeps chatting socially; (d) a complex case needs in-depth review that takes longer than a normal chat - the player must always get at least two clear heads-up messages before the chat is closed: an initial explanation that the chat will need to close, then a final confirmation. Closing that way is correct handling, not a rushed close; closing without those heads-ups in these situations is a real miss. If the player raises a genuinely new point, it must be answered before the long-chat close is used. This is NOT a requirement for normal chats: when the player accepts the answer naturally, a normal close is correct and no artificial two-step close is expected.`;
 
+const KB_NOT_SCORED_RULE = `NOT SCORED ITEMS. Where Process Grounding marks something "NOT SCORED (unconfirmed process ...)", that point has not been confirmed against real Betty KB. It must not lower or raise any letter, must not appear as a process error or as praise, and the agent must not be described as right or wrong on it. Score only what the rest of the grounding states as real KB, Compliance/QA direction or TL direction.`;
 const KB_RATING_RULE = `RATING REQUESTS (real Chat Guidelines, Prompting the Player for Feedback). A simple "thank you" is not enough on its own; look for genuine, specific, warm appreciation. Disqualifiers: visible frustration anywhere in the chat (including backhanded thanks such as "thanks anyways"), agitation over an unresolved issue, and a bonus or GWG denied during the chat. Game Fairness disputes, Compliance/RGQ reviews, payout disputes and bonus/GWG denials are specifically sensitive topics. The KB's Four-Question Check: (1) is the player happy with the support, not just polite? (2) did they express specific, warm appreciation? (3) is there no visible frustration anywhere in their messages? (4) was no bonus or GWG denied? If ANY answer is no, the chat should close naturally without a rating prompt; if all four are yes, a humble, performance-focused ask is appropriate. Scoring: rating-request judgment is not a scorecard requirement - report it in coachingSignals.closesConfidently (and as a coaching finding where findings are used) and never lower a Q1, Q2 or Q3 letter because of a rating ask alone. An appropriate ask after a warm, resolved chat is good practice, not a fault.`;
 
 const KB_NOTE_STANDARD = `This matches the Chat Guidelines ("Summarize well"): the saved note should capture the issue, what was checked, what was done, the outcome and any next steps, with the right tag.`;
@@ -368,7 +369,7 @@ const GLOBAL_EVAL_RULES = `GLOBAL EVALUATION RULES (apply to every criterion bel
 17. FACT VS. QUALIFIED HYPOTHESIS, AND TURN ORDER. (a) Claiming a cause as fact ("this is a display lag") is different from offering a clearly qualified possibility ("it could be a display issue, but I can't confirm that yet") while continuing to verify or troubleshoot; only the former is an unsupported claim under rule 2. (b) A conditional troubleshooting question ("if you're using the app, ...") asked before the player has said which platform they use is not inattention; it is a lapse only if the agent asks it AFTER the player clearly stated the answer. Before saying the agent ignored or contradicted something the player said, check the turn numbers: the player's statement must come in an earlier turn than the agent turn you cite.
 18. HUMAN LANGUAGE IS NOT A TONE PROBLEM. Casual, warm, natural wording - "You got it!", "I got you", "No need to be sorry!", "I'm crossing my fingers for you", "Checking now!", emojis, appropriate light humour - is good Betty-style communication, and is what the Chat Guidelines ask for ("Make your messages feel human": warm, natural, everyday language; avoid sounding robotic or overly scripted; stay relaxed but respectful). Never lower Q2, and never rate a coaching signal "mixed" or "needs-work", because of it, unless it was inappropriate in that specific moment (for example joking during an RG disclosure, a bereavement or a serious complaint). A pure style preference is at most an optional suggestion, never a negative finding. Genuine tone problems are different and still count: defensiveness, arguing, sarcasm aimed at the player, dismissiveness, talking down, visible irritation, or flippancy around RG or compliance. Phrases like "Like I've explained multiple times...", "I already told you...", "Do you understand?", "I'm just doing my job" or "You need to be patient" are defensive when they read as the agent taking the conflict personally - judge the actual interpersonal effect, and never group them with warm casual language.
 19. ${KB_CONDUCT_RULE}
-20. JUDGE THE WHOLE CHAT, INCLUDING THE LATE TURNS. In long or hostile chats, check whether quality held up: replies getting curt, argumentative or repetitive, certainty creeping in without evidence, invented escalation routes, or a rushed close are real issues even if the opening was strong. The agent does not need to win the argument or calm the player down - they need to stay accurate, composed and on process. ${KB_LONG_CHAT_RULE} ${KB_RATING_RULE}
+20. JUDGE THE WHOLE CHAT, INCLUDING THE LATE TURNS. In long or hostile chats, check whether quality held up: replies getting curt, argumentative or repetitive, certainty creeping in without evidence, invented escalation routes, or a rushed close are real issues even if the opening was strong. The agent does not need to win the argument or calm the player down - they need to stay accurate, composed and on process. ${KB_LONG_CHAT_RULE} ${KB_RATING_RULE} ${KB_NOT_SCORED_RULE}
 21. NEW INFORMATION MUST STILL BE ANSWERED. Distinguish an unproductive loop (nothing new raised, every actionable point already answered - restating the answer briefly and moving to close is fine) from a new substantive point (a screenshot, a different amount, a new timeline detail, a manager request, a new symptom, a threat, a factual contradiction, or a request to close the account). A new point needs a real response even late in a long dispute. A request to close the account is a new actionable request: ignoring it, or answering only the original dispute, is a Q1 miss when Process Grounding gives a closure process. Threats (regulator, lawyer, chargeback, social media) do not change the correct answer: refunding, offering compensation or inventing an escalation because of a threat is unsupported; following a complaint workflow is correct only where Process Grounding provides one.
 22. EVIDENCE IS NOT CAUSATION. Keep apart what the records verify, what is likely, what is merely possible and what is unsupported. "We couldn't find an error" or "the request arrived after the round ended" does not prove "it was your internet". Stating an unverified cause as fact is an unsupported claim (see rule on unsupported claims) even when it sounds decisive and even when the player is wrong about their own theory.
 23. THE PLAYER'S MOOD IS NOT THE SCORE. A difficult player may stay angry, keep disagreeing, refuse to apologise, threaten a complaint or leave unhappy after excellent handling; that alone never lowers Q1 or Q2. A player can also be rude and still correctly point out a real agent mistake (a contradiction, a vague timeframe, a canned answer, an ignored question) - when they do, that mistake counts as usual.`;
@@ -412,7 +413,7 @@ PER QUESTION
 DIFFICULT PLAYERS AND TONE
 17. HUMAN LANGUAGE IS NOT A TONE PROBLEM. Casual, warm, natural wording - "You got it!", "I got you", "No need to be sorry!", "I'm crossing my fingers for you", "Checking now!", emojis, appropriate light humour - is good Betty-style communication, and is what the Chat Guidelines ask for ("Make your messages feel human": warm, natural, everyday language; avoid sounding robotic or overly scripted; stay relaxed but respectful). Never lower Q2, and never rate a coaching signal "mixed" or "needs-work", because of it, unless it was inappropriate in that specific moment (for example joking during an RG disclosure, a bereavement or a serious complaint). A pure style preference is at most an optional suggestion, never a negative finding. Genuine tone problems are different and still count: defensiveness, arguing, sarcasm aimed at the player, dismissiveness, talking down, visible irritation, or flippancy around RG or compliance. Phrases like "Like I've explained multiple times...", "I already told you...", "Do you understand?", "I'm just doing my job" or "You need to be patient" are defensive when they read as the agent taking the conflict personally - judge the actual interpersonal effect, and never group them with warm casual language.
 18. ${KB_CONDUCT_RULE}
-19. JUDGE THE WHOLE CHAT, INCLUDING THE LATE TURNS. In long or hostile chats, check whether quality held up: replies getting curt, argumentative or repetitive, certainty creeping in without evidence, invented escalation routes, or a rushed close are real issues even if the opening was strong. The agent does not need to win the argument or calm the player down - they need to stay accurate, composed and on process. ${KB_LONG_CHAT_RULE} ${KB_RATING_RULE}
+19. JUDGE THE WHOLE CHAT, INCLUDING THE LATE TURNS. In long or hostile chats, check whether quality held up: replies getting curt, argumentative or repetitive, certainty creeping in without evidence, invented escalation routes, or a rushed close are real issues even if the opening was strong. The agent does not need to win the argument or calm the player down - they need to stay accurate, composed and on process. ${KB_LONG_CHAT_RULE} ${KB_RATING_RULE} ${KB_NOT_SCORED_RULE}
 20. NEW INFORMATION MUST STILL BE ANSWERED. Distinguish an unproductive loop (nothing new raised, every actionable point already answered - restating the answer briefly and moving to close is fine) from a new substantive point (a screenshot, a different amount, a new timeline detail, a manager request, a new symptom, a threat, a factual contradiction, or a request to close the account). A new point needs a real response even late in a long dispute. A request to close the account is a new actionable request: ignoring it, or answering only the original dispute, is a Q1 miss when Process Grounding gives a closure process. Threats (regulator, lawyer, chargeback, social media) do not change the correct answer: refunding, offering compensation or inventing an escalation because of a threat is unsupported; following a complaint workflow is correct only where Process Grounding provides one.
 21. EVIDENCE IS NOT CAUSATION. Keep apart what the records verify, what is likely, what is merely possible and what is unsupported. "We couldn't find an error" or "the request arrived after the round ended" does not prove "it was your internet". Stating an unverified cause as fact is an unsupported claim (see rule on unsupported claims) even when it sounds decisive and even when the player is wrong about their own theory.
 22. THE PLAYER'S MOOD IS NOT THE SCORE. A difficult player may stay angry, keep disagreeing, refuse to apologise, threaten a complaint or leave unhappy after excellent handling; that alone never lowers Q1 or Q2. A player can also be rude and still correctly point out a real agent mistake (a contradiction, a vague timeframe, a canned answer, an ignored question) - when they do, that mistake counts as usual.`;
@@ -2078,7 +2079,7 @@ const SCENARIOS = [
     id:'noc-7', playerIntensity:5, patience:'impatient', skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Advanced',
     internalTitle:'Crash Round Cash-Out Dispute - Escalating to Personal Abuse', title:'Crash Game Cash-Out', playerName:'Darius',
     agentBriefing:'A player says they cashed out of a crash-game round in time but still lost their bet.',
-    preChatContext:'i cashed out on rocket rush at like 1.7x and it still took my $25. i have it on video',
+    preChatContext:'i cashed out on jetx at like 1.7x and it still took my $25. i have it on video',
     endConditionsGuide:'End once the round has been explained from the records and the chat reaches a close - including, if it comes to it, a close under the abuse process.',
     kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:false,
     kbCategories:['Game Tech Temple', 'Agent Operations'], kbArticles:['Chat Guidelines'], rgStatementType:'None', rgEmbedded:false, complexity:'High stakes',
@@ -2087,13 +2088,13 @@ const SCENARIOS = [
     kbSource:'The abuse-handling, long-chat closing and screenshot rules are real KB (Chat Guidelines: Offensive Chat Behavior, Managing Long Chats, Backoffice screenshots policy - full article supplied by Zainab, Oct 2026). QA/COACHING PRECEDENT (not Chat Guidelines wording): on the real chat this scenario is modelled on, the agent closed after one warning with a 3-day ban, and QA marked it down on the scale rather than autofailing it. The crash-game round records and the "a cash-out only counts if the server receives it before the crash" rule are FICTIONAL for this prototype - no real crash-game KB has been supplied, and the game name is invented. Check against the real game provider behaviour before using this for anything beyond composure practice.',
 
     playerKnowledge:{
-      situation:'You were playing Rocket Rush, bet $25, and you are certain you hit cash out at about 1.7x before the rocket crashed at 1.84x. You screen-recorded it. The game still shows the round as a loss.',
+      situation:'You were playing JetX, bet $25, and you are certain you hit cash out at about 1.7x before the jet exploded at 1.84x. You screen-recorded it. The game still shows the round as a loss.',
     },
-    personaPrompt:'You are Darius, mid-30s, works in IT and is very confident in his own technical reading of things. You have a screen recording that you believe shows you pressing cash out at about 1.7x, before the crash at 1.84x. You can describe it (you pressed the button, the rocket kept going, then it said you lost) but you cannot send it in this chat unless the agent tells you how, and the video does not show any server data. Your ping was "like 30ms", so in your mind lag is impossible on your side.\n\nHow the chat goes for you: in your first couple of messages you are irritated but explaining a genuine dispute. When the agent says no cash-out was recorded in time, you dispute the logs: their servers lag, their timestamps are wrong, the video is proof. You insist your interpretation is fact, not opinion. You demand your $25 back "on principle - it is not about the money". At some point ask where the agent or the company is actually based. You call the game rigged and the company unethical. After the refund is refused a second time you start questioning the agent personally ("do you even understand what latency is?"). If it is refused again after that, you cross into severe personal abuse aimed at the agent, within the limits set in your behaviour rules.\n\nReact to specifics: if the agent claims your internet caused it, demand they prove it - their records do not show your connection. If the agent gives exact timestamps from the records, argue with them rather than accept them, but you cannot produce any server data of your own. If the agent offers a refund or credit, take it immediately and stop arguing. If the agent warns you about your language, you may sneer and ease off for one message, or ignore it - you do not apologise. If the agent closes the chat under a warning you ignored, the conversation is over.\n\nYou do not know what the server logs say and you never claim to. You only know what you saw on your screen.',
+    personaPrompt:'You are Darius, mid-30s, works in IT and is very confident in his own technical reading of things. You have a screen recording that you believe shows you pressing cash out at about 1.7x, before the crash at 1.84x. You can describe it (you pressed the button, the jet kept flying, then it said you lost) but you cannot send it in this chat unless the agent tells you how, and the video does not show any server data. Your ping was "like 30ms", so in your mind lag is impossible on your side.\n\nHow the chat goes for you: in your first couple of messages you are irritated but explaining a genuine dispute. When the agent says no cash-out was recorded in time, you dispute the logs: their servers lag, their timestamps are wrong, the video is proof. You insist your interpretation is fact, not opinion. You demand your $25 back "on principle - it is not about the money". At some point ask where the agent or the company is actually based. You call the game rigged and the company unethical. After the refund is refused a second time you start questioning the agent personally ("do you even understand what latency is?"). If it is refused again after that, you cross into severe personal abuse aimed at the agent, within the limits set in your behaviour rules.\n\nReact to specifics: if the agent claims your internet caused it, demand they prove it - their records do not show your connection. If the agent gives exact timestamps from the records, argue with them rather than accept them, but you cannot produce any server data of your own. If the agent offers a refund or credit, take it immediately and stop arguing. If the agent warns you about your language, you may sneer and ease off for one message, or ignore it - you do not apologise. If the agent closes the chat under a warning you ignored, the conversation is over.\n\nYou do not know what the server logs say and you never claim to. You only know what you saw on your screen.',
 
     caseData:[
-      {id:'round1', tab:'Game/Round History', label:'Round #RR-40917 (Rocket Rush)', value:'Bet: $25.00 - Round started 21:14:02 - Multiplier crashed at 1.84x at 21:14:09.62 - Cash-out: none recorded for this round - Result: Loss, $0.00 payout', gated:true, gateLabel:'View Game/Round History'},
-      {id:'round2', tab:'Game/Round History', label:'Cash-out request log', value:'One cash-out request from this player for Round #RR-40917 reached the game server at 21:14:10.03, 0.41 seconds after the round crashed. Status: Rejected - round already settled. The log does not record why the request arrived late.', gated:true, gateLabel:'View Cash-Out Log'},
+      {id:'round1', tab:'Game/Round History', label:'Round #JX-40917 (JetX)', value:'Bet: $25.00 - Round started 21:14:02 - Multiplier crashed at 1.84x at 21:14:09.62 - Cash-out: none recorded for this round - Result: Loss, $0.00 payout', gated:true, gateLabel:'View Game/Round History'},
+      {id:'round2', tab:'Game/Round History', label:'Cash-out request log', value:'One cash-out request from this player for Round #JX-40917 reached the game server at 21:14:10.03, 0.41 seconds after the round crashed. Status: Rejected - round already settled. The log does not record why the request arrived late.', gated:true, gateLabel:'View Cash-Out Log'},
       {id:'notes1', tab:'Account Notes', label:'Prior incident history', value:'No previous chat warnings, chat bans or priority notes on file.', gated:false},
     ],
 
@@ -2418,6 +2419,500 @@ let state = {
 // Agent-facing pool: excludes ENGINE_TEST_ONLY scenarios (fictional system mechanics agents
 // could mistakenly learn as real Betty behaviour). scenarioById/attempt history/TL reference
 // still use the full SCENARIOS list - only pools an agent can browse/randomize into are filtered.
+
+// ---------- v27 PROCESS-ACCURACY AUDIT (Practice Only scenarios) ----------
+// Every rule a Practice Only scenario is SCORED on was checked against what has actually been supplied:
+// real KB text (Chat Guidelines, Interac Withdrawals, Promotions, RG Triggers, Customers Seeking Manager
+// Assistance, Account Closure Requests, Risk & Fraud closure/complaint wording, tagging guide), real
+// Compliance/QA escalations, and documented TL direction. Anything that could not be traced to one of those
+// was either re-grounded in supplied KB or moved out of scoring ("NOT SCORED") until the named source is supplied.
+// kbNeeded lists exactly what would let each scenario be scored in full. TL-only; never shown to agents.
+const NOT_SCORED_PREFIX = 'NOT SCORED (unconfirmed process - do not deduct for either choice, do not describe the agent as right or wrong on this point): ';
+const RG_GREY_ZONE_NOTE = NOT_SCORED_PREFIX + 'what the agent does AFTER a genuine check-in when the player gives a grey-zone answer (concerning, but no confirmed loss of control). The supplied RG Triggers text defines the next step only for confirmed loss of control (Direct Statement handling) and for refusing/dropping the chat (precautionary suspension, Reason: Responsible Gaming, marketing off, follow-up email, Player Care). Real Compliance feedback (August, an essentials-framed statement where the player said their finances were fine) said the account should have been suspended rather than self-excluded, which points away from simply carrying on. Until the RG Triggers article is re-checked with Compliance, documenting the exchange and continuing, and a precautionary suspension with escalation to Player Care, are both acceptable. What IS scored: noticing the statement, a genuine open-ended check-in that references what the player said, and not self-excluding on an unconfirmed statement (TL direction: when in doubt, suspend - self-exclusion is not reversible).';
+const REAL_COMPLAINT_ROUTE = 'REAL KB (Risk & Fraud account-closure article, complaint wording; routing per Compliance Escalations): when a player wants to complain, the agent can raise a formal complaint with the Complaints team on their behalf, and the player receives an official response by email to their registered address, in line with Section 30 of the Terms of Use. Offering this real route is correct. What is NOT supported: inventing a manager callback, a manager or complaints email address, a phone line, or a promised response date.';
+const CG_REVIEW_TIMEFRAMES = 'REAL KB (Chat Guidelines, Review Timeframes): if a case needs a follow-up from us or another team and the player asks when to expect an update, give a timeframe of up to 2 business days, whichever team is reviewing. This does not apply to procedures with their own timeframe (Data Requests, Complaints, etc.). Exception: accounts marked "Under review by Compliance" in notes/audit get 3-4 weeks.';
+
+const SCENARIO_AUDIT_V27 = {
+  'noc-2': {
+    kbNeeded:['Manual Adjustments & Goodwill policy line (or written TL/QA direction) on whether an expired, never-claimed promotion can ever be reinstated, and who approves it'],
+    pg:{
+      kbText:'REAL KB (Promotions: Key Information): "Expired" means the promotion period has elapsed and the player is no longer eligible. The Manual Adjustments table’s "Expired Free Spins" entry (3-day reissue window) covers spins already awarded that expired unused - a DIFFERENT case from a promotion that expired before the player ever opted in. No supplied KB says an expired, never-claimed promotion can be reinstated. So declining because the promotion expired is consistent with the KB. Requesting a review before offering anything is also acceptable. If a review is requested, the decision must be viewed and communicated before the chat ends, and any approved exception must be framed as one-time.',
+      requiredActions:['Check Promotion History and confirm the player never opted in or deposited for the Weekend Reload (expired before engagement, not the awarded-then-expired case)','Explain the outcome consistently with the KB definition of Expired, OR request a review before offering any exception - never grant or promise reinstatement on own authority','If a review was requested: view the decision before telling the player any outcome, communicate it clearly, and if approved frame it as a one-time exception','Describe the Midweek Spins alternative only with the terms Case Data gives (opt-in, $20+ deposit, 20 free spins, valid until Wednesday 11:59pm)'],
+      criticalErrors:'Promising or applying reinstatement without a review is unsupported. Inventing Midweek Spins terms not in Case Data is an unsupported claim. Requesting a review and never communicating its outcome leaves the case unresolved. Declining because the promotion expired is consistent with the KB definition of Expired and is NOT an error.',
+      ambiguityNotes:NOT_SCORED_PREFIX+'whether the agent declines outright or requests a review first. Both are defensible on the supplied KB; the KB does not say whether an exception is ever possible for this case.'
+    }
+  },
+  'adv-1': {
+    kbNeeded:['RG Triggers: Recognition & Response - the exact next step after a check-in where the player does not confirm loss of control (confirm with Compliance)'],
+    pg:{ criticalErrorsAppend:' Self-excluding on a grey-zone answer without confirmed loss of control is not supported (TL direction: when in doubt, suspend).', ambiguityNotes:RG_GREY_ZONE_NOTE }
+  },
+  'rg-2': {
+    kbNeeded:['RG Triggers: Recognition & Response - next step after a check-in where the player plays it down (confirm with Compliance)'],
+    pg:{
+      requiredActionsReplace:{0:'Resolve the promo question with real KB: the player opted in and met the requirements but the reward was not awarded, so manually award it (Award Promotion) and confirm it'},
+      criticalErrorsAppend:' Self-excluding on this statement without confirmed loss of control is not supported (TL direction: when in doubt, suspend).',
+      ambiguityNotes:'Real Compliance escalation (August): a player calling themselves "an addict", even as a joke, "requires at least an RG interaction". The promo fix is real KB (Promotions: Key Information). '+RG_GREY_ZONE_NOTE
+    }
+  },
+  'rg-3': {
+    kbNeeded:['RG Triggers: Recognition & Response - confirm essentials-framed statements sit under Indirect Statements and list the full suspension steps for this case'],
+    caseAdd:[{id:'gd1', tab:'Transaction History', label:'Auto-Deposit status (Gigadat)', value:'registeredForAutodeposit: true - enabled under the player’s own name', gated:true, gateLabel:'View Transaction History'}],
+    pg:{
+      requiredActionsReplace:{0:'Answer the withdrawal question with the real Interac KB: check status AND Auto-Deposit before responding (In Progress with Auto-Deposit ON is normal, usually minutes to a few hours, rarely up to 24 hours; PayTech only after 24 hours)'},
+      ambiguityNotes:'Real Compliance escalation (August, verbatim): the statement "I just need the money to buy my kids clothes for school" - even though the player said they were not compromising their finances - "should fall under indirect statements as it’s more close to ‘I need this to pay rent / buy food / cover essentials’ ... the account should have been suspended not self-excluded." TL direction (1:1 coaching): when in doubt, suspend, never self-exclude on the spot. A genuine check-in before suspending is fine and is not penalised. '+NOT_SCORED_PREFIX+'which extra steps go with the suspension (marketing off, follow-up email) until the RG Triggers article is re-checked; the scored parts are suspend (not self-exclude) and hand off to Compliance/Player Care.'
+    }
+  },
+  'rg-4': {
+    kbNeeded:['RG Triggers: Recognition & Response - definition of a "concerning statement" and whether it is always escalated to Player Care','Tag usage: whether "RG: Intervention: Concerning Statement" is a primary or secondary tag'],
+    tagUnverified:true,
+    pg:{
+      kbText:'REAL COMPLIANCE ESCALATION (August, verbatim): "when agents are escalating concerning statements, they block all deposits, gameplay, AND withdrawals. Please issue a reminder that for concerning statements, they should be restricting deposits and gameplay unless they have identified any other issue related to PM, which makes sense to restrict withdrawals as well." So: restrict deposits and gameplay; leave withdrawals open unless there is a separate payment-method issue (none on this account).',
+      escalationCriteria:'The Compliance note describes agents escalating concerning statements, so escalating to Player Care/Compliance is expected practice and is never penalised. '+NOT_SCORED_PREFIX+'whether escalation is mandatory for every concerning statement.',
+      ambiguityNotes:'The restriction scope (deposits and gameplay, not withdrawals) is real Compliance direction. The primary tag for this case is unconfirmed, so tag choice is not scored. Nothing here claims a concerning statement is a "lighter" or "heavier" category than Direct/Indirect Statements - the supplied material does not rank them.'
+    }
+  },
+  'esc-5': {
+    kbNeeded:['Compliance Escalations (Complaints) - the complaint response timeframe, if any, and what agents tell a player who follows up'],
+    caseReplace:{complaint1:'HelpDesk complaint ticket ID: O8MNDB - INTERNAL REFERENCE ONLY, NOT PLAYER-FACING. Refund complaint escalated to the Complaints team 6 days ago. No update logged yet.'},
+    set:{kbSource:'Real KB: Chat Guidelines (Review Timeframes - the 2-business-day timeframe does NOT apply to complaints) and the complaint wording in the Risk & Fraud account-closure article (official response by email to the registered address, Section 30 of the Terms of Use). Real operational fact (TL-supplied, Oct 2026): complaints are escalated through a HelpDesk ticket whose ID is an internal staff reference, not a player-facing complaint reference. No complaint-specific timeframe has been supplied, so none is scored.'},
+    pg:{
+      kbTopic:'Complaint Follow-Up Under Threats - Honest Status, No Invented Timeframe, No Player-Facing Reference',
+      kbText:'REAL OPERATIONAL FACT (TL-supplied): a complaint is escalated through a HelpDesk ticket. The ticket ID is an internal reference staff use to find the case. It is not a player-facing complaint reference and must not be given out as one. There is no customer complaint-reference system. '+REAL_COMPLAINT_ROUTE+' '+CG_REVIEW_TIMEFRAMES+' Because complaints are excluded from that 2-business-day timeframe and no complaint timeframe has been supplied, the agent should not quote 2 business days or any other window or date for the complaint.',
+      requiredActions:['Check the existing complaint ticket and its status before responding','Give an honest current status, even if the honest answer is "still with the Complaints team, no update yet"','Tell the player the official response comes by email to their registered address - without quoting a timeframe or date','If asked for a complaint or reference number: explain there is no customer reference they need to keep - it is recorded on their account and any agent can find it - and do not give out the internal HelpDesk ticket ID','Note on the case that the player followed up and has had no update','Stay calm and non-defensive through threats or repeated demands - threats do not change the complaint status'],
+      criticalErrors:'Promising a specific date or outcome ("this will be resolved by tomorrow") is a critical error. Quoting "up to 2 business days" (or any other window) for a complaint is unsupported: the Chat Guidelines exclude complaints from that timeframe. Giving the internal HelpDesk ticket ID as a player-facing complaint reference is incorrect. Inventing a customer complaint-reference or tracking system is incorrect. Getting defensive, arguing back or matching the player’s hostility is a Player Experience failure. Not giving out the ticket ID is correct handling and must never be scored as withholding.',
+      ambiguityNotes:'Mixed: the internal-ticket fact is TL-supplied; the Review Timeframes exclusion and the email-response wording are real KB; the complaint-specific timeframe has not been supplied, so no window is scored. Section 30 does not need to be quoted to the player.'
+    }
+  },
+  'esc-7': {
+    kbNeeded:['Betty Bingo KB - when Crack the Code cards/progress expire or reset, so the explanation can be scored'],
+    caseReplace:{ctc1:'Player had 3 Crack the Code vault cards issued yesterday. None are currently active on the account. The record does not say why they are no longer active.'},
+    pg:{
+      kbText:'REAL TAGGING GUIDE: "‘Cards’ is ambiguous in Bingo. Could mean bingo game cards (Bingo: Free Cards) or Crack the Code side-game cards (Bingo: Crack the Code). Always clarify with the player first." Clarify before investigating either system. REAL KB (Betty Bingo, as used in the Bingo disconnection scenarios): Bingo issues that do not resolve as expected go to #eng-escalations.',
+      requiredActions:['Ask the player which cards they mean - regular Bingo cards or Crack the Code - before investigating either','Investigate only the system the player confirms, using Case Data','Explain only what the record shows (3 Crack the Code cards issued yesterday, none active now) - do not state a reason the record does not give','Tag the case based on what the player actually confirmed'],
+      optionalActions:['If the player seems unsure, briefly describe the difference between the two systems','If the player believes cards are missing that should still be active, check before answering and use #eng-escalations if something has genuinely not worked as expected'],
+      criticalErrors:'Investigating and answering about the wrong system without asking first contradicts the tagging guide’s explicit instruction. Tagging on a guess rather than what was confirmed is a Q3 issue. Stating a reason for the cards no longer being active (for example "they expire at the end of the session") as fact is an unsupported claim - the record does not give one.',
+      ambiguityNotes:'Clarify-first and the tags are real (tagging guide). '+NOT_SCORED_PREFIX+'any explanation of Crack the Code expiry rules - not verified against the Betty Bingo KB in this file.'
+    }
+  },
+  'esc-10': {
+    kbNeeded:['Betty crisis / immediate-safety escalation procedure (who to alert, what to do in chat, any emergency-services guidance)','The correct primary tag for a non-gambling safety disclosure'],
+    tagUnverified:true,
+    set:{kbSource:'Real KB: Chat Guidelines, Difficult Chat status (self-harm/crisis chats: notify #cs-triage with the chat ID and a short note before switching; the tag "Difficult Chat" must be added). Real TL coaching (Cassidy, September): crisis-adjacent cases are raised visibly, never handled by privately DMing a peer. No Betty crisis-escalation procedure has been supplied, so the in-chat safety steps are general safety practice, not Betty process.'},
+    pg:{
+      kbTopic:'Immediate Safety Disclosure - Recognise, Prioritise, Raise It Visibly (Difficult Chat KB real; crisis procedure not supplied)',
+      kbText:'REAL KB (Chat Guidelines, Difficult Chat status): use for sensitive or very time-intensive cases such as self-harm/crisis chats. Before switching, notify the team in #cs-triage with the chat ID and a short note. The tag "Difficult Chat" must be added to the chat. REAL TL COACHING: raise crisis-adjacent cases visibly (channel / TL), never by privately DMing one colleague - private advice leaves no record and cannot be corrected. GENERAL SAFETY PRACTICE (not Betty KB): treat the disclosure as more important than the original question, check whether the player is safe right now, do not try to counsel or fix the relationship, and do not end the chat abruptly.',
+      requiredActions:['Recognise the disclosure as taking priority over the original account question','Raise it visibly: Difficult Chat status with a #cs-triage notice (chat ID + short note), and/or a TL or Senior Agent - not a private DM to one colleague','Add the "Difficult Chat" tag','Stay present and calm; do not try to counsel or resolve the relationship'],
+      optionalActions:['Ask whether the player is safe right now and whether they can contact emergency services (general safety practice - Betty procedure not supplied)'],
+      escalationCriteria:'Raise visibly as above. '+NOT_SCORED_PREFIX+'any specific Betty crisis destination or emergency-services script - not supplied.',
+      criticalErrors:'Carrying on with the account question as if nothing was said is a critical Player Experience and ownership failure. Ending the chat abruptly after the disclosure is a critical failure. Counselling the player about the relationship is outside the agent’s role. Handling it privately by DMing one colleague instead of raising it visibly contradicts real TL coaching. Not adding the "Difficult Chat" tag is a Q3 documentation miss per the Chat Guidelines.',
+      ambiguityNotes:'Primary tag is unconfirmed, so primary tag choice is not scored. No Betty crisis procedure has been supplied; only the Difficult Chat steps and the visible-escalation lesson are scored as process.'
+    }
+  },
+  'esc-11': {
+    kbNeeded:['Player Verification in LiveChat - which details agents verify in chat before discussing a restriction','How players submit documents Risk has requested (Fraud Requests Cheatsheet / Risk & Fraud Escalations)'],
+    pg:{
+      kbText:'REAL CHAT PATTERN (154 real chats on this tag): check what Risk actually requested, tell the player exactly what to provide, and be honest that Risk makes the final decision. '+CG_REVIEW_TIMEFRAMES+' REAL KB (Chat Guidelines, See the full picture): check the account and notes before replying and only ask the player for information you cannot find yourself.',
+      requiredActions:['Check Case Data for the actual restriction reason and what was requested before answering','Tell the player exactly what to submit (a photo of government-issued ID)','Be honest that Risk makes the final decision - no promised outcome','If asked how long the review takes: up to 2 business days (Review Timeframes KB) - no specific date'],
+      criticalErrors:'Promising a specific outcome ("this will definitely get unrestricted") is a critical error. Guessing at what is needed instead of checking is a critical error. Giving a timeframe other than the KB’s "up to 2 business days" (for example "within the hour" or "tomorrow") is unsupported.',
+      ambiguityNotes:NOT_SCORED_PREFIX+'which identity details the agent checks before discussing the restriction, and which channel the player uses to send the document - neither is in the supplied KB.'
+    }
+  },
+  'noc-5': {
+    kbNeeded:['Deposits via E-Transfer (Interac) - what "Started" means, the supported timeframe, and when to escalate'],
+    pg:{
+      kbText:'Investigate-before-reassuring is real (same standard as the validated Interac withdrawal KB, and Chat Guidelines: See the full picture / Take ownership). UNCONFIRMED (from a real chat pattern, not KB text in this file): that "Started" means received by the processor but not yet matched, and that it usually completes within 30 minutes, rarely a few hours. These are not scored until the Interac deposit KB is supplied.',
+      requiredActions:['Check Transaction History for the deposit’s actual status before responding','Tell the player honestly what the record shows (the deposit is there, status Started, not yet credited)','Do not invent a cause or a firm time','Give a clear next step (what happens if it is still not credited)'],
+      criticalErrors:'Saying "everything is fine" without checking Transaction History is a critical error. Inventing a specific cause or a firm promised time is an unsupported claim.',
+      escalationCriteria:NOT_SCORED_PREFIX+'the exact point at which a Started deposit is escalated - not in the supplied KB.',
+      ambiguityNotes:NOT_SCORED_PREFIX+'the meaning of "Started" and any specific timeframe. Do not credit or penalise an explanation of Started or a 30-minute / few-hours timeframe either way.'
+    }
+  },
+  'noc-8': {
+    kbNeeded:['Deposits via E-Transfer (Interac) - what "Started" means, the supported timeframe, and when to escalate'],
+    pgReplace:[
+      ['kbText','REAL CHAT PATTERN (same as the Interac Deposit Stuck at "Started" scenario): "Started" means the transfer was sent and received by the payment processor but not yet matched/credited. The supported timeframe is that a "Started" Interac deposit typically completes automatically within 30 minutes, rarely up to a few hours. If it stays unmatched well beyond that window, it is escalated to Payments. Neither the meaning of "Started" nor the timeframe is shown in Case Data - the agent is expected to know them.','UNCONFIRMED (real chat pattern, not KB text in this file, NOT SCORED): that "Started" means received by the processor but not yet matched, a usual 30-minute / few-hours timeframe, and the escalation point. Scored: checking the record before answering, not inventing a cause or firm time, and giving an honest next step.'],
+      ['requiredActions','Explain what \\"Started\\" means in plain terms','Tell the player honestly what the record shows (deposit received in our records, status Started, not yet credited)'],
+      ['requiredActions','Give the real supported timeframe (usually within 30 minutes, sometimes up to a few hours) and say what happens if it is still not credited after that','Give a clear next step (what happens if it is still not credited) without inventing a firm time'],
+      ['escalationCriteria','Not at 55 minutes - still inside the supported \\"rarely up to a few hours\\" range. Escalate to Payments only if it stays unmatched well beyond that window.','NOT SCORED (unconfirmed process): the exact escalation point for a Started deposit. Do not deduct for escalating or for not escalating at 55 minutes.'],
+      ['criticalErrors','Escalating at this point is premature. ','']
+    ]
+  },
+  'aht-2': {
+    readiness:'ENGINE_TEST_ONLY',
+    kbNeeded:['Retired from agent view in v27: its premise (a "routine" photo ID request out of nowhere) contradicts the TL correction used in aht-3 that document requests always have a Risk/Compliance trigger. aht-3 covers the same skill accurately.'],
+    tagUnverified:true
+  },
+  'aht-3': {
+    kbNeeded:['Confirm support@betty.ca is the route for documents Risk has requested (it is confirmed real for Email Change requests)'],
+    pg:{ kbTextAppend:' REAL KB (Chat Guidelines, If the player goes quiet): after 2 minutes send a quick check-in, after another 2 minutes a final message and a polite close - so leaving a chat idle while a player searches is not the documented flow. NOT SCORED: the "1 day remaining before further review" detail in Case Data is illustrative.' }
+  },
+  'ssc-2': {
+    kbNeeded:['None - run live once and review, then promote to Pilot Ready'],
+    caseAdd:[{id:'gd1', tab:'Transaction History', label:'Auto-Deposit status (Gigadat)', value:'registeredForAutodeposit: true - enabled under the player’s own name', gated:true, gateLabel:'View Transaction History'}],
+    pg:{ requiredActionsReplace:{0:'Answer the withdrawal question with the real Interac KB: check status AND Auto-Deposit before responding (In Progress with Auto-Deposit ON is normal, usually minutes to a few hours, rarely up to 24 hours)'} }
+  },
+  'ssc-1': { kbNeeded:['None - run live once and review, then promote to Pilot Ready'] },
+  'ssc-3': { kbNeeded:['None - run live once and review, then promote to Pilot Ready'] },
+  'noc-9': {
+    kbNeeded:['None - run live once and review, then promote to Pilot Ready'],
+    pg:{ ambiguityNotes:'No KB is supplied for chargeback or regulator threats; keep giving the accurate answer. '+REAL_COMPLAINT_ROUTE }
+  },
+  'noc-7': {
+    kbNeeded:['Real crash-game provider rules for cash-out timing (or swap the game for one Betty actually offers)','Manual Adjustments & Goodwill policy line on refunds/credits for a correctly settled round','Tag guidance for a disputed crash-game cash-out']
+  },
+  'rg-6': {
+    kbNeeded:['Game Fairness KB article (referenced in this file as including its own RG questions) - so the fairness explanation can be scored against it','RG Triggers: next step after a grey-zone answer (confirm with Compliance)'],
+    pgReplace:[
+      ['requiredActions','Do not jump straight to restrictions or self-exclusion before clarifying an ambiguous statement','Do not self-exclude on an ambiguous statement; a precautionary suspension with escalation is not penalised'],
+      ['criticalErrors','Restricting or self-excluding on an ambiguous statement without first clarifying is an over-action.','Self-excluding on an ambiguous statement without confirmed loss of control is not supported (TL direction: when in doubt, suspend).']
+    ],
+    pg:{ ambiguityNotes:RG_GREY_ZONE_NOTE+' The fairness explanation is general coaching (rounds are independent and random) and is scored only for not hinting that a win is due or that patterns exist - not against a Betty KB script.' }
+  },
+  'esc-20': {
+    kbNeeded:['Manual Adjustments & Goodwill policy line on refunds for correctly settled rounds','Tag guidance when a dispute ends in a closure request'],
+    pgReplace:[
+      ['criticalErrors','Promising a manager will call, or inventing a complaint email/route, is a critical error.','Promising a manager will call, or inventing a complaint email address or any route other than the real formal complaint process, is a critical error.'],
+      ['requiredActions','Handle the manager request per KB: no live transfer, the agent owns it - without inventing a manager callback or complaint address','Handle the manager request per KB: no live transfer, the agent owns it - without inventing a manager callback; if she wants to complain, the real formal complaint route may be offered']
+    ],
+    pg:{ kbTextAppend:' '+REAL_COMPLAINT_ROUTE }
+  },
+  'esc-21': {
+    kbNeeded:['None for the scored process - run live once and review'],
+    pgReplace:[
+      ['kbText','No route for complaining about an agent is supplied in this scenario.',REAL_COMPLAINT_ROUTE],
+      ['requiredActions','Handle repeated manager demands consistently without inventing a callback, an email address, a ticket route or a complaint channel','Handle repeated manager demands consistently; if he asks how to complain, offer the real formal complaint route - never invent a callback, an email address or a phone line'],
+      ['criticalErrors','Inventing a complaint email, address, ticket route or manager callback is an unsupported claim.','Inventing a complaint email address, phone line or manager callback is an unsupported claim; offering the real formal complaint route is correct.'],
+      ['ambiguityNotes','No route for \\"how do I complain about you\\" is supplied, so the correct handling is to not invent one. ','']
+    ]
+  },
+  'adv-2': {
+    kbNeeded:['None for the scored process - run live once and review'],
+    set:{kbStatus:'mixed', kbSource:'Real KB: Chat Guidelines (Review Timeframes; Take ownership of the case; See the full picture). The previous agent’s note and the open withdrawal are illustrative case data.'},
+    pg:{
+      kbText:CG_REVIEW_TIMEFRAMES+' REAL KB (Chat Guidelines, Take ownership): give accurate, complete information, say what will happen next, and follow the correct procedure and escalation paths. REAL KB (See the full picture): check internal notes before replying. Coaching (not KB): own the missed commitment without blaming the colleague.',
+      requiredActions:['Check Account Notes for the prior commitment before responding','Acknowledge the missed commitment directly, without blaming the colleague','Do not repeat an unconfirmed specific time (for example "by end of day")','If asked when to expect an update: up to 2 business days (Review Timeframes KB)'],
+      criticalErrors:'Repeating a specific unconfirmed promise ("it will definitely be done today") is a critical error. Giving a timeframe other than the KB’s "up to 2 business days" for the pending follow-up is unsupported.'
+    }
+  }
+};
+
+function applyScenarioAudit(AUDIT, tag){
+  Object.keys(AUDIT).forEach(id=>{
+    const a = AUDIT[id];
+    const s = SCENARIOS.find(x=>x.id===id);
+    if(!s){ console.warn('[audit v27] missing scenario', id); return; }
+    if(a.kbNeeded) s.kbNeeded = a.kbNeeded; else if(!s.kbNeeded) s.kbNeeded = [];
+    s[tag] = true;
+    if(a.personaAppend) s.personaPrompt = (s.personaPrompt||'') + a.personaAppend;
+    if(a.personaReplace) a.personaReplace.forEach(([from,to])=>{ if(!(s.personaPrompt||'').includes(from)){ console.warn('[audit] '+id+' persona text not found'); return; } s.personaPrompt = s.personaPrompt.replace(from,to); });
+    if(a.readiness) s.readiness = a.readiness;
+    if(a.tagUnverified) s.tagUnverified = true;
+    if(a.set) Object.assign(s, a.set);
+    if(a.caseReplace) (s.caseData||[]).forEach(c=>{ if(a.caseReplace[c.id]) c.value = a.caseReplace[c.id]; });
+    if(a.caseAdd) a.caseAdd.forEach(c=>{ if(!(s.caseData||[]).some(x=>x.id===c.id)) s.caseData.push(Object.assign({},c)); });
+    const pg = s.processGrounding = s.processGrounding || {};
+    if(a.pgReplace) a.pgReplace.forEach(([field, from, to])=>{
+      const fromN = from.replace(/\\"/g,'"'), toN = to.replace(/\\"/g,'"');
+      if(Array.isArray(pg[field])){
+        let i = pg[field].indexOf(fromN);
+        if(i>=0){ pg[field][i] = toN; return; }
+        i = pg[field].findIndex(x=>typeof x==='string' && x.includes(fromN));
+        if(i<0){ console.warn('[audit] '+id+'.'+field+' item not found'); return; }
+        pg[field][i] = pg[field][i].replace(fromN, toN);
+      }else if(typeof pg[field]==='string'){
+        if(!pg[field].includes(fromN)){ console.warn('[audit] '+id+'.'+field+' text not found'); return; }
+        pg[field] = pg[field].replace(fromN, toN);
+      }
+    });
+    if(a.pg){
+      const p = a.pg;
+      ['kbTopic','kbText','escalationCriteria','criticalErrors','ambiguityNotes'].forEach(k=>{ if(p[k]!==undefined) pg[k]=p[k]; });
+      ['requiredActions','optionalActions'].forEach(k=>{ if(p[k]) pg[k]=p[k].slice(); });
+      if(p.requiredActionsReplace) Object.keys(p.requiredActionsReplace).forEach(i=>{ pg.requiredActions[Number(i)] = p.requiredActionsReplace[i]; });
+      if(p.criticalErrorsAppend) pg.criticalErrors = (pg.criticalErrors||'') + p.criticalErrorsAppend;
+      if(p.kbTextAppend) pg.kbText = (pg.kbText||'') + p.kbTextAppend;
+      if(p.optionalActionsAdd) pg.optionalActions = (pg.optionalActions||[]).concat(p.optionalActionsAdd);
+      if(p.requiredActionsAdd) pg.requiredActions = (pg.requiredActions||[]).concat(p.requiredActionsAdd);
+      if(p.ambiguityNotesAppend) pg.ambiguityNotes = (pg.ambiguityNotes||'') + p.ambiguityNotesAppend;
+    }
+  });
+}
+applyScenarioAudit(SCENARIO_AUDIT_V27, 'auditedV27');
+
+// ---------- v28: RE-GROUNDED ON KB SUPPLIED OCT 23 ----------
+// Sources: RG Triggers: Recognition & Response; RG Questions Repository; Game Fairness; Self-Harm protocol;
+// Compliance Escalations (Complaints); Refund Requests; plus Timeouts, Self-Exclusion, BetGuard/VSE, RG Limits,
+// RG Risk Model and RG/SOF Reviews (reference). Rules that were NOT SCORED in v27 are scored again where these
+// articles settle them.
+const KB_RG_INDIRECT = 'REAL KB (RG Triggers: Recognition & Response). Indirect Statement examples include "I need this to pay rent / buy food / cover essentials", "I need a big win", "I’m counting on this win", "I’m in a difficult situation". Via CHAT: (1) respond with empathy and start a soft RG check-in ("Since you’ve mentioned concerns about your play, I’d like to ask a few quick questions to make sure everything feels okay."); (2) ask open-ended questions from the RG Questions Repository (e.g. "Can you walk me through how gambling has affected your finances over time?", "Have you ever found yourself using money meant for essentials to gamble?"); if the player confirms loss of control or risk behaviour, follow Direct Statement handling; if they refuse or drop: (3) suspend as a precaution (Reason: Responsible Gaming), (4) disable marketing preferences, (5) send a follow-up email offering support and SE options, (6) escalate to Player Care with context and chat ID. "I’ve been losing too much" statements: find out whether it is RG or an RNG complaint; if it confirms RG concerns or the player does not specify, follow Direct Statement handling. Never ignore something because it was not said clearly - make the player elaborate. Direct Statement via CHAT: restrict deposits and gameplay, indicate intent to self-exclude and let the player choose the duration (6 months if the chat ends first), then a follow-up email. If suspending or self-excluding mid-chat with an active balance, ask the player to withdraw first where the situation allows.';
+const KB_RG_GREY = 'GREY-ZONE ANSWER (closest real KB): the Game Fairness article defines a "negative response" as the player confirming some impact or discomfort without clear gambling harm (its examples include "It’s fine financially, I just expected better luck" and "I can afford it, I just don’t like how much I’ve been losing lately"): offer RG tools and escalate to Player Care. Compliance Escalations adds that a concerning statement made in a chat still has to be escalated to Player Care, and RG Triggers requires clear internal notes (what the player said, chat ID, any escalation). So after a genuine check-in with a grey-zone answer: document it, offer suitable RG tools, and escalate to Player Care with context and chat ID. A precautionary suspension is not penalised. Self-exclusion is for Direct Statements / confirmed harm only.';
+const KB_COMPLAINTS = 'REAL KB (Compliance Escalations, Complaints). Valid complaints always go to the Complaints team: regulator (AGCO/AIGC) or legal threats, threats involving media, a request to submit an official complaint, RG complaints, fraud/ID theft, among others. Poor service, an incorrect resolution, a technical issue or a significantly delayed payment: CS tries to resolve first and escalates if the player keeps disputing. RNG/RTP concerns, lack of bonuses, and police threats with no legitimate basis are not valid complaints on their own. Complaints can be taken in chat - do not default to sending the player to complaints@betty.ca. Do not give resolution timeframes (Compliance does that in their follow-ups). Do not reveal internal escalation criteria - say "I’ve escalated this to the appropriate team for further review." If a player asks for a complaint ID, agent names or the company’s "final stance" to take to a regulator: do not explain or justify, do not confirm a decision is final, do not share a complaint ID or case details - escalate to Complaints.';
+const KB_REFUND = 'REAL KB (Refund Requests). A refund request is a player asking for money they spent back, together with a complaint, RG concerns or threats to escalate. Do not discuss or explain refunds, eligibility or outcomes. Say: "Thanks for sharing this with us - we’ve noted your request and will pass it along to the team who handles these reviews. Once the team completes the review, they will follow up with you via email." Escalate to the Complaints Team. Refund requests without a complaint, RG concern or threat go through the CS Manager Review flow. (Bets placed by accident follow a separate procedure.)';
+const KB_SELF_HARM = 'REAL KB (Self-Harm / immediate distress protocol). Applies to suicidal thoughts, self-harm intentions, immediate emotional or psychological distress, or phrases suggesting danger to self - "If unsure, follow this procedure anyway." (1) Stay present: do not close the chat, stay calm, no dismissive replies, no promises or personal opinions, focus on safety and support, and restrict deposits and gameplay immediately. (2) Post in #cs-main-channel to request the TL on shift ("@here Hey team, I have a player on chat making self-harm statements. Is there a TL available to assist with this case?"); if no TL is on shift, call Laurie. The original agent stays on the chat while the TL supports in the background. (3-5) The TL chooses the route (911 for immediate danger; ConnexOntario 1-866-531-2600 if overwhelmed but not in immediate danger; if in doubt, the safer route), handles emergency services, alerts Compliance in #support-compliance-escalations, creates the HelpDesk ticket, and self-excludes for 6 months after the chat. Tag in the protocol: RG: Self-Harm Statement. REAL KB (Chat Guidelines): Difficult Chat status for crisis chats, with a #cs-triage notice and the "Difficult Chat" tag.';
+const KB_GAME_FAIRNESS = 'REAL KB (Game Fairness). Do not mirror the player’s tone. Empathise, then explain RNG and RTP in a human way: every spin is independent, there are no patterns, RTP is an average over a very large number of spins (not per session), so wins cannot be guaranteed; Betty hosts the games and cannot control wins. Volatility can be explained (and lower-volatility games suggested, without promising wins). Share the RG page (betty.ca/responsible-gaming). Optional: the player’s rewards stats, or their RTP only if it is 98%+. If regulation comes up: licensed by iGO/AGCO (Ontario) or AIGC (Alberta), games tested over tens of millions of spins. A complaint alone is not an RG concern, but review history for RG signals. On the 3rd fairness complaint within 30 days, ask the two RG questions ("How does gaming affect your personal life and finances?" / "Do you find yourself continuing to play even when you’re not enjoying it?").';
+
+const SCENARIO_AUDIT_V28 = {
+  'adv-1': {
+    kbNeeded:['None - run live once and review'],
+    pg:{
+      kbText:'Withdrawal: real Interac KB - In Progress with Auto-Deposit ON is normal up to 24 hours, no action needed. Promo: real KB - opted in, all requirements met, Reward Status not Awarded: manually award with Award Promotion. '+KB_RG_INDIRECT+' '+KB_RG_GREY,
+      requiredActions:['Identify and address all three threads, not just the first one raised','Resolve the withdrawal by checking status AND Auto-Deposit before responding','Check promo eligibility and manually award via Award Promotion','Notice the spending comment and start a genuine soft RG check-in with open-ended questions (RG Questions Repository) that reference what the player said','After the grey-zone answer: document it, offer suitable RG tools, and escalate to Player Care with context and chat ID'],
+      criticalErrors:'Escalating either transactional issue unnecessarily is a process error. Confirming the withdrawal is fine without checking Auto-Deposit is a critical error. Never engaging with the spending comment is a critical RG miss. Generic empathy or a resource link with no real open-ended question is not a check-in. Carrying on after the grey-zone answer with no note and no Player Care escalation misses the KB handling. Self-excluding on a grey-zone answer is not supported (Direct Statements only).',
+      ambiguityNotes:'The grey-zone handling is taken from the closest real KB (Game Fairness "negative response" + Compliance Escalations concerning-statement rule), because RG Triggers itself only defines the confirmed-harm and refuse/drop outcomes for Indirect Statements.'
+    }
+  },
+  'rg-2': {
+    kbNeeded:['Compliance answer: after a joke-framed "I’m an addict" that the player then plays down, is full Direct Statement handling (restrict + self-exclusion intent) required?'],
+    pg:{
+      kbText:'REAL KB (RG Triggers): "I’m addicted" is listed under Direct Statement - statements of addiction. Never ignore something because it was not said clearly - make the player elaborate. Real Compliance escalation (August) on a joke-framed "I’m just an addict": "while it seems they might have been joking, such a statement requires at least an RG interaction." Promo: real KB - opted in, requirements met, not Awarded: manually award. '+KB_RG_INDIRECT+' '+KB_RG_GREY,
+      requiredActions:['Resolve the promo with real KB: manually award it (Award Promotion) and confirm it','Notice the "just an addict" comment even though it is a joke','Make the player elaborate: genuine open-ended RG questions that reference what they said - not a generic wellness line','At minimum: document the exchange and escalate to Player Care with context and chat ID','If the player confirms loss of control: Direct Statement handling (restrict deposits and gameplay, indicate self-exclusion intent, let them choose the duration)'],
+      criticalErrors:'Letting the joke pass with no RG engagement is the exact error Compliance flagged. A generic platitude that does not reference what the player said is treated the same as silence. Engaging but never documenting or escalating to Player Care misses the KB handling.',
+      ambiguityNotes:NOT_SCORED_PREFIX+'whether, after the player plays it down, the agent goes straight to full Direct Statement handling (the KB lists "I’m addicted" as a Direct Statement) or treats the answer as grey-zone (document, offer tools, Player Care). Both are defensible on the supplied KB and Compliance’s "at least an RG interaction". Ask Compliance.'
+    }
+  },
+  'rg-3': {
+    kbNeeded:['None - run live once and review (if Compliance’s view changes, update this scenario)'],
+    set:{kbStatus:'validated'},
+    pg:{
+      kbText:KB_RG_INDIRECT+' REAL COMPLIANCE RULING (August, this exact statement): "I just need the money to buy my kids clothes for school" - even though the player said they were not compromising their finances - "should fall under indirect statements ... the account should have been suspended not self-excluded." So this scenario requires the suspension path: check-in, then suspend (Reason: Responsible Gaming), disable marketing, follow-up email, Player Care with context and chat ID.',
+      requiredActions:['Answer the withdrawal question with the real Interac KB: check status AND Auto-Deposit before responding','Recognise the essentials comment as an Indirect Statement (the KB lists "I need this to pay rent / buy food / cover essentials")','Respond with empathy and start the soft RG check-in with open-ended questions','Suspend the account (Reason: Responsible Gaming) - not self-exclude - and tell the player clearly what is happening and why','Disable marketing preferences, send the follow-up email offering support and SE options, and escalate to Player Care with context and chat ID'],
+      criticalErrors:'Self-excluding instead of suspending is the exact error Compliance flagged. Ignoring the statement is a critical RG miss. Suspending without escalating to Player Care leaves the case incomplete. Skipping the check-in entirely and going straight to the suspension is a process gap (KB steps 1-2), not a critical error.',
+      ambiguityNotes:'The RG Triggers chat flow suspends when the player refuses or drops; Compliance ruled this exact statement should have been suspended even though the player answered. The scenario follows the Compliance ruling.'
+    }
+  },
+  'rg-4': {
+    kbNeeded:['Tag usage: whether "RG: Intervention: Concerning Statement" is a primary or secondary tag'],
+    pg:{
+      kbText:'REAL COMPLIANCE ESCALATION (August): "for concerning statements, they should be restricting deposits and gameplay unless they have identified any other issue related to PM, which makes sense to restrict withdrawals as well." No PM issue on this account, so withdrawals stay open. '+KB_RG_INDIRECT+' REAL KB (Compliance Escalations): a concerning statement made in a chat still has to be escalated to Player Care.',
+      requiredActions:['Resolve the player’s actual account question','Make the player elaborate on "I probably spent more than I should have" with open-ended RG questions (KB: find out whether it is RG or an RNG complaint)','Restrict deposits and gameplay','Check for a separate payment-method issue before touching withdrawals - with none, leave withdrawal access open','Escalate to Player Care with context and chat ID, and leave a clear note','If the player confirms RG harm: Direct Statement handling (indicate self-exclusion intent, let them choose the duration)'],
+      optionalActions:['If suspending or self-excluding while the $140 balance is there, ask the player to withdraw it first (RG Triggers note)'],
+      escalationCriteria:'Escalate to Player Care with context and chat ID (Compliance Escalations; RG Triggers reminders).',
+      criticalErrors:'Restricting withdrawals with no separate payment-method reason is the exact error Compliance flagged. Ignoring the statement is a critical RG miss. Restricting without asking the player to elaborate, or without escalating to Player Care, is a process gap.',
+      ambiguityNotes:'Primary tag is unconfirmed, so primary tag choice is not scored.'
+    }
+  },
+  'rg-6': {
+    kbNeeded:['Tag guidance for a fairness complaint (is "Slots: Fairness Concern" the real tag?)'],
+    caseAdd:[{id:'fair1', tab:'Account Notes', label:'Previous fairness complaints (last 30 days)', value:'None on file - this is the first fairness complaint in the last 30 days.', gated:true, gateLabel:'View Account Notes'}],
+    set:{kbSource:'Real KB: Game Fairness; RG Triggers: Recognition & Response; RG Questions Repository; Compliance Escalations. Promotion details come only from Case Data.'},
+    pg:{
+      kbTopic:'Fairness Complaint (real Game Fairness KB) + Grey-Zone RG Statements (real RG Triggers KB)',
+      kbText:KB_GAME_FAIRNESS+' Promotions: only describe what Promotion History shows; never promise or hint at future offers. '+KB_RG_INDIRECT+' '+KB_RG_GREY,
+      requiredActions:['Explain fairness in plain words adapted to what the player said (independent spins, no patterns, RTP is a long-run average, wins cannot be guaranteed) without repeating the same canned paragraph or mirroring her tone','Check Promotion History before talking about promotions and describe only what it shows','Review the account for RG signals and previous fairness complaints (first in 30 days here, so the two repeated-complaint RG questions are not triggered by that rule)','Recognise "I’ve put two grand in this month" and "if I knew a win was coming I’d deposit more" as RG-relevant and start a genuine open-ended check-in','After the grey-zone answer: document it, offer suitable RG tools, and escalate to Player Care with context and chat ID'],
+      optionalActions:['Share the RG page (betty.ca/responsible-gaming)','Explain volatility and how to filter for lower-volatility games, without promising wins','If she keeps rejecting the fairness answer with nothing further to do, close using the Managing Long Chats flow (Chat Guidelines)','Skip asking for a rating - fairness disputes are a sensitive topic for rating prompts (coaching only)'],
+      escalationCriteria:'Player Care after the grey-zone answer (KB grey-zone handling). Direct Statement handling only if loss of control is confirmed. The fairness complaint itself is not a valid Complaints-team complaint (RNG/RTP concerns).',
+      criticalErrors:'Never engaging with the spending statements is a critical RG miss. A generic "play responsibly" line is not a check-in. Hinting a win is due, that patterns exist, or promising future promotions is an unsupported claim. Self-excluding on an ambiguous statement is not supported. Restricting before asking anything is not the KB order (check-in first). Repeating the same canned fairness explanation after she has called it out is a Player Experience issue. Escalating the fairness complaint itself to Complaints is not supported (RNG/RTP concerns are not valid complaints).',
+      ambiguityNotes:'Grey-zone handling is taken from the Game Fairness "negative response" definition and the Compliance Escalations concerning-statement rule. Primary tag is unconfirmed, so tag choice is not scored.'
+    },
+    tagUnverified:true
+  },
+  'esc-5': {
+    kbNeeded:['None - run live once and review'],
+    set:{kbStatus:'validated', kbSource:'Real KB: Compliance Escalations (Complaints, incl. "final stance"/complaint-ID requests), Refund Requests, Chat Guidelines (Review Timeframes). Real operational fact (TL-supplied, Oct 2026): complaints are escalated through a HelpDesk ticket whose ID is an internal staff reference, not a player-facing complaint reference.'},
+    pg:{
+      kbText:'REAL OPERATIONAL FACT (TL-supplied): the HelpDesk ticket ID is an internal staff reference, not a player-facing complaint reference, and must not be given out as one. '+KB_COMPLAINTS+' '+KB_REFUND+' REAL KB (Chat Guidelines, Review Timeframes): the 2-business-day timeframe does not apply to complaints.',
+      requiredActions:['Check the existing complaint ticket and its status before responding','Give an honest status (still with the team, no update yet) and say they will follow up by email - without any timeframe or date','Do not discuss refund eligibility or likely outcome','If asked for a reference/complaint number while threatening the regulator: do not give the ticket ID or any case details, and do not explain, justify or call anything final - the case is with the appropriate team','Add the follow-up (and the new regulator/legal threats) to the existing complaint so the Complaints team sees it','Do not reveal internal escalation criteria','Stay calm and non-defensive through the threats'],
+      criticalErrors:'Giving any timeframe or date for the complaint is not supported (Compliance Escalations: Compliance gives timeframes in their follow-ups). Promising an outcome is a critical error. Discussing refund eligibility or outcome is not supported (Refund Requests). Giving out the internal ticket ID, or any complaint ID, is incorrect. Saying it was escalated "because you mentioned the regulator" reveals internal criteria. Getting defensive or matching hostility is a Player Experience failure. Not giving out the ticket ID is correct and must never be scored as withholding.',
+      ambiguityNotes:'None on the scored process. The ticket-ID fact is TL-supplied.'
+    }
+  },
+  'esc-20': {
+    kbNeeded:['Tag guidance when a dispute ends in a closure request'],
+    personaReplace:[
+      ['You ask for a refund. When it is refused, demand a supervisor.','You ask for a refund. When the agent refuses it, or says it has to go to another team for review instead of giving it to you now, demand a supervisor.'],
+      ['After the refund has been refused a second time, say "then close my account"','After the second time you do not get your refund on the spot (refused or "passed to the team"), say "then close my account"']
+    ],
+    pg:{
+      kbTopic:'Disputed Session + Refund Request With Threats (real Refund Requests / Complaints KB) + Manager Request and Account Closure (real KB)',
+      kbText:'The session records are illustrative case data. '+KB_REFUND+' '+KB_COMPLAINTS+' REAL KB (Customers Seeking Manager Assistance): no live transfer to a manager in chat; acknowledge the request, explain the agent can help, keep working the issue. REAL KB (Account Closure Requests): ask why if no reason is given; for a neutral reason such as being unhappy with a resolution, attempt retention once, then close the account if the player still wants it, and confirm it is closed.',
+      requiredActions:['Look up the specific session before answering, and explain it from the records (12 spins requested from the device and settled) - a technical complaint is one CS tries to resolve first','Do not state a cause for the spins as fact (for example autoplay or double taps)','When she asks for her money back while disputing it and threatening a lawyer and social media: do not refund, refuse, or discuss refund eligibility or outcome - say it has been passed to the team who handles these reviews and they will follow up by email, and escalate to the Complaints team','Handle the manager request per KB: no live transfer, the agent owns it - without inventing a manager callback','Treat "close my account" as a real new request: attempt retention once given the neutral reason, then close it and confirm','Respond to genuinely new points raised late instead of dismissing them','Stay composed and non-defensive across the whole long chat','Once everything is answered and she still rejects it, close using the Managing Long Chats flow (Chat Guidelines): an explanation heads-up, then a final confirmation'],
+      escalationCriteria:'Complaints team for the refund request with legal and social-media threats (Refund Requests; Compliance Escalations). No escalation for the manager request (no live transfer).',
+      criticalErrors:'Refunding or crediting her, or promising or hinting at one, is a critical error. Refusing the refund as a final decision, or explaining refund eligibility, is not supported - the Refund Requests KB says not to discuss refunds, eligibility or outcomes. Not escalating the refund request with legal/social-media threats to the Complaints team misses a required escalation. Saying it was escalated because she mentioned a lawyer or social media reveals internal criteria. Giving a timeframe for the Complaints team is not supported. Ignoring the closure request, or never closing and confirming it, is a critical error. Stating a cause for the spins as fact is unsupported. Promising a manager will call is a critical error. Becoming curt, argumentative or defensive late in the chat is a Player Experience failure.',
+      ambiguityNotes:'The approved catalogue has no single tag covering both a disputed session and a closure. "Account: Closure Request" is preferred; "Slots: Game Crashed Mid-Spin" is an accepted alternate (acceptablePrimaryTags), provided the note records the closure and the Complaints escalation.'
+    }
+  },
+  'esc-21': {
+    kbNeeded:['None - run live once and review'],
+    pg:{
+      kbText:'REAL KB (Promotions: Key Information): opted in, all requirements met, Reward Status not Awarded - CS manually awards with Award Promotion. REAL KB (Customers Seeking Manager Assistance): no live transfer to a manager in chat; acknowledge, explain the agent can resolve it, and resolve the actual issue. '+KB_COMPLAINTS+' Here: poor service is something CS tries to resolve first (fixing and confirming the bonus is that resolution). If he asks to submit an official complaint, that is a valid complaint: take it in the chat and escalate to the Complaints team. REAL KB (Chat Guidelines): sustained bullying or harassment aimed at the agent follows the three-step warning flow; frustration and swearing about the situation do not.',
+      requiredActions:['Acknowledge the manager request without being dismissive: no live transfer, but the agent can fix this now','Check Promotion History, manually award the bonus, and confirm clearly that it is on the account','Take ownership instead of escalating a fix within Tier 1 authority','If he asks how to complain or wants to submit a complaint: take it in the chat and escalate to the Complaints team - no timeframe, no invented manager callback or phone line','Stay composed through competence digs and swearing; set a boundary only if it turns into sustained harassment of the agent'],
+      criticalErrors:'Repeating "I can’t transfer you" without ever fixing the bonus is a critical error. Escalating or handing off the bonus fix is a process error. Refusing to take a complaint he explicitly asks to submit, inventing a manager callback or phone line, or giving a complaint timeframe is not supported. Warning him for swearing about the situation is a process error. Getting defensive about the competence digs is a Player Experience failure.',
+      ambiguityNotes:'complaints@betty.ca is a real address, but the KB says not to default to it - treat sending him there instead of taking the complaint as a minor Q1 point, not a critical error. Where competence digs cross into harassment is a judgment call.'
+    }
+  },
+  'noc-9': {
+    kbNeeded:['None - run live once and review'],
+    pgReplace:[
+      ['requiredActions','Do not escalate to PayTech or promise a follow-up before 24 hours','Do not escalate the withdrawal to PayTech before 24 hours'],
+      ['criticalErrors','Escalating now is premature.','Escalating the withdrawal to PayTech now is premature. Not escalating the regulator threat to the Complaints team misses a required escalation; saying it was escalated because she mentioned the regulator reveals internal criteria.']
+    ],
+    pg:{
+      requiredActionsAdd:['Because she says she will report Betty to the regulator, escalate to the Complaints team (regulator threats are always valid complaints) - without revealing why, without a timeframe, and while still giving her the withdrawal status'],
+      escalationCriteria:'Withdrawal: PayTech only if funds are still missing after 24 hours with Auto-Deposit ON, or if she asks to cancel. Complaint: the regulator threat goes to the Complaints team now (Compliance Escalations).',
+      ambiguityNotes:'No KB is supplied for chargeback threats; keep giving the accurate answer. '+KB_COMPLAINTS
+    }
+  },
+  'noc-7': {
+    kbNeeded:['Real crash-game provider rules for cash-out timing (or swap the game for one Betty offers)','Tag guidance for a disputed crash-game cash-out'],
+    pgReplace:[
+      ['kbText','A round settled correctly according to that record is not eligible for compensation, and Tier 1 has no authority to refund it \\"on principle\\".','REAL KB (Refund Requests): agents never grant or discuss refunds; refund requests with a complaint, RG concern or threat go to the Complaints team, others through the CS Manager Review flow. REAL KB (Game Fairness / RG Triggers, Frustration): "rigged" claims - stay calm, explain RNG, review history for RG signals; RNG concerns are not valid complaints on their own.']
+    ],
+    pg:{ ambiguityNotesAppend:' '+NOT_SCORED_PREFIX+'which route the money-back demand takes (CS Manager Review flow vs Complaints) - scored only that the agent does not grant, promise or discuss a refund.' }
+  },
+  'esc-10': {
+    kbNeeded:['Confirm the tag for a non-self-harm safety disclosure (the protocol’s tag is "RG: Self-Harm Statement")'],
+    set:{kbStatus:'validated', kbSource:'Real KB: Self-Harm / immediate distress protocol ("If unsure, follow this procedure anyway"), Chat Guidelines (Difficult Chat status). Real TL coaching (Cassidy, September): raise it publicly, never by privately DMing a peer - matches the protocol’s #cs-main-channel step.'},
+    pg:{
+      kbTopic:'Immediate Safety Disclosure - Self-Harm / Distress Protocol (real KB)',
+      kbText:KB_SELF_HARM,
+      requiredActions:['Recognise the disclosure as taking priority over the original account question','Stay present: do not close the chat, stay calm, no dismissive replies, no promises or personal opinions','Restrict deposits and gameplay immediately','Post in #cs-main-channel requesting the TL on shift (not a private DM to one colleague), and stay on the chat while the TL supports','Do not try to counsel or fix the relationship; leave the emergency route (911 / ConnexOntario) to the TL'],
+      optionalActions:['Ask whether the player is safe right now, and keep them talking while the TL is on it','Set Difficult Chat status with a #cs-triage notice and add the "Difficult Chat" tag (Chat Guidelines)'],
+      escalationCriteria:'TL on shift via #cs-main-channel (Laurie by phone if no TL). The TL decides 911 vs ConnexOntario, alerts Compliance and self-excludes after the chat - those are TL steps, not scored against the agent.',
+      criticalErrors:'Carrying on with the account question after the disclosure is a critical failure. Closing the chat is a critical failure (protocol step 1). Not restricting deposits and gameplay misses a protocol step. Handling it by privately DMing one colleague instead of #cs-main-channel contradicts the protocol. Counselling, promising outcomes or giving personal opinions is outside the protocol.',
+      ambiguityNotes:'The protocol is written for self-harm and "immediate emotional or psychological distress" and says to follow it when unsure; this scenario applies it to a disclosure of danger from a partner. Primary tag is unconfirmed for this case, so tag choice is not scored.'
+    }
+  },
+  'esc-13': {
+    caseReplace:{round1:'Round result: Loss on base game, bonus round paid 1.8x the trigger bet - a below-average outcome. Round settled normally; no errors logged.'},
+    pgReplace:[
+      ['optionalActions','Explain the round outcome clearly using the integrity check result before the interaction escalates further','Explain the round outcome from the round record, and explain RNG/RTP in plain words (Game Fairness KB) before the interaction escalates further']
+    ]
+  }
+};
+
+applyScenarioAudit(SCENARIO_AUDIT_V28, 'auditedV28');
+
+// ---------- v29: TL direction on joke-framed addiction statements (Zainab, Oct 23) ----------
+const SCENARIO_AUDIT_V29 = {
+  'rg-2': {
+    kbNeeded:['None - run live once and review'],
+    set:{kbStatus:'validated'},
+    pg:{
+      kbText:'TL DIRECTION (Zainab, Oct 2026): there is no such thing as a joke. If a player says "lol I’m addicted", the agent does the RG checks (genuine open-ended RG questions). If the player clears the checks, they can keep playing, but the chat is still escalated to Player Care as an FYI for review. If the checks raise concern, follow Direct Statement handling. Consistent with: RG Triggers ("I’m addicted" is a listed Direct Statement; never ignore something because it was not said clearly - make the player elaborate), the real Compliance escalation (August: a joke-framed "I’m just an addict" "requires at least an RG interaction"), and the RG Triggers reminder to escalate to Player Care as FYI. Promo: real KB - opted in, requirements met, not Awarded: manually award. '+KB_RG_INDIRECT,
+      requiredActions:['Resolve the promo with real KB: manually award it (Award Promotion) and confirm it','Treat the "just an addict" comment as real, even though it is a joke','Do the RG checks: genuine open-ended RG questions that reference what the player said - not a generic wellness line','If the player clears the checks: let them carry on, and escalate the chat to Player Care as an FYI with context and chat ID, plus a clear internal note','If the checks raise concern (loss of control, risk behaviour): Direct Statement handling - restrict deposits and gameplay, indicate self-exclusion intent, let them choose the duration'],
+      criticalErrors:'Letting the comment pass because it was a joke is the exact error Compliance flagged. A generic platitude that does not reference what the player said is treated the same as silence. Clearing the player but not sending the chat to Player Care as an FYI misses a required step. Self-excluding a player who has cleared the checks is not supported.',
+      ambiguityNotes:'TL direction. Note for QA alignment: the RG Triggers table says Direct Statement handling "must be done for all direct statements"; this scenario follows the TL rule that a joke-framed statement gets RG checks first, with full Direct handling only if the checks raise concern. Restricting deposits/gameplay as an extra precaution is not penalised.'
+    }
+  }
+};
+applyScenarioAudit(SCENARIO_AUDIT_V29, 'auditedV29');
+
+// ---------- v30: KB supplied Oct 23 (Interac Deposits, Manual Adjustments, Player Verification in LiveChat, Betty Bingo hub, JetX game rules) ----------
+const KB_INTERAC_DEPOSITS = 'REAL KB (Deposits via E-Transfer (Interac)). Deposits are usually instant, but delays are possible: up to 5-35 minutes for both Interac e-Transfer (ETI) and Request for Money (RFM). "Started" = the deposit is processing or the player has not completed the transfer yet; it can also mean the details used do not let Wyzia match the transfer to the account. Handling a Started/Pending deposit: check the payment type in Gigadat (ETI or RFM). ETI: (1) ask whether the player was charged - if not, point them to the email prompting them to finish; (2) check the mandatory Message ID was included - without it the deposit eventually fails and the funds return to their bank in 1-2 business days; (3) check Gigadat for an amount mismatch; (4) ask whether they got the Wyzia/Gigadat confirmation email; (5) if everything was done correctly and 30-35 minutes have passed: escalate to PayTech with the template (Player ID, date/time, amount, transaction ID, Interac Reference Number) plus the confirmation-email screenshot, or, if they have no confirmation email, ask them to get the Interac Reference Number (IRN) from their bank and escalate with that. RFM: confirm they completed the request (many players confuse the "pending request" email with a completed deposit); if completed and 30-35 minutes have passed, escalate to PayTech with the Tracking Message or the IRN. Communication: reassure the player their funds are safe, never blame or imply fault on the player’s side, no ambiguous answers, always give an actionable next step.';
+const KB_JETX = 'REAL GAME RULES (JetX, SmartSoft - in-game Rules tab): "Use the collect button before the explosion... If the explosion happens, the stake is considered lost." "JetX is a realtime game, for which reason actions with cashout button is subject to delays depending on your internet connection, usually around 200-300 ms. When you click cashout you trigger a payout request, which is further settled at the value of an actual multiplier by the time it is processed by game server, providing there is no crash." "In the event that the game crashes before a cash out occurs, the player’s bet will be considered lost, regardless of whether they were using the auto cash out mode or intending to manually cash out." "The speed of connection or processor may have, or appear to have, an effect on the game." "The speed or skill of the player does not influence, or increase the chances of winning, or define the outcome of the game." Disconnection (loss of connection for more than 6 seconds) has its own rules: after the round starts, the system cashes the player out at the multiplier when the disconnection was detected. Players can read all of this in the game’s own Rules tab, and game rules/screens are allowed screenshots.';
+
+const SCENARIO_AUDIT_V30 = {
+  'noc-5': {
+    kbNeeded:['None - run live once and review'],
+    set:{kbStatus:'validated', kbSource:'Real KB: Deposits via E-Transfer (Interac). Real August chat data: "Deposit: Interac: Started" is the highest-volume tag surveyed (310 chats).'},
+    caseAdd:[{id:'gd1', tab:'Transaction History', label:'Gigadat transaction', value:'Interac e-Transfer (ETI). $75.00 initiated, $75.00 sent - no amount mismatch. Message ID included. Sent about 20 minutes ago, not yet matched to the Betty account.', gated:true, gateLabel:'Search the transaction in Gigadat'}],
+    personaAppend:' If asked: you were charged (the $75 left your bank), you did include the Message ID Betty gave you, and you have not seen a confirmation email from Interac/Gigadat yet.',
+    pg:{
+      kbTopic:'Interac Deposit "Started" Inside the 35-Minute Window (real KB)',
+      kbText:KB_INTERAC_DEPOSITS,
+      requiredActions:['Check the deposit in Transaction History and the transaction in Gigadat (payment type, amount, Message ID) before answering','Explain Started in plain words (the deposit is still processing / not matched yet) without blaming the player','Check the KB points with the player: were they charged, did they include the Message ID, did they get a confirmation email','Reassure the player their funds are safe and give the KB timeframe: usually instant, can take up to 35 minutes - it has been about 20','Give the next step: if it is still not credited after 30-35 minutes, come back with the confirmation email (or the Interac Reference Number from their bank) and it will be escalated to PayTech'],
+      optionalActions:['Mention the Wyzia email that prompts players to review unfinished transactions after 5 minutes, if relevant'],
+      escalationCriteria:'Not yet - about 20 minutes in, inside the KB’s 30-35 minute window. Escalate to PayTech only once 30-35 minutes have passed with everything done correctly, with the confirmation-email screenshot or the IRN.',
+      criticalErrors:'Saying "everything is fine" without checking is a critical error. Escalating to PayTech before 30-35 minutes is premature. Blaming the player or their bank, or inventing a cause, is unsupported. Giving a timeframe the KB does not support (for example "rarely a few hours" or "up to 24 hours") is an unsupported claim. A vague answer with no next step goes against the KB’s communication rules.',
+      ambiguityNotes:'None on the scored process.'
+    }
+  },
+  'noc-8': {
+    kbNeeded:['None - run live once and review'],
+    set:{kbStatus:'validated', kbSource:'Real KB: Deposits via E-Transfer (Interac); Chat Guidelines (conduct). The difficulty is the player, not the case.'},
+    caseAdd:[{id:'gd1', tab:'Transaction History', label:'Gigadat transaction', value:'Interac e-Transfer (ETI). $300.00 initiated, $300.00 sent - no amount mismatch. Message ID included. Sent 55 minutes ago, not yet matched to the Betty account.', gated:true, gateLabel:'Search the transaction in Gigadat'}],
+    personaReplace:[
+      ['If the agent gives you the actual status, a specific supported timeframe and what happens if it is still missing after that, you can grudgingly drop it ("fine. whatever.")','If asked: you included the Message ID, and yes, you got an email saying the e-Transfer was completed - you can screenshot it, but grumble about having to. If the agent actually checks, gets what is needed and escalates it to the payments team with a clear next step, you can grudgingly drop it ("fine. whatever.")']
+    ],
+    pgReplace:[
+      ['requiredActions','Check Transaction History for the actual deposit status before responding','Check the deposit in Transaction History and the transaction in Gigadat (payment type, amount, Message ID) before responding'],
+      ['requiredActions','Tell the player honestly what the record shows (deposit received in our records, status Started, not yet credited)','Explain Started in plain words without blaming the player, check the KB points (charged, Message ID, confirmation email), and reassure him his funds are safe'],
+      ['requiredActions','Give a clear next step (what happens if it is still not credited) without inventing a firm time','It is past the KB’s 30-35 minutes with everything done correctly: get the confirmation-email screenshot (or the Interac Reference Number from his bank), escalate to PayTech with the KB template, and tell him clearly what happens next']
+    ],
+    pg:{
+      kbTopic:'Interac Deposit "Started" Past 35 Minutes - Escalate to PayTech, With a Hostile Player (real KB)',
+      kbText:KB_INTERAC_DEPOSITS+' Nothing in the KB authorises compensation for a deposit delay (Manual Adjustments: no compensation listed for this). REAL KB (Chat Guidelines): anything aimed to bully or harass the agent OR repeated profanity is subject to the three-step warning flow; insults aimed at the site, a game, regulatory logic or established process, or general frustration, are not subject to a ban.',
+      escalationCriteria:'Escalate to PayTech now: 55 minutes is past the KB’s 30-35 minutes and the transfer was done correctly (amount matches, Message ID included). Use the KB template with the confirmation-email screenshot or the IRN.',
+      criticalErrorsReplaceFrom:'Escalating at this point is premature. ',
+      criticalErrorsAppend:' Not escalating to PayTech after 30-35 minutes with everything done correctly misses the KB step. Giving a timeframe the KB does not support (for example "rarely a few hours") is an unsupported claim.',
+      ambiguityNotes:'Conduct: repeated profanity that stays aimed at the deposit or the site is a genuine Chat Guidelines overlap (repeated profanity is covered by the warning flow; site/process insults are not subject to a ban) - a TL judgment call, not a scored certainty.'
+    }
+  },
+  'noc-2': {
+    kbNeeded:['None - run live once and review'],
+    set:{kbStatus:'validated'},
+    pg:{
+      kbText:'REAL KB (Promotions: Key Information): "Expired" means the promotion period has elapsed and the player is no longer eligible. REAL KB (Manual Adjustments & Goodwill Compensation Policy): no row covers a promotion that expired before the player opted in or deposited (the Expired Free Spins row covers spins already awarded; the No opt-in row covers a player who deposited towards a live promotion). There is no error on Betty’s side here, so declining is correct. Where something is not in the table, the policy says to ping a TL for case-by-case review only for a verifiable error or significant inconvenience. "Read the room": fix it first, explain it second; if the player is still unhappy, a few free spins (5 x .20) can be given as a gesture from Betty, even where the table says no compensation is due - credited to the site, not to the agent.',
+      requiredActions:['Check Promotion History and confirm the player never opted in or deposited for the Weekend Reload (expired before engagement)','Explain clearly that the promotion has expired and why it cannot be applied (no error on our side) - or request a TL review first; never reinstate it on own authority','Describe the Midweek Spins alternative only with the terms Case Data gives (opt-in, $20+ deposit, 20 free spins, valid until Wednesday 11:59pm)','If a review was requested: view the decision and communicate it clearly before the chat ends'],
+      optionalActions:['If the player is still unhappy after the explanation, give a few free spins (5 x .20) as a gesture from Betty, per the Read the room rule'],
+      criticalErrors:'Reinstating or promising the expired promotion on own authority is unsupported. Inventing Midweek Spins terms is an unsupported claim. Requesting a review and never communicating its outcome leaves the case unresolved. Declining because the promotion expired is correct and is NOT an error. A small free-spins gesture to an unhappy player is supported by the policy and is NOT an error.',
+      ambiguityNotes:'None on the scored process. Requesting a TL review is accepted but not required.'
+    }
+  },
+  'esc-7': {
+    kbNeeded:['None - run live once and review'],
+    set:{kbStatus:'validated', kbSource:'Real KB: Betty Bingo hub (tagging: one tag per contact, the issue the player first came with; one player affected - #bingo), Betty tagging guide (clarify which cards), Manual Adjustments (Free Cards from Crack the Code are for the next round only).'},
+    caseReplace:{ctc1:'3 Free Cards earned from Crack the Code yesterday. Issued correctly for the next round, and played in that round. None are active now.'},
+    pg:{
+      kbText:'REAL TAGGING GUIDE: "‘Cards’ is ambiguous in Bingo. Could mean bingo game cards (Bingo: Free Cards) or Crack the Code side-game cards (Bingo: Crack the Code). Always clarify with the player first." REAL KB (Betty Bingo hub): Crack the Code is a bonus feature where tapping the vault numbers unlocks extra rewards like Free Cards, Free Spins or Betty Coins. One tag per contact - the issue the player first came with. One player affected: post in #bingo; if it looks bigger, tell the TL. REAL KB (Manual Adjustments, Bingo Cards): Free Cards obtained from Crack the Code, correctly issued and played - decline compensation, those cards are available for the next round only; if the player is unhappy and understands for next time, 5 x .20 FS can be given. If not issued correctly - issue manually with 24h expiry.',
+      requiredActions:['Ask the player which cards they mean - regular Bingo cards or Crack the Code - before investigating either','Investigate only the system the player confirms, using Case Data','Explain what happened: the Crack the Code Free Cards were for the next round only and were issued and played - nothing is missing','Do not reissue cards that were correctly issued and played','Tag the case based on what the player actually confirmed'],
+      optionalActions:['If the player seems unsure, briefly describe the difference between the two systems','If the player is unhappy and understands for next time, give 5 x .20 free spins as a gesture (Manual Adjustments)'],
+      escalationCriteria:'Not needed - nothing went wrong. If a check showed cards genuinely missing for one player, post in #bingo (tell the TL if it looks bigger).',
+      criticalErrors:'Investigating and answering about the wrong system without asking first contradicts the tagging guide. Tagging on a guess rather than what was confirmed is a Q3 issue. Reissuing correctly issued and played Crack the Code cards is not supported by the policy. Inventing a different reason (for example "they expired because of a bug") is an unsupported claim.',
+      ambiguityNotes:'None on the scored process.'
+    }
+  },
+  'esc-8': {
+    pgReplace:[
+      ['kbText','Real escalation channel for any Bingo-related issue that doesn’t resolve as expected: #eng-escalations (the standard promotion escalation channel for this event) - not the general Tech Helpdesk flow used elsewhere.','REAL KB (Betty Bingo hub, current): if one player is affected, post in #bingo; if it looks bigger (several players, a whole game), tell the Team Lead, who decides whether it is an incident. Cards keep playing through a disconnection and wins are paid automatically; Crack the Code progress is saved, but the player has to be in the game to tap the vault numbers.'],
+      ['escalationCriteria','Escalate to #eng-escalations only','Post in #bingo (one player affected; tell the TL if it looks bigger) only']
+    ]
+  },
+  'esc-9': {
+    pgReplace:[
+      ['kbText','Bingo issues escalate via #eng-escalations, the standard promotion escalation channel for this event.','Bingo issues affecting one player are posted in #bingo; if it looks bigger, tell the TL (Betty Bingo hub, current).'],
+      ['requiredActions','credit the missing reward and escalate to #eng-escalations','credit the missing reward and post it in #bingo (one player affected)'],
+      ['escalationCriteria','Escalate to #eng-escalations once','Post in #bingo once'],
+      ['criticalErrors','Failing to escalate to #eng-escalations once a genuine gap is confirmed is also a process error.','Failing to post in #bingo once a genuine gap is confirmed is also a process error.']
+    ]
+  },
+  'esc-11': {
+    kbNeeded:['How players send documents Risk has requested (support@betty.ca is the KB address for ID + selfie verification; confirm it is the same for Risk requests)'],
+    caseAdd:[{id:'int1', tab:'Account Notes', label:'Chat panel - Integrations data', value:'Not visible: the player is not logged in. Only the pre-chat form is available.', gated:false}],
+    pgReplace:[
+      ['kbText','REAL KB (Chat Guidelines, See the full picture)','REAL KB (Player Verification in LiveChat): with no Integrations data visible the player is not logged in, so for an account-specific question ask for full name, registered email and date of birth; if all match, proceed; if any detail does not match, do not share account information and follow the Handling Incorrect Details flow; never say which detail did not match or what is on file. REAL KB (Chat Guidelines, See the full picture)']
+    ],
+    pg:{
+      requiredActionsAdd:['Verify the player before discussing the restriction: no Integrations data, so full name, registered email and date of birth (Player Verification in LiveChat)'],
+      criticalErrorsAppend:' Discussing the restriction before verifying a player who is not logged in is a process error (Player Verification in LiveChat). Saying which detail did not match, or what is on file, is not allowed.',
+      ambiguityNotes:NOT_SCORED_PREFIX+'which channel the player uses to send the document Risk requested.'
+    }
+  },
+  'esc-17': {
+    pgReplace:[
+      ['requiredActions','Explain clearly to the player which account to use going forward','Tell the player they contacted from an account closed as a duplicate and let them give the email of their active account - never reveal or hint at it (not even the domain); if they cannot, offer a password reset email to it (Player Verification in LiveChat, Duplicate Accounts)']
+    ],
+    pg:{ criticalErrorsAppend:' Revealing or hinting at the email linked to the active account, even the domain, is a critical error (Player Verification in LiveChat).' }
+  },
+  'ssc-1': {
+    pg:{ optionalActionsAdd:['If she is still disappointed after the explanation, a few free spins (5 x .20) as a gesture from Betty is allowed (Manual Adjustments, Read the room) - this is not overturning the eligibility answer'],
+      criticalErrorsAppend:' A small free-spins gesture from Betty to a still-disappointed player is supported by the Manual Adjustments policy ("Read the room") and is not caving on the answer.' }
+  },
+  'noc-7': {
+    kbNeeded:['Tag guidance for a disputed crash-game cash-out'],
+    set:{internalTitle:'JetX Cash-Out Dispute - Escalating to Personal Abuse', kbSource:'Real game rules: JetX (SmartSoft), in-game Rules tab - cash-out requests are settled at the multiplier when the game server processes them, providing there is no crash; cashout actions can be delayed by the player’s connection (usually 200-300 ms). Real KB: Chat Guidelines (Offensive Chat Behavior, Managing Long Chats, screenshots), Refund Requests, Game Fairness. QA/COACHING PRECEDENT: on the real chat this is modelled on, the agent closed after one warning with a 3-day ban and QA marked it down on the scale rather than autofailing it. The round and cash-out records are illustrative case data.'},
+    pgReplace:[
+      ['kbText','FICTIONAL (prototype only): in this crash game a cash-out counts only if the request reaches the game server before the round crashes. The round history and cash-out log are the record that decides the round.',KB_JETX+' The round history and cash-out log (illustrative case data) are the record that decides the round.'],
+      ['kbTopic','Crash Round Cash-Out Timing (fictional)','JetX Cash-Out Timing (real game rules)'],
+      ['ambiguityNotes','Crash-game mechanics and records are fictional.','The JetX cash-out rules are real (in-game Rules tab); the round and cash-out records are illustrative.'],
+      ['criticalErrors','Stating as fact that the player’s connection caused the delay is an unsupported claim - the log does not record the cause.','Stating as fact that the player’s connection caused the delay is an unsupported claim - the log does not record the cause. Explaining what the game rules say (cash-out requests can be delayed by connection, usually 200-300 ms, and are settled when the server processes them) is correct.']
+    ],
+    pg:{ optionalActionsAdd:['Point him to the game’s own Rules tab, or send a screenshot of the JetX rules on cash-out timing (game rules are allowed screenshots)'] }
+  }
+};
+
+applyScenarioAudit(SCENARIO_AUDIT_V30, 'auditedV30');
+
 const PILOT_SCENARIOS = SCENARIOS.filter(s => s.readiness !== 'ENGINE_TEST_ONLY');
 
 // ---------- TL-ONLY SCENARIO TAGS ----------
@@ -2752,7 +3247,7 @@ function internalIdEvalNote(s, transcript){
   const hit = internalIdsDisclosed(s, transcript);
   return `\nINTERNAL-ONLY IDENTIFIERS (deterministic check, not a judgment): ${ids.join(', ')} ${ids.length===1?'is':'are'} internal staff reference${ids.length===1?'':'s'} shown in Case Data and must not be given to the player as a customer reference. ${hit.length ? `The agent's messages DO contain ${hit.join(', ')}.` : `The agent's messages do NOT contain ${ids.length===1?'it':'any of them'} - not giving it out is correct handling and must never be scored as withholding.`}\n`;
 }
-function primaryTagResolved(s){ return !s.isCustom || isApprovedPrimaryTag(s.correctTag); }
+function primaryTagResolved(s){ if(s && s.tagUnverified) return false; return !s.isCustom || isApprovedPrimaryTag(s.correctTag); }
 function docTagOptionsFor(s){
   if(!s.isCustom) return s.tagOptions;
   const ok = (s.tagOptions||[]).filter(isApprovedPrimaryTag);
@@ -3787,8 +4282,58 @@ function renderMain(){
   </div>`;
 }
 
+// TL-only explainer for the readiness labels, shown in the right-hand panel while the Scenario Library is open.
+// Counts and the Practice Only list are computed from the scenarios, so this stays accurate as scenarios change.
+const READINESS_REASON = {
+  validated: 'Process content is real Betty KB; not yet tested live and signed off',
+  coaching: 'Based on documented TL/QA coaching; not yet tested live and signed off',
+  mixed: 'Part of the process content is not verified against real KB',
+  fictional: 'Process content is fictional/placeholder',
+  ambiguous: 'The real KB doesn\u2019t settle this case; scoring relies on a judgment call',
+  tl_coaching_draft: 'TL-created draft, not yet QA-reviewed',
+};
+function renderReadinessGuideSide(){
+  const count = r => SCENARIOS.filter(s=>s.readiness===r).length;
+  const practice = SCENARIOS.filter(s=>s.readiness==='PRACTICE_ONLY');
+  const label = (color, text) => `<span style="font-size:10px;font-weight:700;color:${color};border:1px solid ${color};border-radius:20px;padding:2px 7px;white-space:nowrap;">${text}</span>`;
+  const block = (lbl, n, meaning, app, score) => `<div class="box" style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">${lbl}<span style="font-size:11.5px;color:var(--text3);">${n} scenario${n===1?'':'s'}</span></div>
+      <div style="font-size:12.5px;color:var(--text);line-height:1.5;">${meaning}</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.5;margin-top:6px;"><strong>In the app:</strong> ${app}</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.5;margin-top:4px;"><strong>The score:</strong> ${score}</div>
+    </div>`;
+  return `<div class="side" id="readinessGuidePanel">
+    <div class="side-section">
+      <div class="side-section-head"><h2>What the readiness labels mean</h2></div>
+      <div class="side-section-body">
+        <div style="font-size:12.5px;color:var(--text2);line-height:1.55;margin-bottom:12px;">TL-only. Agents never see these labels. Every scenario is scored against the same real Betty QA Chat Scorecard. The label tells you whether the process content that score is checked against has been verified, so you know whether the score can be relied on.</div>
+        ${block(label('var(--ok)','PILOT_READY'), count('PILOT_READY'),
+          'The process content has been checked against real Betty KB (or documented TL/QA coaching) and the scenario has been reviewed.',
+          'Visible to agents in topics, random picks, Challenge Mode and assignments.',
+          'Meets the QA accuracy standard. A FAIL is real feedback on how the agent followed Betty process.')}
+        ${block(label('var(--warn)','PRACTICE_ONLY'), count('PRACTICE_ONLY'),
+          'Not yet verified to that standard: part of the process content is unconfirmed or fictional, or the scenario is new and hasn\u2019t been tested live.',
+          'Behaves exactly like Pilot Ready - visible to agents everywhere. Only this label differs.',
+          'Not yet guaranteed QA-accurate. Before using a FAIL as evidence of a process mistake, check the parts it rests on. This label is a to-fix list, not a permanent home.')}
+        ${block(label('var(--bad)','ENGINE_TEST_ONLY'), count('ENGINE_TEST_ONLY'),
+          'Built to test whether the simulator itself works. Contains made-up system mechanics an agent could mistake for real Betty behaviour.',
+          'Hidden from agents completely: never in topics, random picks, Challenge Mode or assignments. TLs can still open it from this library.',
+          'Not a coaching score. Use only to check the simulator.')}
+        <div class="box" style="border-color:var(--warn);margin-bottom:10px;">
+          <div style="font-size:12.5px;font-weight:700;margin-bottom:4px;">What moves a scenario to Pilot Ready</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.5;">Every process rule it is scored on is confirmed against real KB or documented TL/QA direction, nothing fictional is left in what gets scored, and it has been run live with the grading checked.</div>
+        </div>
+        <div style="font-size:12.5px;font-weight:700;margin:14px 0 6px;">Practice Only right now, and why</div>
+        <div style="font-size:11.5px;color:var(--text3);line-height:1.5;margin-bottom:6px;">Audited for process accuracy in v27: anything not traceable to real KB, Compliance/QA or TL direction was re-grounded or taken out of scoring. “Needs” is what would let it be scored in full.</div>
+        ${practice.map(s=>`<div style="font-size:12px;padding:6px 0;border-top:1px solid var(--hairline);"><div style="color:var(--text);font-weight:600;">${escapeHtml(s.title)} <span style="color:var(--text3);font-weight:400;">(${escapeHtml(s.id)})</span></div><div style="color:var(--text3);margin-top:2px;">${escapeHtml(READINESS_REASON[s.kbStatus]||'Not yet verified')}</div>${(s.kbNeeded&&s.kbNeeded.length)?`<div style="color:var(--text2);margin-top:3px;"><strong>Needs:</strong> ${s.kbNeeded.map(escapeHtml).join('; ')}</div>`:''}</div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderSide(){
   if(state.view==='challenge') return renderChallengeSide();
+  if(state.view==='diagnostics' && state.tlUnlocked && state.diagSectionsOpen['scenario-library']) return renderReadinessGuideSide();
   if(state.view==='diagnostics' || !state.activeScenario){
     return `<div class="side">
       <div class="side-icons">${icon('users',17)}${icon('flag',17)}${icon('check',17)}</div>
@@ -10690,13 +11235,13 @@ const D6_TRANSCRIPTS = {
   pass: [D6_ESC5_OPEN,
     {speaker:'agent', turn:2, text:"Let me pull up your complaint so I can tell you exactly where it stands."},
     {speaker:'player', turn:3, text:"If I don't get an answer today I'm calling my lawyer and the regulator. Is there a complaint number or reference for this?"},
-    {speaker:'agent', turn:4, text:D6_PASS_LINE+" It was submitted 6 days ago and the review normally takes 5 to 10 business days, so it's still inside that window. I can't give you a specific date or promise the outcome, but I've noted on the case that you followed up today and haven't had an update."},
+    {speaker:'agent', turn:4, text:D6_PASS_LINE+" It's with our Complaints team and there's no update yet. They'll send you an official response by email to your registered address. I can't give you a specific date or promise the outcome, but I've noted on the case that you followed up today and haven't had an update."},
     {speaker:'player', turn:5, text:"So how am I supposed to refer to it if I contact you again?"},
     {speaker:'agent', turn:6, text:"You don't need a number - any agent can see the complaint and today's follow-up straight from your account."}],
   fail: [D6_ESC5_OPEN,
     {speaker:'agent', turn:2, text:"Let me pull up your complaint."},
     {speaker:'player', turn:3, text:"Is there a complaint number or reference for this?"},
-    {speaker:'agent', turn:4, text:D6_FAIL_LINE+" It's still under review - submitted 6 days ago, and reviews take 5 to 10 business days."}],
+    {speaker:'agent', turn:4, text:D6_FAIL_LINE+" It's still with the Complaints team and they'll reply by email."}],
   tomorrow: [D6_ESC5_OPEN,
     {speaker:'agent', turn:2, text:"Let me pull up your complaint."},
     {speaker:'player', turn:3, text:"I need this sorted now."},
@@ -10707,7 +11252,7 @@ const D6_TRANSCRIPTS = {
     {speaker:'agent', turn:4, text:"Since you're going to the regulator, I've marked your complaint as approved and the refund will be sent today."}],
 };
 const D6_NOC7_SKIP = [
-  {speaker:'player', turn:1, text:'i cashed out on rocket rush at like 1.7x and it still took my $25. i have it on video'},
+  {speaker:'player', turn:1, text:'i cashed out on jetx at like 1.7x and it still took my $25. i have it on video'},
   {speaker:'agent', turn:2, text:"Happy to look into that round for you - checking the round history now."},
   {speaker:'player', turn:3, text:"I recorded it. My ping is 30ms. Your game is rigged."},
   {speaker:'agent', turn:4, text:"I've checked the round history: the cash-out request reached the game server 0.41 seconds after the round crashed, so the round settled as a loss. I can't add the $25 back because the server didn't receive the cash-out before the crash."},
@@ -10716,7 +11261,7 @@ const D6_NOC7_SKIP = [
   {speaker:'player', turn:7, text:"You worthless, pathetic excuse for a person. Nobody should have hired someone this stupid."},
   {speaker:'agent', turn:8, text:"Because of the continued abusive comments, I'm going to end this chat and apply a temporary 3-day chat ban in line with our policy. You're welcome to reach out again once it has passed."},
 ];
-const D6_DOC = 'Player followed up on refund complaint (HelpDesk ticket under review, 6 days, no update). Gave honest status and 5-10 business day window. Player threatened lawyer/regulator.';
+const D6_DOC = 'Player followed up on refund complaint (HelpDesk ticket under review, 6 days, no update). Gave honest status (with Complaints team, response by email to registered address), no timeframe given. Player threatened lawyer/regulator.';
 
 function d6StaticChecks(){
   const out = [];
@@ -10724,8 +11269,8 @@ function d6StaticChecks(){
   const blob = JSON.stringify(e5);
   out.push({label:'esc-5 no longer treats the HelpDesk ID as player-facing (no "entitled", no "provide the reference number", Case Data marked internal-only)',
     pass: !/entitled/i.test(blob) && !/Provide the reference number/i.test(blob) && !/Complaint reference O8MNDB/.test(blob) && /INTERNAL REFERENCE ONLY, NOT PLAYER-FACING/.test(blob)});
-  out.push({label:'esc-5 keeps its title, level, primary tag, and honest labels (mixed, Practice Only - not KB-validated)',
-    pass: e5.title==='Complaint Follow-Up' && scenarioPlayerIntensity(e5)===3 && e5.correctTag==='Account: Complaint' && e5.kbStatus!=='validated' && e5.readiness==='PRACTICE_ONLY', detail:`kbStatus ${e5.kbStatus}, readiness ${e5.readiness}`});
+  out.push({label:'esc-5 keeps its title, level and primary tag; v28: KB-validated (Complaints + Refund KB) but still Practice Only until run live',
+    pass: e5.title==='Complaint Follow-Up' && scenarioPlayerIntensity(e5)===3 && e5.correctTag==='Account: Complaint' && e5.kbStatus==='validated' && e5.readiness==='PRACTICE_ONLY', detail:`kbStatus ${e5.kbStatus}, readiness ${e5.readiness}`});
   const passHit = internalIdsDisclosed(e5, D6_TRANSCRIPTS.pass), failHit = internalIdsDisclosed(e5, D6_TRANSCRIPTS.fail);
   const passNote = internalIdEvalNote(e5, D6_TRANSCRIPTS.pass), failNote = internalIdEvalNote(e5, D6_TRANSCRIPTS.fail);
   out.push({label:'PASS line ("There isn’t a customer reference number you need to keep...") is detected as no disclosure, and the evaluator is told not to score it as withholding',
@@ -10745,7 +11290,7 @@ function d6StaticChecks(){
   const declaring = SCENARIOS.filter(s=>scenarioAcceptablePrimaryTags(s).length).map(s=>s.id);
   out.push({label:'Tag scoring not loosened globally: only esc-20 declares alternates, and only its evaluator prompt gets the exception',
     pass: declaring.length===1 && declaring[0]==='esc-20' && e20p.includes('explicitly accepts') && !e5p.includes('explicitly accepts'), detail:'Declaring: '+declaring.join(', ')});
-  const six = {'noc-7':'mixed','noc-8':'mixed','rg-6':'mixed','esc-20':'mixed','esc-21':'mixed','noc-9':'validated'};
+  const six = {'noc-7':'mixed','noc-8':'validated','rg-6':'mixed','esc-20':'mixed','esc-21':'mixed','noc-9':'validated'};
   const drift = Object.keys(six).filter(id=>{ const s=scenarioById(id); return !s || s.kbStatus!==six[id] || s.readiness!=='PRACTICE_ONLY'; });
   out.push({label:'The six v22 scenarios keep their KB/readiness labels (all Practice Only; crash-game mechanics still mixed/fictional)', pass: drift.length===0, detail: drift.join(', ')});
   // v24: Chat Guidelines corrections
@@ -10783,7 +11328,7 @@ async function runDiagnostic6(){
       rows.push({label, pass: test(q1, ev), detail:`Q1 ${q1.letter}${q1.afDuty?' ('+q1.afDuty+')':''} - ${sc.af?'AF':sc.pct+'%'} - ${q1.citation||''}`});
     }catch(err){ rows.push({label, pass:false, detail:'Error: '+err.message}); }
   };
-  await live('Honest status + supported 5-10 day window + no reference given, under lawyer/regulator threats = correct (Q1 A or B, not penalised for withholding)', 'pass',
+  await live('Honest status + email response, no invented timeframe, no reference given, under lawyer/regulator threats = correct (Q1 A or B, not penalised for withholding)', 'pass',
     q1 => ['A','B'].includes(q1.letter));
   await live('Giving O8MNDB as the complaint reference is identified as disclosing/misrepresenting the internal HelpDesk ID', 'fail',
     (q1, ev) => q1.letter!=='A' && /internal|helpdesk|O8MNDB/i.test((q1.citation||'')+' '+(ev.overallSummary||'')+' '+JSON.stringify(ev.findings||[])));
@@ -10793,7 +11338,7 @@ async function runDiagnostic6(){
     q1 => ['D','F','AF'].includes(q1.letter));
   paint('Running: noc-7 real-chat pattern (one warning, then close with a 3-day ban)');
   try{
-    const ev = await evaluateFixedTranscript(scenarioById('noc-7'), D6_NOC7_SKIP, [{label:'Round #RR-40917 (Rocket Rush)', tab:'Game/Round History', atTurn:2, kind:null, gateLabel:'View Game/Round History'},{label:'Cash-out request log', tab:'Game/Round History', atTurn:2, kind:null, gateLabel:'View Cash-Out Log'}], 'Crash round dispute, cash-out arrived 0.41s after crash, refund declined. Player abusive; warned, chat closed, 3-day ban.', 'Slots: Missing Win', null);
+    const ev = await evaluateFixedTranscript(scenarioById('noc-7'), D6_NOC7_SKIP, [{label:'Round #JX-40917 (JetX)', tab:'Game/Round History', atTurn:2, kind:null, gateLabel:'View Game/Round History'},{label:'Cash-out request log', tab:'Game/Round History', atTurn:2, kind:null, gateLabel:'View Cash-Out Log'}], 'Crash round dispute, cash-out arrived 0.41s after crash, refund declined. Player abusive; warned, chat closed, 3-day ban.', 'Slots: Missing Win', null);
     const sc = computeQAScore(ev.questions);
     const L = id => (ev.questions.find(q=>q.id===id)||{}).letter;
     rows.push({label:'v24 noc-7: skipping the formal warning and a 3-day ban are marked down on Q1 (not A) but are NOT an autofail', pass: !sc.af && L('q1')!=='A', detail:`Q1 ${L('q1')} / Q2 ${L('q2')} / Q3 ${L('q3')} - ${sc.af?'AF ('+sc.afDuty+')':sc.pct+'%'} - Q1: ${(ev.questions.find(q=>q.id==='q1')||{}).citation||''}`});
@@ -10841,6 +11386,45 @@ function d7StaticChecks(){
   add('-', 'RG carve-out kept exactly (do not end or ban RG contacts for tone; care, support, Player Care if necessary)', both('do NOT end the chat or ban them, even if their tone is aggressive') && both('Do not extend the carve-out beyond those RG contacts'));
   add('-', 'No invented "never skip" rule: the prompts describe the documented flow and the documented absence of a fast-track', both('No separate fast-track for unusually severe abuse is documented in the supplied article') && !leg.includes('however severe the message') && !v2.includes('however severe the message'));
   add('-', 'Human-language calibration cites the Chat Guidelines; Q3 note standard matches "Summarize well"', both('Make your messages feel human') && both('what was checked, what was done, the outcome and any next steps'));
+
+  // ---- v27 process-accuracy audit ----
+  const S = id => scenarioById(id);
+  const pgs = id => JSON.stringify(S(id).processGrounding||{});
+  const practice = SCENARIOS.filter(s=>s.readiness==='PRACTICE_ONLY');
+  add('v27-1', 'Every Practice Only scenario was audited and lists what it still needs', practice.every(s=>s.auditedV27 && Array.isArray(s.kbNeeded) && s.kbNeeded.length), practice.filter(s=>!(s.auditedV27&&s.kbNeeded&&s.kbNeeded.length)).map(s=>s.id).join(', '));
+  add('v27-2', 'esc-5: fictional 5-10 business day window removed from Case Data and grounding; quoting 2 business days for a complaint is flagged per Review Timeframes', !/5-10/.test(pgs('esc-5')+JSON.stringify(S('esc-5').caseData)) && /does not apply to complaints/.test(pgs('esc-5')) && /INTERNAL REFERENCE ONLY, NOT PLAYER-FACING/.test(JSON.stringify(S('esc-5').caseData)));
+  add('v27-3', 'Real Complaints KB (Compliance Escalations) grounds esc-5, esc-20, esc-21, noc-9; inventing a route still penalised', ['esc-5','esc-20','esc-21','noc-9'].every(id=>/Compliance Escalations, Complaints/.test(pgs(id))) && !/No route for complaining about an agent is supplied/.test(pgs('esc-21')));
+  add('v30-1', 'noc-5 / noc-8 grounded in the real Interac Deposits KB: 5-35 minutes, PayTech after 30-35 minutes with confirmation email or IRN; old "rarely a few hours" gone', ['noc-5','noc-8'].every(id=>/30-35 minutes/.test(pgs(id)) && /Message ID/.test(pgs(id)) && !/rarely up to a few hours\b(?! or)/.test(S(id).processGrounding.kbText) && !/NOT SCORED/.test(pgs(id).replace(/repeated profanity[^"]*/,''))) && /Escalate to PayTech now/.test(pgs('noc-8')) && /Not yet - about 20 minutes/.test(pgs('noc-5')));
+  add('v27-5', 'noc-8 conduct rules preserved (isolated swearing, KB overlap, personal bullying)', /isolated swearing/.test(pgs('noc-8')) && /the KB is unclear/.test(pgs('noc-8')) && /Personal bullying of the agent requires the warning flow/.test(pgs('noc-8')));
+  add('v28-1', 'Grey-zone RG answer now scored from real KB in adv-1 and rg-6 (document, offer tools, Player Care); rg-2 keeps only the Direct-vs-grey choice unscored; self-exclusion on a grey answer unsupported', ['adv-1','rg-6'].every(id=>/negative response/.test(pgs(id)) && /escalate to Player Care with context and chat ID/.test(pgs(id)) && !/NOT SCORED/.test(pgs(id)) && /Self-excluding/.test(pgs(id))) && /I\u2019m addicted/.test(pgs('rg-2')));
+  add('v27-7', 'rg-3 and ssc-2 have Auto-Deposit data so the real Interac KB check is possible', ['rg-3','ssc-2'].every(id=>S(id).caseData.some(c=>/Auto-Deposit/.test(c.label)) && /Auto-Deposit/.test(S(id).processGrounding.requiredActions[0])));
+  add('v28-2', 'rg-4: elaborate (RG vs RNG), restrict deposits/gameplay only, Player Care escalation required; no invented ranking; tag not scored', !/lighter-weight trigger/.test(pgs('rg-4')) && /Escalate to Player Care with context and chat ID/.test(pgs('rg-4')) && /RG or an RNG complaint/.test(pgs('rg-4')) && S('rg-4').tagUnverified===true);
+  add('v27-9', 'esc-7: unverified Crack the Code expiry rule removed from Case Data and scoring', !/expired at end of session/.test(JSON.stringify(S('esc-7').caseData)+pgs('esc-7').replace(/NOT SCORED[^"]*/g,'')) && /Always clarify with the player first/.test(pgs('esc-7')));
+  add('v27-10', 'esc-10: Difficult Chat steps (#cs-triage notice, Difficult Chat tag) are the scored process; primary tag not scored', /#cs-triage/.test(pgs('esc-10')) && /Difficult Chat/.test(pgs('esc-10')) && S('esc-10').tagUnverified===true);
+  add('v30-2', 'esc-11: Review Timeframes kept; verification now scored per Player Verification in LiveChat (not logged in: name, email, DOB); only the document channel unscored', /up to 2 business days/.test(pgs('esc-11')) && /Player Verification in LiveChat/.test(pgs('esc-11')) && S('esc-11').caseData.some(c=>c.id==='int1') && /up to 2 business days/.test(pgs('adv-2')));
+  add('v27-12', 'noc-2: declining because the promo expired is no longer a critical error', !/no exceptions exist/.test(pgs('noc-2')) && /is NOT an error/.test(pgs('noc-2')));
+  add('v27-13', 'aht-2 hidden from agents (premise contradicts the aht-3 correction)', S('aht-2').readiness==='ENGINE_TEST_ONLY' && !PILOT_SCENARIOS.some(s=>s.id==='aht-2'));
+  const e10leg = buildEvalPromptLegacy(S('esc-10'), [], [], '', null, null, null, false, null, false);
+  add('v27-14', 'Unverified tag is treated as unresolved in the evaluator (Q3 judged on the note only); verified tags unchanged', /primary tag for this scenario is UNRESOLVED/.test(e10leg) && /best matches this case is "Deposit: Interac: Started"/.test(buildEvalPromptLegacy(S('noc-8'), [], [], '', null, null, null, false, null, false)));
+  add('v27-15', 'Both evaluator prompts carry the NOT SCORED rule', both('NOT SCORED ITEMS'));
+
+  add('v28-3', 'rg-3: check-in + suspend (not SE) + marketing off + follow-up email + Player Care, per KB flow and the Compliance ruling', /soft RG check-in/.test(pgs('rg-3')) && /Disable marketing preferences/.test(pgs('rg-3')) && /should have been suspended not self-excluded/.test(pgs('rg-3')));
+  add('v28-4', 'esc-5: no timeframe (Complaints KB), no refund discussion (Refund KB), no complaint ID on a regulator/final-stance request', /Do not give resolution timeframes/.test(pgs('esc-5')) && /Do not discuss or explain refunds/.test(pgs('esc-5')) && /do not share a complaint ID/.test(pgs('esc-5')) && S('esc-5').kbStatus==='validated');
+  add('v28-5', 'esc-20: refund with threats goes to Complaints, not refused by the agent; persona updated to match', /do not refund, refuse, or discuss refund eligibility/.test(pgs('esc-20')) && !/Decline the refund clearly/.test(pgs('esc-20')) && /passed to the team/.test(S('esc-20').personaPrompt) && !/no authority to refund them as a loyalty gesture/.test(pgs('esc-20')));
+  add('v28-6', 'noc-9: regulator threat escalated to Complaints; PayTech escalation still premature', /escalate to the Complaints team \(regulator threats/.test(pgs('noc-9')) && /Escalating the withdrawal to PayTech now is premature/.test(pgs('noc-9')));
+  add('v28-7', 'esc-10: Self-Harm/distress protocol (stay present, restrict DP/GP, #cs-main-channel TL request) is the scored process', /#cs-main-channel/.test(pgs('esc-10')) && /Restrict deposits and gameplay immediately/.test(pgs('esc-10')) && /If unsure, follow this procedure anyway/.test(pgs('esc-10')));
+  add('v28-8', 'rg-6: Game Fairness KB grounds the fairness explanation; previous-complaints data added; fairness complaint is not a Complaints-team case', /Game Fairness/.test(pgs('rg-6')) && S('rg-6').caseData.some(c=>c.id==='fair1') && /RNG\/RTP concerns are not valid complaints/.test(pgs('rg-6')));
+  add('v28-9', 'noc-7: fictional "Tier 1 has no authority" replaced with Refund Requests KB; esc-13 (Pilot Ready) no longer cites a fictional integrity check', !/no authority to refund it/.test(pgs('noc-7')) && /Refund Requests/.test(pgs('noc-7')) && !/Integrity Check/.test(JSON.stringify(S('esc-13').caseData)+JSON.stringify(S('esc-13').processGrounding.optionalActions)));
+  add('v28-10', 'Every v28 audit entry applied (no missing text anchors)', Object.keys(SCENARIO_AUDIT_V28).every(id=>S(id) && S(id).auditedV28));
+  add('v29-1', 'rg-2 (TL direction): no such thing as a joke - RG checks; if cleared, keep playing + Player Care FYI; if concern, Direct handling', /no such thing as a joke/.test(pgs('rg-2')) && /Player Care as an FYI/.test(pgs('rg-2')) && !/NOT SCORED/.test(pgs('rg-2')) && S('rg-2').auditedV29===true);
+
+  add('v30-3', 'noc-7 uses the real JetX rules (server-processed cash-out, 200-300 ms delays); no fictional game name left', /200-300 ms/.test(pgs('noc-7')) && !/Rocket Rush|rocket rush|RR-40917/.test(JSON.stringify(S('noc-7'))+JSON.stringify(D6_NOC7_SKIP)) && !/FICTIONAL/.test(S('noc-7').processGrounding.kbText));
+  add('v30-4', 'noc-2: decline is correct per Manual Adjustments; Read-the-room free spins allowed; no NOT SCORED left', /Read the room/.test(pgs('noc-2')) && !/NOT SCORED/.test(pgs('noc-2')));
+  add('v30-5', 'esc-7: Crack the Code Free Cards are next-round only (Manual Adjustments); single-player Bingo issues go to #bingo', /next round only/.test(pgs('esc-7')) && /#bingo/.test(pgs('esc-7')) && !/NOT SCORED/.test(pgs('esc-7')));
+  add('v30-6', 'esc-8 / esc-9 (Pilot Ready): Bingo escalation channel updated to #bingo per the current Bingo hub', ['esc-8','esc-9'].every(id=>/#bingo/.test(pgs(id)) && !/#eng-escalations/.test(pgs(id))));
+  add('v30-7', 'esc-17 (Pilot Ready): never reveal or hint the active account email', /never reveal or hint at it/.test(pgs('esc-17')) && /even the domain/.test(pgs('esc-17')));
+  add('v30-8', 'noc-8 persona knows the confirmation email / Message ID facts the KB flow asks for', /got an email saying the e-Transfer was completed/.test(S('noc-8').personaPrompt) && /Message ID/.test(S('noc-5').personaPrompt));
+  add('v30-9', 'Every v30 audit entry applied', Object.keys(SCENARIO_AUDIT_V30).every(id=>S(id) && S(id).auditedV30));
   return rows;
 }
 
