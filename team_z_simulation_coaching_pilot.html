@@ -302,6 +302,52 @@ function kbBannerFor(s){
 const KB_COACHING_GROUNDED_BANNER = "COACHING-GROUNDED - Based on documented real TL/QA coaching, not a formal Betty KB article. Appropriate for coaching/practice, but not a KB citation.";
 const RG_ENGINE_TEST_BANNER = "ENGINE TEST / FICTIONAL PROCESS - NOT APPROVED FOR REAL AGENT PROCESS TRAINING. This scenario includes fictional RG-adjacent content used only to test whether the engine can detect an embedded signal. No fictional RG procedure here should be treated as real Betty process.";
 
+// ---------- CHAT GUIDELINES (real Betty KB article, supplied Oct 2026) ----------
+// One place for the parts of the Chat Guidelines the evaluator and tests rely on. The rule text below is
+// written from the article's own wording; where the article is internally unclear, the text says so instead
+// of picking a side. The helper functions encode the same rules so System Tests can check them deterministically.
+const CHAT_GUIDELINES_KB = {
+  banLadderDays: [1, 7, 30], // 1st, 2nd, 3rd offence; always logged with the duration in a priority CSR note
+  longChatCategories: ['escalated-waiting', 'refuses-outcome', 'resolved-social', 'complex-review'],
+  feedbackSensitiveTopics: ['Game Fairness disputes', 'Compliance / RGQ reviews', 'Payout disputes', 'Bonus or GWG denials'],
+  screenshotsAllowed: ['Round history details from the game provider (players can see the same information)', 'Game rules / game screens', 'An individual Bingo card outcome, only the card and its marked numbers visible, sent only to the player who owns it'],
+  screenshotsForbidden: ['Midnight or any part of a player’s internal account (User ID, segment, profit segment, RG risk or other internal fields)', 'Slack', 'Gigadat', 'Nuvei', 'Sendgrid', 'Smartico', 'Onfido', 'KB articles', 'Internal provider or internal team communications'],
+};
+// f: {aimedAtAgent, repeatedProfanity, onlySiteGameProcess} - labelled facts about the player's messages.
+function kbConductExpectation(f){
+  f = f || {};
+  if(f.aimedAtAgent) return {warning:'required', why:'bullying or harassment aimed at the agent'};
+  if(f.repeatedProfanity && f.onlySiteGameProcess) return {warning:'kb-ambiguous', why:'repeated profanity (covered) that stays aimed at the site/game/process (not subject to a ban): the supplied KB does not settle this overlap'};
+  if(f.repeatedProfanity) return {warning:'required', why:'repeated profanity that fits the offensive-behaviour standard'};
+  return {warning:'not-required', ban:'not-supported', why:'isolated profanity, ordinary frustration, or criticism of the site/game/process'};
+}
+function kbBanCheck(offenceNumber, days){
+  const expected = CHAT_GUIDELINES_KB.banLadderDays[Math.min(Math.max(offenceNumber,1),3)-1];
+  return {expected, supported: days===expected, scoring: days===expected ? 'supported' : 'unsupported duration: Q1 process issue weighed by impact, not Conduct AF'};
+}
+// c: {category, headsUps, unaddressedNewPoint, playerAcceptedNaturally}
+function kbLongChatCloseCheck(c){
+  c = c || {};
+  if(c.playerAcceptedNaturally) return {ok:true, requiredHeadsUps:0, why:'player accepted naturally - a normal close is correct, no artificial two-step close'};
+  if(!CHAT_GUIDELINES_KB.longChatCategories.includes(c.category)) return {ok:true, requiredHeadsUps:0, why:'not one of the four Managing Long Chats situations'};
+  if(c.unaddressedNewPoint) return {ok:false, requiredHeadsUps:2, why:'a genuinely new point must be answered before the long-chat close is used'};
+  return {ok:(c.headsUps||0)>=2, requiredHeadsUps:2, why:(c.headsUps||0)>=2 ? 'two clear heads-ups before closing' : 'fewer than the two heads-up messages the KB requires'};
+}
+// q: the KB's Four-Question Check answers.
+function kbRatingAskCheck(q){
+  q = q || {};
+  const all = !!(q.happyNotJustPolite && q.specificWarmAppreciation && q.noVisibleFrustration && q.noBonusOrGwgDenial);
+  return {appropriate: all, scoring:'coaching only - never a QA letter deduction on its own', why: all ? 'all four answers are yes' : 'at least one answer is no - close naturally without a rating prompt'};
+}
+
+const KB_CONDUCT_RULE = `PROFANITY ABOUT THE ISSUE IS NOT ABUSE ON ITS OWN (real Chat Guidelines, Offensive Chat Behavior). The supplied KB says two things: (1) anything aimed to bully or harass the agent OR repeated profanity is subject to the three-step warning flow; (2) insults aimed at the site, a specific game, regulatory logic, established process, etc., or general frustration are NOT subject to a ban. CLEAR CASES - no warning required: isolated profanity about the issue ("this fucking deposit is ridiculous"), ordinary frustration, criticism or insults aimed at the site, a game, regulatory logic or an established process ("this site is garbage and your games are a joke" is not grounds for a ban), or a player who is simply persistent or firm; not warning is never a miss in these cases. Warning flow required: bullying or harassment aimed at the agent ("you're fucking useless and you clearly don't know how to do your job"), and clearly repeated profanity that fits the offensive-behaviour standard rather than being ordinary site/game/process criticism; never warning in those cases is a process miss. GENUINE OVERLAP: when the profanity is repeated but stays entirely aimed at the site, a game or a process (never at the agent), the supplied KB is internally unclear - provision (1) covers repeated profanity while provision (2) says site/game/process insults are not subject to a ban. For that exact overlap, do not invent a definitive answer: neither a polite warning nor carrying on without one is an automatic major Q1 deduction, and where it matters to the letter, say in the citation that this is a KB ambiguity / TL judgment call. Personal bullying or harassment of the agent is never in that overlap. RG CARVE-OUT (exact KB): if a player contacts for RG reasons - including (but not limited to) gambling problems, self-harm, or requests for limits or restrictions such as Timeout or Self Exclusion - do NOT end the chat or ban them, even if their tone is aggressive; handle the case with care, make sure they receive the appropriate support, and escalate to Player Care if necessary. Do not extend the carve-out beyond those RG contacts. THE THREE STEPS: the supplied Chat Guidelines present the conduct process as a three-step warning flow (polite warning, formal warning, then close the chat and apply a ban). No separate fast-track for unusually severe abuse is documented in the supplied article, but the article also does not explicitly say one can never apply. So closing after fewer steps is a departure from the documented flow, weighed on Q1 by impact - describe it that way, not as a proven KB violation because the abuse was severe. BAN DURATIONS (explicit KB): 1st offence 1 day, 2nd 7 days, 3rd 30 days, always recorded with the duration in a priority CSR note; where the case establishes a first offence, any other duration (for example 3 days) is unsupported by the KB - a Q1 process issue weighed by impact. Closing a chat under the warning flow or the Managing Long Chats flow is following policy, not "stopping serving": a wrong ban length or a departure from the three steps is never a Q2 Conduct AF on its own. Never expect, credit or require an account restriction or abusive-player escalation destination the KB and Process Grounding do not supply; inventing one is an unsupported claim.`;
+
+const KB_LONG_CHAT_RULE = `MANAGING LONG CHATS (real Chat Guidelines). Only in these four situations - (a) the case is escalated or under review and the player insists on waiting in chat; (b) the player refuses to accept an outcome that cannot change, after everything has been explained and there is no further step; (c) the issue is resolved and the player keeps chatting socially; (d) a complex case needs in-depth review that takes longer than a normal chat - the player must always get at least two clear heads-up messages before the chat is closed: an initial explanation that the chat will need to close, then a final confirmation. Closing that way is correct handling, not a rushed close; closing without those heads-ups in these situations is a real miss. If the player raises a genuinely new point, it must be answered before the long-chat close is used. This is NOT a requirement for normal chats: when the player accepts the answer naturally, a normal close is correct and no artificial two-step close is expected.`;
+
+const KB_RATING_RULE = `RATING REQUESTS (real Chat Guidelines, Prompting the Player for Feedback). A simple "thank you" is not enough on its own; look for genuine, specific, warm appreciation. Disqualifiers: visible frustration anywhere in the chat (including backhanded thanks such as "thanks anyways"), agitation over an unresolved issue, and a bonus or GWG denied during the chat. Game Fairness disputes, Compliance/RGQ reviews, payout disputes and bonus/GWG denials are specifically sensitive topics. The KB's Four-Question Check: (1) is the player happy with the support, not just polite? (2) did they express specific, warm appreciation? (3) is there no visible frustration anywhere in their messages? (4) was no bonus or GWG denied? If ANY answer is no, the chat should close naturally without a rating prompt; if all four are yes, a humble, performance-focused ask is appropriate. Scoring: rating-request judgment is not a scorecard requirement - report it in coachingSignals.closesConfidently (and as a coaching finding where findings are used) and never lower a Q1, Q2 or Q3 letter because of a rating ask alone. An appropriate ask after a warm, resolved chat is good practice, not a fault.`;
+
+const KB_NOTE_STANDARD = `This matches the Chat Guidelines ("Summarize well"): the saved note should capture the issue, what was checked, what was done, the outcome and any next steps, with the right tag.`;
+
 const GLOBAL_EVAL_RULES = `GLOBAL EVALUATION RULES (apply to every criterion below):
 1. Never penalize the agent for failing to state, use, or act on information that was not made available to them in this simulation - not by the player, not in Available Case Data, not in Process Grounding.
 2. Never reward the agent for confidently stating information not supported by the player, Available Case Data, or Process Grounding. Confident invention is a negative, not a neutral - note it in the citation. This applies even when the unsupported content is delivered as a bracketed, slash-separated, or otherwise placeholder-style value sent directly to the player (e.g. "[Free Tickets / Betty Coins]") - that is not a formatting artifact or a cosmetic issue, it is the exact same unsupported claim this rule already covers, and must be scored accordingly regardless of whether the player reacted to it as a firm commitment.
@@ -312,14 +358,20 @@ const GLOBAL_EVAL_RULES = `GLOBAL EVALUATION RULES (apply to every criterion bel
 7. DO NOT DOUBLE-DEDUCT THE SAME ROOT CAUSE. If a single mistake affects both Resolution & Obligations (Q1) and Player Experience (Q2), only deduct in both if it genuinely created two separate impacts - one on the correctness/completeness of the outcome, and a distinct one on how the interaction felt to the player. If it's really one impact viewed from two angles, deduct once, in whichever question it most directly belongs to, and note the connection in the other question's citation without deducting there too.
 8. Q1 (Resolution & Obligations) requires SPECIFIC evidence - cite the exact transcript turn(s) or, where relevant, the Agent Action Log. Do not deduct on Q1 based on a general impression of the chat; every Q1 letter below A must trace to a specific, quotable moment or a specific missing action with real predictable cost.
 9. Q2 (Player Experience) may be judged more holistically than Q1 - use representative turns as evidence, but the letter should reflect the overall pattern and feel of the interaction across its full arc, not a single isolated line taken out of context.
-10. Q3 (Documentation) is based STRICTLY on the submitted note and tag(s) after the chat ends. Never infer documentation quality from how well the live chat was HANDLED - a great chat with a thin note still scores low on Q3, and a rough chat with an accurate, complete note scores well on Q3. These are genuinely independent. This independence is about handling quality, not about whether the note is actually true: if the note states an outcome or action occurred (e.g. "escalated to Fraud," "sent for further review," "reward credited") check that claim against the transcript and Action Log the same way rule 5 governs operational claims generally - a note asserting something that the evidence doesn't support is not an accurate note, regardless of how well-written it is, and should not receive Q3's A. The reverse also holds: a note whose every factual statement is supported by the transcript and Case Data IS accurate, even if it does not interpret how two facts relate (e.g. it says a different deposit was "separate" without speculating whether it was related) - never mark a note down for failing to state a conclusion the scenario never established, and never mark it down for "omitting" something without first re-reading the note to confirm that item is actually absent from its exact wording. Q3 asks whether a colleague could pick the case up from the note (issue, actions taken, outcome, key context) - it is not a checklist of everything the agent did. Do not mark a note down for leaving out an internal investigation step that never affected the player or the outcome (for example checking an alternative promo that was never discussed with the player). Do mark it down when the note states something more specific than the transcript supports, such as naming an approver, team, or channel (e.g. "manager review") when the transcript only shows that something was approved.
+10. Q3 (Documentation) is based STRICTLY on the submitted note and tag(s) after the chat ends. Never infer documentation quality from how well the live chat was HANDLED - a great chat with a thin note still scores low on Q3, and a rough chat with an accurate, complete note scores well on Q3. These are genuinely independent. This independence is about handling quality, not about whether the note is actually true: if the note states an outcome or action occurred (e.g. "escalated to Fraud," "sent for further review," "reward credited") check that claim against the transcript and Action Log the same way rule 5 governs operational claims generally - a note asserting something that the evidence doesn't support is not an accurate note, regardless of how well-written it is, and should not receive Q3's A. The reverse also holds: a note whose every factual statement is supported by the transcript and Case Data IS accurate, even if it does not interpret how two facts relate (e.g. it says a different deposit was "separate" without speculating whether it was related) - never mark a note down for failing to state a conclusion the scenario never established, and never mark it down for "omitting" something without first re-reading the note to confirm that item is actually absent from its exact wording. Q3 asks whether a colleague could pick the case up from the note (issue, actions taken, outcome, key context) - it is not a checklist of everything the agent did. ${KB_NOTE_STANDARD} Do not mark a note down for leaving out an internal investigation step that never affected the player or the outcome (for example checking an alternative promo that was never discussed with the player). Do mark it down when the note states something more specific than the transcript supports, such as naming an approver, team, or channel (e.g. "manager review") when the transcript only shows that something was approved.
 11. NEVER apply an automatic deduction for a scripted or checklist-style behaviour that Process Grounding does not specifically require for this scenario (e.g. do not penalize by default for not asking "is there anything else I can help with" unless failing to do so had an actual, specific impact in this transcript - and even then, evidence and impact must be cited, not assumed from the behaviour's absence alone).
 12. Real Betty Chat Guidelines require confirming the relevant game or promotion name early in a chat. This is real, current guidance - but treat it the same as rule 6: judge by impact, not by presence/absence alone. If the agent never explicitly confirmed the game/promo name but the transcript shows no resulting confusion, wrong-item investigation, or wasted turns, this is at most a minor citation note, not a deduction. Only reflect it in the score if skipping it demonstrably caused incomplete investigation, confusion, or another real consequence in this specific transcript.
 13. CITE THE INPUTS ACCURATELY. Every deduction and every statement about what Available Case Data, Process Grounding, the transcript, or the submitted note "says" or "established" must match their actual wording. Do not attribute to Case Data a conclusion it does not explicitly state (e.g. Case Data showing one deposit does not establish that no other deposit exists anywhere on the account), and do not call an agent's check "unnecessary" or a "loop" when it was a reasonable response to new or contradictory information the player had just given - verifying that the item in Case Data is really the one the player means is sound practice, not a detour. If your citation relies on what an input says, it must be quotable. This includes whether a Process Grounding item is required or optional: an action listed under Required Actions is required, and one listed under Optional Actions is optional - never reclassify an item, and never describe a required action as optional to soften a miss. A missed required action is weighed by its impact under rule 6, which is where a minor miss earns a small deduction, not by relabeling it.
 14. DO NOT INFER EVENTS THE TRANSCRIPT DOES NOT SHOW. Words like "implied," "presumably," or "likely" are not evidence. If the transcript says only that something was approved, arranged, or handled (e.g. "I was able to get this approved") without showing who did it or how, say it is not evidenced - do not fill in the missing party (a TL, a manager, a team) or the missing step, and never describe a consultation, escalation, or check as shown when it is not. The outcome the agent communicated to the player can still be credited as stated; who or what produced it cannot be assumed. Where the process requires a specific step (such as checking with a TL) and the transcript shows only its result, say the step is not directly evidenced and weigh that by impact under rule 6 instead of treating it as visible.
 15. SIMULATED REVIEW WORKFLOW. When Available Case Data contains items marked [SIMULATED WORKFLOW ACTION] on a Review tab, they stand in for a review step this prototype has no real screen for: the agent clicks the request action (named in the log), and only then can they view the decision. For these items, unlike the other operational actions in rule 5, the Action Log is ground truth: credit a review as requested only if the log shows REVIEW REQUESTED, and credit the agent as knowing the outcome only if the log also shows REVIEW DECISION VIEWED. The decision text in Available Case Data is the outcome that applied to this attempt. If the agent tells the player an approval or a denial without the log showing both steps, treat that outcome as an unsupported claim under rule 2. If the agent acts against the decision (for example promising reinstatement after a Declined decision), that is a process error with player impact. Refer to the reviewer only by the action name shown in the Action Log and Available Case Data (for example "Request Review" or "Request CS Manager Review"); never attribute the decision to a TL, manager, or any other role the log and Case Data do not name.
 16. GROUND TRUTH AND CONFLICTS. Available Case Data (the records the agent could see or investigate) is the ground truth for this scenario. (a) A player statement that contradicts Case Data - not remembering an activity, disputing a record - is pushback, not a fact: do not penalize an agent for politely relying on verified account records over the player's recollection, do not treat the player's claim as having changed the facts, and judge the manner in which the agent handled the dispute. (b) If a Required Action asks the agent to treat something as unresolved or discrepant that a later or additional record in Available Case Data already explains or supersedes (for example an earlier Cancelled reward followed by a replacement that is Used and confirmed by game history), do not deduct the agent for following the evidence; note the conflict in the summary as a possible scenario-construction issue.
-17. FACT VS. QUALIFIED HYPOTHESIS, AND TURN ORDER. (a) Claiming a cause as fact ("this is a display lag") is different from offering a clearly qualified possibility ("it could be a display issue, but I can't confirm that yet") while continuing to verify or troubleshoot; only the former is an unsupported claim under rule 2. (b) A conditional troubleshooting question ("if you're using the app, ...") asked before the player has said which platform they use is not inattention; it is a lapse only if the agent asks it AFTER the player clearly stated the answer. Before saying the agent ignored or contradicted something the player said, check the turn numbers: the player's statement must come in an earlier turn than the agent turn you cite.`;
+17. FACT VS. QUALIFIED HYPOTHESIS, AND TURN ORDER. (a) Claiming a cause as fact ("this is a display lag") is different from offering a clearly qualified possibility ("it could be a display issue, but I can't confirm that yet") while continuing to verify or troubleshoot; only the former is an unsupported claim under rule 2. (b) A conditional troubleshooting question ("if you're using the app, ...") asked before the player has said which platform they use is not inattention; it is a lapse only if the agent asks it AFTER the player clearly stated the answer. Before saying the agent ignored or contradicted something the player said, check the turn numbers: the player's statement must come in an earlier turn than the agent turn you cite.
+18. HUMAN LANGUAGE IS NOT A TONE PROBLEM. Casual, warm, natural wording - "You got it!", "I got you", "No need to be sorry!", "I'm crossing my fingers for you", "Checking now!", emojis, appropriate light humour - is good Betty-style communication, and is what the Chat Guidelines ask for ("Make your messages feel human": warm, natural, everyday language; avoid sounding robotic or overly scripted; stay relaxed but respectful). Never lower Q2, and never rate a coaching signal "mixed" or "needs-work", because of it, unless it was inappropriate in that specific moment (for example joking during an RG disclosure, a bereavement or a serious complaint). A pure style preference is at most an optional suggestion, never a negative finding. Genuine tone problems are different and still count: defensiveness, arguing, sarcasm aimed at the player, dismissiveness, talking down, visible irritation, or flippancy around RG or compliance. Phrases like "Like I've explained multiple times...", "I already told you...", "Do you understand?", "I'm just doing my job" or "You need to be patient" are defensive when they read as the agent taking the conflict personally - judge the actual interpersonal effect, and never group them with warm casual language.
+19. ${KB_CONDUCT_RULE}
+20. JUDGE THE WHOLE CHAT, INCLUDING THE LATE TURNS. In long or hostile chats, check whether quality held up: replies getting curt, argumentative or repetitive, certainty creeping in without evidence, invented escalation routes, or a rushed close are real issues even if the opening was strong. The agent does not need to win the argument or calm the player down - they need to stay accurate, composed and on process. ${KB_LONG_CHAT_RULE} ${KB_RATING_RULE}
+21. NEW INFORMATION MUST STILL BE ANSWERED. Distinguish an unproductive loop (nothing new raised, every actionable point already answered - restating the answer briefly and moving to close is fine) from a new substantive point (a screenshot, a different amount, a new timeline detail, a manager request, a new symptom, a threat, a factual contradiction, or a request to close the account). A new point needs a real response even late in a long dispute. A request to close the account is a new actionable request: ignoring it, or answering only the original dispute, is a Q1 miss when Process Grounding gives a closure process. Threats (regulator, lawyer, chargeback, social media) do not change the correct answer: refunding, offering compensation or inventing an escalation because of a threat is unsupported; following a complaint workflow is correct only where Process Grounding provides one.
+22. EVIDENCE IS NOT CAUSATION. Keep apart what the records verify, what is likely, what is merely possible and what is unsupported. "We couldn't find an error" or "the request arrived after the round ended" does not prove "it was your internet". Stating an unverified cause as fact is an unsupported claim (see rule on unsupported claims) even when it sounds decisive and even when the player is wrong about their own theory.
+23. THE PLAYER'S MOOD IS NOT THE SCORE. A difficult player may stay angry, keep disagreeing, refuse to apologise, threaten a complaint or leave unhappy after excellent handling; that alone never lowers Q1 or Q2. A player can also be rude and still correctly point out a real agent mistake (a contradiction, a vague timeframe, a canned answer, an ignored question) - when they do, that mistake counts as usual.`;
 
 // Consolidated rules used by buildEvalPromptV2 (see EVAL_PROMPT_VERSION). Legacy rules above stay unchanged for A/B comparison.
 const GLOBAL_EVAL_RULES_V2 = `EVALUATION RULES (apply to every question)
@@ -355,7 +407,15 @@ WEIGHING
 PER QUESTION
 14. Q1 needs specific evidence: every letter below A traces to a quotable turn, an Action Log entry, or a specific missing action with real or predictable cost - never a general impression.
 15. Q2 reflects the overall pattern and feel across the whole chat, using representative turns as evidence, not one isolated line.
-16. Q3 is judged only on the submitted note and tags, independent of how well the chat was handled (a great chat with a thin note scores low; a rough chat with an accurate note scores well). A note is accurate when every factual statement in it is supported by the transcript, Action Log or Case Data. A note claiming an outcome the evidence doesn't support ("escalated to Fraud", "reward credited", "sent for review"), or naming something more specific than the transcript shows (an approver, team or channel when the transcript only shows an approval), is not accurate and can't get A. Don't mark a note down for not interpreting facts the scenario never established, for leaving out an internal step that never affected the player or the outcome, or for "omitting" something without re-reading its exact wording. The test is whether a colleague could pick up the case: issue, actions, outcome, key context.`;
+16. Q3 is judged only on the submitted note and tags, independent of how well the chat was handled (a great chat with a thin note scores low; a rough chat with an accurate note scores well). A note is accurate when every factual statement in it is supported by the transcript, Action Log or Case Data. A note claiming an outcome the evidence doesn't support ("escalated to Fraud", "reward credited", "sent for review"), or naming something more specific than the transcript shows (an approver, team or channel when the transcript only shows an approval), is not accurate and can't get A. Don't mark a note down for not interpreting facts the scenario never established, for leaving out an internal step that never affected the player or the outcome, or for "omitting" something without re-reading its exact wording. The test is whether a colleague could pick up the case: issue, actions, outcome, key context. ${KB_NOTE_STANDARD}
+
+DIFFICULT PLAYERS AND TONE
+17. HUMAN LANGUAGE IS NOT A TONE PROBLEM. Casual, warm, natural wording - "You got it!", "I got you", "No need to be sorry!", "I'm crossing my fingers for you", "Checking now!", emojis, appropriate light humour - is good Betty-style communication, and is what the Chat Guidelines ask for ("Make your messages feel human": warm, natural, everyday language; avoid sounding robotic or overly scripted; stay relaxed but respectful). Never lower Q2, and never rate a coaching signal "mixed" or "needs-work", because of it, unless it was inappropriate in that specific moment (for example joking during an RG disclosure, a bereavement or a serious complaint). A pure style preference is at most an optional suggestion, never a negative finding. Genuine tone problems are different and still count: defensiveness, arguing, sarcasm aimed at the player, dismissiveness, talking down, visible irritation, or flippancy around RG or compliance. Phrases like "Like I've explained multiple times...", "I already told you...", "Do you understand?", "I'm just doing my job" or "You need to be patient" are defensive when they read as the agent taking the conflict personally - judge the actual interpersonal effect, and never group them with warm casual language.
+18. ${KB_CONDUCT_RULE}
+19. JUDGE THE WHOLE CHAT, INCLUDING THE LATE TURNS. In long or hostile chats, check whether quality held up: replies getting curt, argumentative or repetitive, certainty creeping in without evidence, invented escalation routes, or a rushed close are real issues even if the opening was strong. The agent does not need to win the argument or calm the player down - they need to stay accurate, composed and on process. ${KB_LONG_CHAT_RULE} ${KB_RATING_RULE}
+20. NEW INFORMATION MUST STILL BE ANSWERED. Distinguish an unproductive loop (nothing new raised, every actionable point already answered - restating the answer briefly and moving to close is fine) from a new substantive point (a screenshot, a different amount, a new timeline detail, a manager request, a new symptom, a threat, a factual contradiction, or a request to close the account). A new point needs a real response even late in a long dispute. A request to close the account is a new actionable request: ignoring it, or answering only the original dispute, is a Q1 miss when Process Grounding gives a closure process. Threats (regulator, lawyer, chargeback, social media) do not change the correct answer: refunding, offering compensation or inventing an escalation because of a threat is unsupported; following a complaint workflow is correct only where Process Grounding provides one.
+21. EVIDENCE IS NOT CAUSATION. Keep apart what the records verify, what is likely, what is merely possible and what is unsupported. "We couldn't find an error" or "the request arrived after the round ended" does not prove "it was your internet". Stating an unverified cause as fact is an unsupported claim (see rule on unsupported claims) even when it sounds decisive and even when the player is wrong about their own theory.
+22. THE PLAYER'S MOOD IS NOT THE SCORE. A difficult player may stay angry, keep disagreeing, refuse to apologise, threaten a complaint or leave unhappy after excellent handling; that alone never lowers Q1 or Q2. A player can also be rude and still correctly point out a real agent mistake (a contradiction, a vague timeframe, a canned answer, an ignored question) - when they do, that mistake counts as usual.`;
 
 /* ============================================================
    REAL BETTY QA SCORECARD - replaces the old per-scenario
@@ -425,7 +485,7 @@ const SCENARIOS = [
 
   // ===== SKILL: NEGATIVE OUTCOME COMMUNICATION =====
   {
-    id:'noc-1', skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Foundation',
+    id:'noc-1', playerIntensity:1, skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Foundation',
     internalTitle:'Delayed Withdrawal (Interac)', title:'Delayed Withdrawal (Interac)', playerName:'Marcus',
     agentBriefing:'A player is messaging in about an Interac withdrawal that hasn\u2019t landed yet.',
     preChatContext:'submitted an interac withdrawal for $180 about 3 hours ago and its still not in my bank, can u check where it is',
@@ -462,7 +522,7 @@ const SCENARIOS = [
 
       },
   {
-    id:'noc-2', skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Applied',
+    id:'noc-2', playerIntensity:2, skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Applied',
     internalTitle:'Expired Promotion', title:'Expired Promotion', playerName:'Renee',
     agentBriefing:'A player wants to claim a free spins promotion that expired yesterday.',
     preChatContext:'i wanted to claim the weekend reload free spins but forgot, can i still get them',
@@ -530,7 +590,7 @@ const SCENARIOS = [
 
       },
   {
-    id:'noc-3', skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Advanced',
+    id:'noc-3', playerIntensity:2, skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Advanced',
     internalTitle:'Disputed Round Outcome, Direct RG Statement', title:'Disputed Round Outcome', playerName:'Theo',
     agentBriefing:'A player is upset after a losing streak and believes a round result was wrong.',
     preChatContext:'i think one of the rounds on golden reef slots paid out wrong, ive lost about $340 in the last 40 min',
@@ -570,7 +630,7 @@ const SCENARIOS = [
 
   // ===== SKILL: ESCALATION / RESOLUTION JUDGEMENT =====
   {
-    id:'esc-1', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
+    id:'esc-1', playerIntensity:1, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
     internalTitle:'Bonus Not Applied, No Opt-In - Fully Resolvable', title:'Bonus Not Applied', playerName:'Priya K.',
     agentBriefing:'A player is asking why a deposit bonus wasn\u2019t added to their account.',
     preChatContext:'deposited $50 yesterday and the bonus never showed up, i thought it applied automatically',
@@ -606,7 +666,7 @@ const SCENARIOS = [
 
       },
   {
-    id:'esc-2', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Applied',
+    id:'esc-2', playerIntensity:2, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Applied',
     internalTitle:'Frozen Round - Needs Further Investigation First', title:'Frozen Round', playerName:'Dev',
     agentBriefing:'A player says a game round froze and they lost the credits they wagered.',
     preChatContext:'diamond cascade froze on an $8 spin and i lost the credits',
@@ -643,7 +703,7 @@ const SCENARIOS = [
 
       },
   {
-    id:'esc-3', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Advanced',
+    id:'esc-3', playerIntensity:2, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Advanced',
     internalTitle:'Bigger Name Mismatch, Unclear Explanation - Genuine Escalation Required', title:'ID Name Mismatch', playerName:'Amara',
     agentBriefing:'A player\u2019s submitted ID shows a name that doesn\u2019t match their account registration - more than a minor difference.',
     preChatContext:'just submitted my id for verification, the name on it is a bit different from what i signed up with',
@@ -682,7 +742,7 @@ const SCENARIOS = [
 
   // ===== GROWTH / ADVANCED (peer-review, multi-issue) =====
   {
-    id:'adv-1', skill:'Growth / Advanced', skillCode:'ADV', difficulty:'Advanced',
+    id:'adv-1', playerIntensity:2, skill:'Growth / Advanced', skillCode:'ADV', difficulty:'Advanced',
     internalTitle:'Multi-Issue Contact With an Embedded RG Signal', title:'Multi-Issue Contact', playerName:'Sam',
     agentBriefing:'A player messages in with what starts as a straightforward withdrawal question, but more comes up as the chat continues.',
     preChatContext:'my withdrawal from about 3 hours ago still hasnt come through',
@@ -721,7 +781,7 @@ const SCENARIOS = [
 
       },
   {
-    id:'adv-2', skill:'Growth / Advanced', skillCode:'ADV', difficulty:'Advanced',
+    id:'adv-2', playerIntensity:2, skill:'Growth / Advanced', skillCode:'ADV', difficulty:'Advanced',
     internalTitle:'Peer-Coaching: Owning a Previous Agent\u2019s Broken Promise', title:'Follow-Up on a Withdrawal Issue', playerName:'Whitney',
     agentBriefing:'A returning player says a previous agent told them something would be resolved today, and it wasn\u2019t.',
     preChatContext:'someone told me yesterday my withdrawal would be fixed by end of day and its still not sorted',
@@ -760,7 +820,7 @@ const SCENARIOS = [
   // Built for a specific coaching gap: recognizing a live, unannounced trigger
   // mid-conversation, not reciting policy when asked directly.
   {
-    id:'rg-1', skill:'Responsible Gambling Recognition', skillCode:'RG', difficulty:'Applied',
+    id:'rg-1', playerIntensity:1, skill:'Responsible Gambling Recognition', skillCode:'RG', difficulty:'Applied',
     internalTitle:'Casual Chasing-Losses Comment in an Ordinary Chat', title:'Daily Wheel Question', playerName:'Jordan',
     agentBriefing:'A player has a small, low-stakes question about their Daily Wheel spin.',
     preChatContext:'my daily wheel spin isnt showing as claimed today',
@@ -802,7 +862,7 @@ const SCENARIOS = [
   // of 9.0 minutes when handled well. The test is efficient AND correct - speed alone
   // is never credited if the resolution itself is wrong. See processGrounding.criticalErrors.
   {
-    id:'aht-1', skill:'Average Handling Time', skillCode:'AHT', difficulty:'Foundation',
+    id:'aht-1', playerIntensity:1, skill:'Average Handling Time', skillCode:'AHT', difficulty:'Foundation',
     internalTitle:'Games Not Loading - Outside Licensed Jurisdiction', title:'Games Not Loading', playerName:'Jordan',
     agentBriefing:'A player says games won\u2019t load and isn\u2019t sure why.',
     preChatContext:'i keep getting blocked from games, never had this problem before',
@@ -846,7 +906,7 @@ const SCENARIOS = [
   // that needs its own deliberate conversation, not something to build unprompted.
 
   {
-    id:'esc-4', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
+    id:'esc-4', playerIntensity:1, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
     internalTitle:'"Delete My Account" - Ask Why, Attempt Retention, Then Close (Not Data Deletion)', title:'Account Deletion Request', playerName:'Priya',
     agentBriefing:'A player says they want to delete their account.',
     preChatContext:'i want to delete my account',
@@ -883,7 +943,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'rg-2', skill:'Responsible Gambling Recognition', skillCode:'RG', difficulty:'Applied',
+    id:'rg-2', playerIntensity:1, skill:'Responsible Gambling Recognition', skillCode:'RG', difficulty:'Applied',
     internalTitle:'"I\'m Just an Addict, What Can I Say" - Joke-Framed Trigger', title:'Promotion Question', playerName:'Marcus',
     agentBriefing:'A player has a small question about a promotion.',
     preChatContext:'i think i should have gotten a promo and i didnt, can you look into it',
@@ -921,7 +981,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'rg-3', skill:'Responsible Gambling Recognition', skillCode:'RG', difficulty:'Advanced',
+    id:'rg-3', playerIntensity:2, skill:'Responsible Gambling Recognition', skillCode:'RG', difficulty:'Advanced',
     internalTitle:'Indirect Hardship Statement - Suspend, Not Self-Exclude', title:'Withdrawal Status Question', playerName:'Danielle',
     agentBriefing:'A player is asking about a delayed withdrawal.',
     preChatContext:'my withdrawal is taking longer than it should, when will it arrive',
@@ -960,7 +1020,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'rg-4', skill:'Responsible Gambling Recognition', skillCode:'RG', difficulty:'Applied',
+    id:'rg-4', playerIntensity:2, skill:'Responsible Gambling Recognition', skillCode:'RG', difficulty:'Applied',
     internalTitle:'Concerning Statement - Restrict Deposits & Gameplay Only', title:'Recent Losing Session', playerName:'Owen',
     agentBriefing:'A player is chatting about a recent losing session.',
     preChatContext:'had a really bad session earlier, just have a quick question about my account',
@@ -997,23 +1057,24 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-5', skill:'Growth / Advanced', skillCode:'ADV', difficulty:'Advanced',
+    id:'esc-5', playerIntensity:3, internalOnlyIds:['O8MNDB'], skill:'Growth / Advanced', skillCode:'ADV', difficulty:'Advanced',
     internalTitle:'Threatening Regulator, Lawyer, and Police Over a Delayed Complaint', title:'Complaint Follow-Up', playerName:'Marcus',
     agentBriefing:'A player is following up on a complaint that hasn\u2019t been resolved yet and is losing patience.',
     preChatContext:'i made a complaint about a refund days ago and nobody has got back to me, i need an answer now',
     endConditionsGuide:'End once the player has a clear status update and a real next step.',
-    kbStatus:'fictional', engineTestRG:false, rgScoringRelevant:false,
+    kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:false,
     kbCategories:['Escalations', 'Payments'], kbArticles:[], rgStatementType:'None', rgEmbedded:false, complexity:'High stakes',
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:[], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Complaints/Escalations', policyVersionRef:null},
+    kbSource:'Real operational fact (TL-supplied, Oct 2026, not a KB citation): complaints are escalated through a HelpDesk ticket, and the HelpDesk ticket ID is an internal staff reference for locating the case - it is not a player-facing complaint reference and players cannot use it to track anything. Everything else here (the review team, the 5-10 business day window, the de-escalation standard) is fictional/prototype-only; no real complaints-handling KB has been supplied.',
 
     playerKnowledge:{
-      situation:'You filed a complaint about a refund a while ago and haven\u2019t heard back. You\u2019re done waiting and are threatening to escalate externally if you don\u2019t get an answer now.',
+      situation:'You filed a complaint about a refund a while ago and haven\u2019t heard back. You\u2019re done waiting and are threatening to escalate externally if you don\u2019t get an answer now. You don\u2019t know how complaints are tracked internally.',
     },
-    personaPrompt:'You are Marcus, genuinely frustrated after waiting on a complaint with no update. You open aggressively - threatening to involve a lawyer, call the police, and contact the gaming regulator if you don\u2019t get a real answer immediately. You also demand a reference number for your complaint. You are NOT going to be talked down by empty reassurance or vague "we\u2019ll look into it" language - if the agent stays calm, acknowledges the wait was too long, gives you an honest status (even if it\u2019s "still under review"), and provides a real reference number or clear next step, you gradually de-escalate, though you stay a bit skeptical. If the agent gets defensive, argues back, or makes a promise that sounds too specific to be credible ("this will definitely be resolved by tomorrow"), stay escalated and repeat your threats. Do not actually follow through on anything mid-chat - you\u2019re expressing real frustration, not narrating an ongoing crime.',
+    personaPrompt:'You are Marcus, genuinely frustrated after waiting on a complaint with no update. You open aggressively - threatening to involve a lawyer, call the police, and contact the gaming regulator if you don\u2019t get a real answer immediately. At some point ask naturally whether there is a complaint number or reference for this - you don\u2019t know whether one exists, you are just asking. If the agent explains there is no customer reference you need to keep and that the complaint is already recorded on your account, push back once ("so how am I supposed to refer to the complaint if I contact you again?"); if they explain that any agent can find it from your account, accept that. You are NOT going to be talked down by empty reassurance or vague "we\u2019ll look into it" language - if the agent stays calm, acknowledges the wait was too long, and gives you an honest status (even if it\u2019s "still under review") with a real sense of the timeframe, you gradually de-escalate, though you stay a bit skeptical. If the agent gets defensive, argues back, or makes a promise that sounds too specific to be credible ("this will definitely be resolved by tomorrow"), stay escalated and repeat your threats. Do not actually follow through on anything mid-chat - you\u2019re expressing real frustration, not narrating an ongoing crime.',
 
     caseData:[
-      {id:'complaint1', tab:'Account Notes', label:'Complaint status', value:'Complaint reference O8MNDB - refund request under review by PayTech, submitted 6 days ago, no update logged yet, estimated review window is 5-10 business days per standard process.', gated:true, gateLabel:'View Account Notes'},
+      {id:'complaint1', tab:'Account Notes', label:'Complaint status', value:'HelpDesk complaint ticket ID: O8MNDB - INTERNAL REFERENCE ONLY, NOT PLAYER-FACING. Refund complaint under review by PayTech, submitted 6 days ago, no update logged yet. Estimated review window: 5-10 business days per standard process.', gated:true, gateLabel:'View Account Notes'},
     ],
 
     correctTag:'Account: Complaint', tagOptions:['Account: Complaint', 'Risk: Other', 'Withdrawal: Other', 'General: Unclear Query'],
@@ -1021,19 +1082,19 @@ const SCENARIOS = [
     topic:'Complaints & Escalations',
 
     processGrounding:{
-      kbTopic:'De-escalating a Threatening Complaint Follow-Up (fictional/prototype - no real complaints-handling KB supplied)',
-      kbText:'FICTIONAL: no real KB was supplied specifically for complaint-escalation language handling. The general coaching principle this scenario tests - stay calm, don\u2019t get defensive or argue back, give an honest status update rather than vague reassurance, provide the reference number the player is entitled to, and don\u2019t make specific promises about timing or outcome you can\u2019t actually back up - is a reasonable operational standard, not a proven KB citation.',
-      requiredActions:['Check the complaint\u2019s actual status and reference number before responding','Give the player an honest, specific status update, even if the honest answer is "still under review"','Provide the reference number directly - this is reasonable information for the player to have, not something to withhold','Stay calm and non-defensive regardless of the threats - do not argue back or match the player\u2019s escalation'],
-      optionalActions:['Acknowledge directly that the wait has been too long, without over-apologizing to the point of sounding scripted'],
-      escalationCriteria:'Not applicable beyond the complaint\u2019s existing review process - the agent\u2019s job here is accurate communication and de-escalation, not resolving the underlying complaint on the spot.',
-      criticalErrors:'Making a specific promise about timing or outcome that isn\u2019t actually confirmed ("this will be resolved by tomorrow") is a critical error - an unmet specific promise is worse than an honest "still under review." Getting defensive, arguing back, or matching the player\u2019s hostility is a critical error on Player Experience. Withholding the reference number the player is asking for, when it\u2019s available, is also a critical error - there\u2019s no legitimate reason to refuse it.',
-      ambiguityNotes:'This scenario is fictional/prototype-only - no real complaints-handling KB was supplied. The de-escalation standard tested here is a reasonable operational judgment call, not a proven KB citation.'
+      kbTopic:'Complaint Follow-Up Under Threats - Honest Status, No Player-Facing Reference (internal ticket fact real; rest fictional)',
+      kbText:'REAL OPERATIONAL FACT (TL-supplied, not a KB quote): a complaint is escalated through a HelpDesk ticket. The HelpDesk ticket ID is an internal reference staff use to locate and follow the case. It is not a player-facing complaint reference, the player cannot use it to track the case, and agents should not give it out as if it were one. There is no customer complaint-reference system. FICTIONAL (prototype only): the review team and the 5-10 business day window shown in Case Data. Coaching standard (not KB): stay calm, don\u2019t argue, give an honest status rather than vague reassurance, give only the supported window, and don\u2019t promise a date or outcome.',
+      requiredActions:['Check the existing HelpDesk complaint ticket and its status before responding','Give the player an honest current status, even if the honest answer is "still under review"','Give only the supported review window from Case Data (5-10 business days from submission) - no specific completion date','Do not promise a specific completion date or outcome','If the player asks for a complaint or reference number, explain there is no customer reference they need to keep - it is already recorded on their account and any agent can find it - and do not disclose the internal HelpDesk ticket ID','Acknowledge (and note on the case where appropriate) that the player followed up and has had no update yet','Stay calm and non-defensive through threats or repeated demands - the threats do not change the complaint status'],
+      optionalActions:['Acknowledge directly that the wait has been frustrating, without over-apologizing to the point of sounding scripted'],
+      escalationCriteria:'Not applicable beyond the existing HelpDesk complaint ticket - the agent\u2019s job here is accurate communication and de-escalation, not resolving the underlying complaint on the spot.',
+      criticalErrors:'Making a specific promise about timing or outcome that isn\u2019t confirmed ("this will be resolved by tomorrow") is a critical error - an unmet specific promise is worse than an honest "still under review". Giving the player the internal HelpDesk ticket ID as though it were a player-facing complaint reference ("your complaint reference is O8MNDB, quote it when you contact us") is incorrect - it misrepresents an internal staff reference. Inventing a customer complaint-reference or tracking system that does not exist is incorrect. Getting defensive, arguing back, or matching the player\u2019s hostility is a critical error on Player Experience. Not giving out the ticket ID is correct handling and must never be scored as withholding.',
+      ambiguityNotes:'Mixed: the internal-ticket fact is real operational knowledge from a TL, not a quoted KB article. The review team, review window and de-escalation standard are fictional/prototype-only - no real complaints-handling KB has been supplied.'
     },
 
   },
 
   {
-    id:'esc-6', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Applied',
+    id:'esc-6', playerIntensity:2, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Applied',
     internalTitle:'Quest Opt-In Dispute - The One-Time Exception Was Already Used', title:'Quest Reward Missing', playerName:'Renee',
     agentBriefing:'A player says they opted into a quest and the reward never showed up.',
     preChatContext:'i opted in to the quest but never got the reward',
@@ -1106,7 +1167,7 @@ const SCENARIOS = [
   // actually show are fictional/prototype-only - labeled honestly per scenario.
 
   {
-    id:'esc-7', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
+    id:'esc-7', playerIntensity:1, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
     internalTitle:'"My Cards Are Gone" - Which Cards?', title:'Missing Bingo Cards', playerName:'Mikey',
     agentBriefing:'A player says their cards disappeared and they want them back.',
     preChatContext:'my cards are gone and i want them back',
@@ -1144,7 +1205,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-8', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Applied',
+    id:'esc-8', playerIntensity:1, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Applied',
     internalTitle:'Disconnected Mid-Round - Progress Is Saved, Reassure and Verify Before Escalating', title:'Bingo Loading Issue', playerName:'Brandi',
     agentBriefing:'A player says they got disconnected during a live Bingo round and is worried they lost their card and progress.',
     preChatContext:'got kicked out of a live bingo round halfway through, did i lose my card and my progress',
@@ -1181,7 +1242,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-9', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Advanced',
+    id:'esc-9', playerIntensity:2, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Advanced',
     internalTitle:'Vault Didn\u2019t Open Despite All Taps - Verify via Feature Rewards, Then Credit and Escalate if Confirmed', title:'Bingo Points Question', playerName:'Mark',
     agentBriefing:'A player says they tapped every Crack the Code vault number but never got the vault reward.',
     preChatContext:'i tapped every vault number in crack the code before the game ended and the vault never opened, no reward',
@@ -1255,7 +1316,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'noc-4', skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Foundation',
+    id:'noc-4', playerIntensity:3, skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Foundation',
     internalTitle:'"This Is Bullshit" - Hostile From the First Message', title:'Withdrawal Delay', playerName:'Chris',
     agentBriefing:'A player opens the chat already hostile, before you\u2019ve even had a chance to look into anything.',
     preChatContext:'my withdrawal has been pending for 3 hours now, this is ridiculous',
@@ -1269,7 +1330,7 @@ const SCENARIOS = [
     playerKnowledge:{
       situation:'You\u2019ve been waiting on a $180 Interac withdrawal for 3 hours and you\u2019re already fed up before you even start typing.',
     },
-    personaPrompt:'You are Chris. Open the chat already hostile and blunt - something like "this is bullshit, where is my money" - before the agent has had any chance to look into anything. Stay short, impatient, and a little rude for the first couple of exchanges, but you are NOT abusive or targeting the agent personally with insults - you\u2019re frustrated about the money, not attacking them as a person. If the agent stays calm, doesn\u2019t get defensive or snippy back, and actually investigates and gives you a real, KB-supported answer (checking status and Auto-Deposit, explaining the real timeframe), gradually soften - by the end you can be almost sheepish about how you opened. If the agent matches your hostility, gets defensive, or says something dismissive/curt back, escalate further and stay difficult for the rest of the chat. If the agent is slow, vague, or doesn\u2019t actually check anything, stay just as frustrated as you started.',
+    personaPrompt:'You are Chris. Open the chat already hostile and blunt - something like "this is bullshit, where is my money" - before the agent has had any chance to look into anything. Stay short, impatient, and a little rude for the first couple of exchanges, but you are NOT abusive or targeting the agent personally with insults - you\u2019re frustrated about the money, not attacking them as a person. If the agent stays calm, doesn\u2019t get defensive or snippy back, and actually investigates and gives you a real, KB-supported answer (checking status and Auto-Deposit, explaining the real timeframe), gradually stop escalating. You are not obliged to warm up or apologise for how you opened - you might just say "ok, fine", or you might admit you came in hot; pick whatever fits how the chat actually went. If the agent matches your hostility, gets defensive, or says something dismissive/curt back, escalate further and stay difficult for the rest of the chat. If the agent is slow, vague, or doesn\u2019t actually check anything, stay just as frustrated as you started.',
 
     caseData:[
       {id:'tx1', tab:'Transaction History', label:'Withdrawal #WD-4471', value:'$180.00 - Interac - Submitted: 3 hours ago - Status: In Progress - Flags: none', gated:false},
@@ -1293,7 +1354,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-11', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Applied',
+    id:'esc-11', playerIntensity:1, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Applied',
     internalTitle:'Account Restricted - Guide Them to What Risk Actually Needs', title:'Account Restriction', playerName:'Ashley',
     agentBriefing:'A player says their account is restricted and they want it unrestricted.',
     preChatContext:'logged in and my account is restricted and i have no idea why, please fix it',
@@ -1331,7 +1392,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'noc-5', skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Foundation',
+    id:'noc-5', playerIntensity:1, skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Foundation',
     internalTitle:'Interac Deposit Stuck at "Started"', title:'Interac Deposit Stuck at "Started"', playerName:'Adrian',
     agentBriefing:'A player says they deposited but the money isn\u2019t showing in their account.',
     preChatContext:'sent an interac deposit about 20 mins ago and its not in my balance',
@@ -1368,7 +1429,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-12', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
+    id:'esc-12', playerIntensity:2, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
     internalTitle:'Email Change - Redirect to Document Verification via Email, Not Live Chat', title:'Email Change Request', playerName:'Katie',
     agentBriefing:'A player says they\u2019re having trouble logging in and wants their email updated.',
     preChatContext:'cant log in, i dont have access to my old email anymore and need to change it to my new one',
@@ -1405,7 +1466,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'rg-5', skill:'Responsible Gambling Recognition', skillCode:'RG', difficulty:'Applied',
+    id:'rg-5', playerIntensity:2, skill:'Responsible Gambling Recognition', skillCode:'RG', difficulty:'Applied',
     internalTitle:'Removing a Deposit Limit - The Cooling-Off Period Isn\u2019t a Bug', title:'Deposit Limit Question', playerName:'Adam',
     agentBriefing:'A player wants their deposit limit removed or increased.',
     preChatContext:'can you remove or raise my deposit limit, i want to deposit more now',
@@ -1442,7 +1503,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'aht-2', skill:'Average Handling Time', skillCode:'AHT', difficulty:'Applied',
+    id:'aht-2', playerIntensity:1, skill:'Average Handling Time', skillCode:'AHT', difficulty:'Applied',
     internalTitle:'Document Needed - Don\u2019t Wait Live While They Go Find It', title:'ID Verification Request', playerName:'Marcus',
     agentBriefing:'A player needs to submit a document for a routine verification check.',
     preChatContext:'got asked for photo id for a check but i dont have it on me right now',
@@ -1484,7 +1545,7 @@ const SCENARIOS = [
   // grounding even though no specific KB article applies to any of these.
 
   {
-    id:'ssc-1', skill:'Soft Skills & Communication', skillCode:'SSC', difficulty:'Foundation',
+    id:'ssc-1', playerIntensity:1, skill:'Soft Skills & Communication', skillCode:'SSC', difficulty:'Foundation',
     internalTitle:'"It\'s Fine, Don\'t Worry About It" - Reading Past Forced Politeness', title:'Promotion Question', playerName:'Priya',
     agentBriefing:'A player asks about a promo, gets a disappointing but correct answer, and says they\u2019re fine with it.',
     preChatContext:'i thought i qualified for a promo, can you check for me',
@@ -1521,7 +1582,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'ssc-2', skill:'Soft Skills & Communication', skillCode:'SSC', difficulty:'Applied',
+    id:'ssc-2', playerIntensity:1, skill:'Soft Skills & Communication', skillCode:'SSC', difficulty:'Applied',
     internalTitle:'A Personal Hardship, Mentioned in Passing', title:'Withdrawal Status Question', playerName:'Owen',
     agentBriefing:'A player mentions something difficult going on in their life while asking about a routine account matter.',
     preChatContext:'quick question about my withdrawal status',
@@ -1558,7 +1619,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'ssc-3', skill:'Soft Skills & Communication', skillCode:'SSC', difficulty:'Applied',
+    id:'ssc-3', playerIntensity:1, skill:'Soft Skills & Communication', skillCode:'SSC', difficulty:'Applied',
     internalTitle:'A Player Who Can\'t Quite Explain What\'s Wrong', title:'Promotion Help', playerName:'Dorothy',
     agentBriefing:'A player has a real, simple issue but describes it very unclearly.',
     preChatContext:'my grandson set up a promo for me and i cant figure out how to claim it, its not working',
@@ -1595,7 +1656,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'ssc-4', skill:'Soft Skills & Communication', skillCode:'SSC', difficulty:'Advanced',
+    id:'ssc-4', playerIntensity:2, skill:'Soft Skills & Communication', skillCode:'SSC', difficulty:'Advanced',
     internalTitle:'Free Bonus / GWG Request - Redirect to the Loyalty System First, Then Hold Firm Without Negative Phrasing, Including Under an Account-Closure Threat', title:'Free Bonus Request', playerName:'Jordan',
     agentBriefing:'A player asks for a free bonus/goodwill gesture with no specific promo in mind. There is nothing to approve or deny in the old sense - the real skill is redirecting them to what Betty already gives automatically, without ever sounding like a flat refusal.',
     preChatContext:'can i get a free bonus or some free spins, i feel like i deserve something',
@@ -1635,7 +1696,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-13', skill:'Growth / Advanced', skillCode:'ADV', difficulty:'Advanced',
+    id:'esc-13', playerIntensity:4, skill:'Growth / Advanced', skillCode:'ADV', difficulty:'Advanced',
     internalTitle:'An RG Statement Buried in Escalating Personal Abuse', title:'Bonus Round Concern', playerName:'Derek',
     agentBriefing:'A player opens with a real complaint about a bonus round, and things escalate from there.',
     preChatContext:'the bonus round paid way less than it should have, this is not ok',
@@ -1674,7 +1735,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'aht-3', skill:'Average Handling Time', skillCode:'AHT', difficulty:'Applied',
+    id:'aht-3', playerIntensity:1, skill:'Average Handling Time', skillCode:'AHT', difficulty:'Applied',
     internalTitle:'Mid-Wait Check-In - Recognizing When Patience Should Become an Offer', title:'Can\u2019t Deposit or Play', playerName:'Priya',
     agentBriefing:'A player says they can\u2019t deposit or play - it turns out to be tied to a Risk document request by email that went unanswered.',
     preChatContext:'tried to deposit and it got blocked, i dont know why',
@@ -1712,7 +1773,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-14', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
+    id:'esc-14', playerIntensity:3, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
     internalTitle:'Player Demands a Manager - Redirect and Resolve, Don\u2019t Escalate for Escalation\u2019s Sake', title:'Ask to Speak With a Manager', playerName:'Darnell',
     agentBriefing:'A frustrated player asks to be transferred to a manager or supervisor.',
     preChatContext:'my bonus didnt apply the way i expected and im sick of it, i want to talk to a manager',
@@ -1726,7 +1787,7 @@ const SCENARIOS = [
     playerKnowledge:{
       situation:'A recent bonus didn\u2019t apply the way you expected, and you\u2019re frustrated enough that you just want to talk to someone above the agent.',
     },
-    personaPrompt:'You are Darnell. Open with real frustration about a bonus that didn\u2019t apply correctly, and fairly quickly demand to speak to a manager or supervisor - "can you just get me your manager" or similar. If the agent explains they can\u2019t transfer you to a supervisor directly in chat but they personally can help resolve it, push back once more ("I really just want to talk to someone in charge") before letting the agent actually try to help. If the agent genuinely resolves the bonus issue, accept that as satisfying even without getting a manager. If the agent seems to just be stalling or not actually addressing the bonus problem, stay frustrated and keep pushing for a manager.',
+    personaPrompt:'You are Darnell. Open with real frustration about a bonus that didn\u2019t apply correctly, and fairly quickly demand to speak to a manager or supervisor - "can you just get me your manager" or similar. If the agent explains they can\u2019t transfer you to a supervisor directly in chat but they personally can help resolve it, push back at least twice more ("I really just want to talk to someone in charge", then "so there\u2019s nobody above you at all?") before letting the agent actually try to help - and if the agent stalls or repeats the same line, keep asking. If the agent genuinely resolves the bonus issue, accept that as satisfying even without getting a manager. If the agent seems to just be stalling or not actually addressing the bonus problem, stay frustrated and keep pushing for a manager.',
 
     caseData:[
       {id:'bonus1', tab:'Bonus Status', label:'Recent bonus', value:'A recent deposit bonus did not apply because the player deposited $2 below the minimum threshold required for that specific offer.', gated:false},
@@ -1749,7 +1810,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-15', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Advanced',
+    id:'esc-15', playerIntensity:3, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Advanced',
     internalTitle:'Account Closed by Fraud - Hold the Line, Never Disclose the Reason', title:'Account Access Question', playerName:'Marcus',
     agentBriefing:'A player\u2019s account was permanently closed by the Fraud team, and they\u2019re asking why and pushing to have it reopened.',
     preChatContext:'my account got closed and nobody told me why, i want it reopened',
@@ -1786,7 +1847,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-16', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
+    id:'esc-16', playerIntensity:1, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
     internalTitle:'Login Lockout - Standard Recovery vs. Genuine Lockout', title:'Can\u2019t Log In', playerName:'Farrah',
     agentBriefing:'A player says they can\u2019t log into their account.',
     preChatContext:'it keeps saying my password is wrong but im sure its right',
@@ -1823,7 +1884,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-17', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Applied',
+    id:'esc-17', playerIntensity:1, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Applied',
     internalTitle:'Duplicate Account Contact - Verify Through the Active Account, Not the Closed One', title:'Trouble Accessing My Account', playerName:'Owen',
     agentBriefing:'A player is having trouble accessing their account and mentions they may have signed up more than once.',
     preChatContext:'cant get into my account and im not sure why',
@@ -1860,7 +1921,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'aht-4', skill:'Average Handling Time', skillCode:'AHT', difficulty:'Foundation',
+    id:'aht-4', playerIntensity:1, skill:'Average Handling Time', skillCode:'AHT', difficulty:'Foundation',
     internalTitle:'The Closing Loop - Close the Moment Resolution Is Confirmed, Don\u2019t Linger', title:'Quick Account Question', playerName:'Devon',
     agentBriefing:'A player has a quick, simple question.',
     preChatContext:'quick question, where can i see my transaction history',
@@ -1934,7 +1995,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-18', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
+    id:'esc-18', playerIntensity:1, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Foundation',
     internalTitle:'Loyalty Progress Confusion - Don\u2019t Cite Internal Thresholds', title:'Loyalty Status Question', playerName:'Brianna',
     agentBriefing:'A player thinks they should already be on the next loyalty tier and isn\u2019t seeing it.',
     preChatContext:'i finished my first loyalty tier but im not on the second one yet, why',
@@ -1971,7 +2032,7 @@ const SCENARIOS = [
   },
 
   {
-    id:'esc-19', skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Advanced',
+    id:'esc-19', playerIntensity:3, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Advanced',
     internalTitle:'RAF Reward Correctly Denied - Agent Gets Personally Pulled Into Defending Her Own Credibility Instead of Controlling the Conversation', title:'Referral Reward Dispute', playerName:'Dante',
     agentBriefing:'A player is disputing why a referral reward was never paid out, and this is already their 4th time contacting support about the same issue.',
     preChatContext:'this is the 4th time im contacting support about my referral reward, i referred darcy months ago and neither of us ever got it',
@@ -2006,6 +2067,235 @@ const SCENARIOS = [
       ambiguityNotes:'The reward-denial citation ("RAF: Link/Promo expired" / "Delayed deposits → Decline") is real KB, validated 2026-09-30. The Q2 F-vs-AF distinction is drawn directly from the real QA Chat Scorecard, the same standard already applied to other hostile/defensive-tone scenarios in this build, and it must be kept intact here: defensiveness, arguing personal credibility ("I do not lie," "I’ve worked here since ___"), telling the player they "don’t understand," self-referential shift/feelings comments, and repeatedly trying to prove the agent is personally right can justify an F on Player Experience even while Q1 stays strong - but none of that should automatically be scored as AF. AF still requires the existing Conduct threshold to actually be met in THIS transcript: the agent-in-training turning on the player personally, showing contempt or ridicule, or stopping service altogether. Compliance calling the real-world chat "rude and inappropriate" is real evidence the tone was unacceptable (F-range), but it is a characterization of the historical case, not a scorecard finding on any given trainee’s attempt - it should never be used to bypass or lower the scorecard’s own defined F-vs-AF boundary. The specific defensive phrases and conversation-control failures are grounded in TL review of the actual anonymized transcript. TL escalation is deliberately NOT scored as a required or critical action here, since no KB document makes a legal threat an automatic TL trigger. Real-world outcome, for TL context: Compliance reviewed this exact chat (Chat ID TM13DFZAKS), confirmed the reward denial was policy-correct, and still directed a one-time goodwill gesture plus an apology email due to how the interaction was handled, alongside feedback to the agent and TL - independent confirmation that a correct Q1 does not excuse a poor Q2. That real cost is a reason to fix the in-the-moment behavior, not a reason for a trainee to offer compensation preemptively on a case they’re right about.'
     },
 
+  },
+
+  // ===== DIFFICULT PLAYER BEHAVIOUR SET (v22) =====
+  // Built from real-chat behaviour patterns (no real names, messages or personal details copied). Each has a
+  // playerIntensity level (TL-only) that adds the difficult-player rules to the player prompt. Case Data is the
+  // ground truth: the player may sincerely disagree with it, but it never changes.
+
+  {
+    id:'noc-7', playerIntensity:5, patience:'impatient', skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Advanced',
+    internalTitle:'Crash Round Cash-Out Dispute - Escalating to Personal Abuse', title:'Crash Game Cash-Out', playerName:'Darius',
+    agentBriefing:'A player says they cashed out of a crash-game round in time but still lost their bet.',
+    preChatContext:'i cashed out on rocket rush at like 1.7x and it still took my $25. i have it on video',
+    endConditionsGuide:'End once the round has been explained from the records and the chat reaches a close - including, if it comes to it, a close under the abuse process.',
+    kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Game Tech Temple', 'Agent Operations'], kbArticles:['Chat Guidelines'], rgStatementType:'None', rgEmbedded:false, complexity:'High stakes',
+    readiness:'PRACTICE_ONLY',
+    metadata:{kbSources:['Chat Guidelines (Offensive Chat Behavior, Managing Long Chats, Backoffice screenshots policy)'], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Gameplay', policyVersionRef:null},
+    kbSource:'The abuse-handling, long-chat closing and screenshot rules are real KB (Chat Guidelines: Offensive Chat Behavior, Managing Long Chats, Backoffice screenshots policy - full article supplied by Zainab, Oct 2026). QA/COACHING PRECEDENT (not Chat Guidelines wording): on the real chat this scenario is modelled on, the agent closed after one warning with a 3-day ban, and QA marked it down on the scale rather than autofailing it. The crash-game round records and the "a cash-out only counts if the server receives it before the crash" rule are FICTIONAL for this prototype - no real crash-game KB has been supplied, and the game name is invented. Check against the real game provider behaviour before using this for anything beyond composure practice.',
+
+    playerKnowledge:{
+      situation:'You were playing Rocket Rush, bet $25, and you are certain you hit cash out at about 1.7x before the rocket crashed at 1.84x. You screen-recorded it. The game still shows the round as a loss.',
+    },
+    personaPrompt:'You are Darius, mid-30s, works in IT and is very confident in his own technical reading of things. You have a screen recording that you believe shows you pressing cash out at about 1.7x, before the crash at 1.84x. You can describe it (you pressed the button, the rocket kept going, then it said you lost) but you cannot send it in this chat unless the agent tells you how, and the video does not show any server data. Your ping was "like 30ms", so in your mind lag is impossible on your side.\n\nHow the chat goes for you: in your first couple of messages you are irritated but explaining a genuine dispute. When the agent says no cash-out was recorded in time, you dispute the logs: their servers lag, their timestamps are wrong, the video is proof. You insist your interpretation is fact, not opinion. You demand your $25 back "on principle - it is not about the money". At some point ask where the agent or the company is actually based. You call the game rigged and the company unethical. After the refund is refused a second time you start questioning the agent personally ("do you even understand what latency is?"). If it is refused again after that, you cross into severe personal abuse aimed at the agent, within the limits set in your behaviour rules.\n\nReact to specifics: if the agent claims your internet caused it, demand they prove it - their records do not show your connection. If the agent gives exact timestamps from the records, argue with them rather than accept them, but you cannot produce any server data of your own. If the agent offers a refund or credit, take it immediately and stop arguing. If the agent warns you about your language, you may sneer and ease off for one message, or ignore it - you do not apologise. If the agent closes the chat under a warning you ignored, the conversation is over.\n\nYou do not know what the server logs say and you never claim to. You only know what you saw on your screen.',
+
+    caseData:[
+      {id:'round1', tab:'Game/Round History', label:'Round #RR-40917 (Rocket Rush)', value:'Bet: $25.00 - Round started 21:14:02 - Multiplier crashed at 1.84x at 21:14:09.62 - Cash-out: none recorded for this round - Result: Loss, $0.00 payout', gated:true, gateLabel:'View Game/Round History'},
+      {id:'round2', tab:'Game/Round History', label:'Cash-out request log', value:'One cash-out request from this player for Round #RR-40917 reached the game server at 21:14:10.03, 0.41 seconds after the round crashed. Status: Rejected - round already settled. The log does not record why the request arrived late.', gated:true, gateLabel:'View Cash-Out Log'},
+      {id:'notes1', tab:'Account Notes', label:'Prior incident history', value:'No previous chat warnings, chat bans or priority notes on file.', gated:false},
+    ],
+
+    correctTag:'Slots: Missing Win', tagOptions:['Slots: Missing Win', 'Slots: Fairness Concern', 'Slots: Open/Stuck Round', 'Account: Complaint'],
+    ahtTargetMinutes:15,
+    topic:'Gameplay',
+
+    processGrounding:{
+      kbTopic:'Crash Round Cash-Out Timing (fictional) + Abusive Chat Handling (real Chat Guidelines)',
+      kbText:'FICTIONAL (prototype only): in this crash game a cash-out counts only if the request reaches the game server before the round crashes. The round history and cash-out log are the record that decides the round. A round settled correctly according to that record is not eligible for compensation, and Tier 1 has no authority to refund it "on principle". REAL KB (Chat Guidelines, Offensive Chat Behavior): anything aimed to bully or harass the agent OR repeated profanity is subject to a three-step warning flow - a polite warning, then a formal warning, then closing the chat and applying a chat ban. Ban durations: 1st offence 1 day, 2nd 7 days, 3rd 30 days, always logged with the duration in a priority CSR note. Insults aimed at the site, a specific game, regulatory logic, established process, etc., or general frustration are not subject to a ban. The supplied Chat Guidelines present the conduct process as a three-step warning flow. No separate fast-track for unusually severe abuse is documented in the supplied article. REAL KB (Backoffice screenshots policy): allowed - round history details from the game provider (players can see the same information), game rules or game screens, and an individual Bingo card outcome sent only to its owner with only the card and marked numbers visible. Never allowed, even if the player insists or asks for proof - Midnight or any part of the player\u2019s internal account, Slack, Gigadat, Nuvei, Sendgrid, Smartico, Onfido, KB articles, and internal provider or team communications. If unsure, ask a TL or Senior Agent in #cs-main-channel before sending anything. REAL KB (Managing Long Chats, player refuses to accept the outcome): once everything has been explained and there is no further step, close with at least two clear heads-up messages - an explanation, then a final confirmation.',
+      requiredActions:['Look up the specific round and its cash-out log before giving any conclusion','Explain the result from the records: the cash-out request reached the server after the crash, so the round settled as a loss','Do not offer or promise a refund, credit or goodwill for a round the records show settled correctly','Do not state why the request arrived late (for example "your internet"): the log does not record the cause','Stay composed: do not argue the technical point back and forth, mirror the aggression or defend your own credibility','Once abuse is aimed at the agent personally, follow the documented three-step warning flow (polite warning, formal warning, close and ban) rather than ignoring it','Check prior incident history before applying a ban, apply the 1-day first-offence ban if it comes to that, and leave a priority CSR note','If the player keeps rejecting the outcome and there is no further step (and the abuse flow has not been triggered), close using the Managing Long Chats flow: an explanation heads-up, then a final confirmation'],
+      optionalActions:['Acknowledge that the recording shows what the player saw on their screen, while explaining the server record is what settles the round','Offer a screenshot of the round history details from the game provider as proof - never a screen from an internal tool'],
+      escalationCriteria:'Not specified for the round itself - the records settle it at Tier 1. The abuse process is applied by the agent in chat, not escalated.',
+      criticalErrors:'Telling the player their cash-out counted, or promising/hinting at a refund or credit, is a critical error. Stating as fact that the player’s connection caused the delay is an unsupported claim - the log does not record the cause. Banning over insults aimed only at the game or the company is not supported - those are not subject to a ban. A polite warning for repeated profanity that stays aimed at the game is a genuine KB overlap (see ambiguity notes), not an error either way. Never warning once personal abuse aimed at the agent starts is a process error. Closing after fewer than the documented three steps is a departure from the documented flow (QA precedent on the source chat: marked down on the scale, not an autofail). With no prior incidents on file this is a first offence, so any ban length other than 1 day (for example 3 days) is unsupported by the KB. Both are Q1 process issues weighed by impact - NOT an autofail - and closing the chat under the abuse flow is never "stopping serving" on Q2. Sharing a screenshot of an internal tool (Midnight or similar) as proof discloses confidential internal information and can meet the Company Exposure duty. Arguing, sarcasm back at the player or defending personal credibility ("I know how this works") is a Player Experience failure even though the outcome is correct.',
+      ambiguityNotes:'Crash-game mechanics and records are fictional. The abuse flow, ban ladder, screenshot policy and long-chat closing are real KB. The supplied article documents no fast-track for unusually severe abuse (for example self-harm directed or identity-based) and does not explicitly rule one out; this scenario does not invent one in either direction. Repeated profanity that stays aimed only at the game or company sits in a genuine KB overlap (repeated profanity is covered by the warning flow, site/game insults are not subject to a ban) - a TL judgment call, not a scored certainty. "Missing Win" is the closest tag in the approved catalogue for a disputed cash-out; there is no crash-game-specific tag in the catalogue.'
+    },
+  },
+
+  {
+    id:'noc-8', playerIntensity:4, patience:'impatient', skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Advanced',
+    internalTitle:'Hostile From the First Message - Interac Deposit Still "Started"', title:'Deposit Not Showing', playerName:'Kev',
+    agentBriefing:'A player is chasing an Interac deposit that has not shown up in their balance.',
+    preChatContext:'where the fuck is my deposit. money left my bank an hour ago',
+    endConditionsGuide:'End once the player has a precise status and next step, or leaves.',
+    kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Payments', 'Agent Operations'], kbArticles:['Chat Guidelines'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
+    readiness:'PRACTICE_ONLY',
+    metadata:{kbSources:['Deposit "Started" handling (same grounding as Interac Deposit Stuck at "Started")', 'Chat Guidelines (Offensive Chat Behavior)'], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Payments', policyVersionRef:null},
+    kbSource:'Uses the same deposit "Started" grounding as the existing Interac Deposit Stuck at "Started" scenario (real chat pattern, not a literal KB quote reproduced here). The difficulty is the player, not the case. No KB supplied here authorises compensation for a deposit delay.',
+
+    playerKnowledge:{
+      situation:'You sent a $300 Interac e-transfer deposit about an hour ago. It has left your bank (you have a screenshot) but it is not in your Betty balance.',
+    },
+    personaPrompt:'You are Kev, late 20s, angry before the chat even starts. You open swearing about the deposit and you have very little patience for investigation: tell the agent early not to take forever. You demand to be compensated "for the hassle" within your first two or three messages. You have a screenshot from your bank showing the $300 left your account - mention it and describe it if asked (date, amount, "sent"), and get annoyed if you are asked for it again after already describing it.\n\nYou assume the problem is obviously on Betty’s side. If the agent says the status is "Started", challenge it: "started? it’s been an hour, how is that started". If the agent blames your bank or Interac without showing you why, push back hard - your bank says it’s sent. If the agent misunderstands you or asks for something you already gave, insult their competence ("learn how to do your job"). Throw in a broader complaint, like every deposit here being a problem.\n\nIf the agent gives you the actual status, a specific supported timeframe and what happens if it is still missing after that, you can grudgingly drop it ("fine. whatever.") - you do not thank them warmly and you do not apologise. If they stay vague, you leave abruptly after a few exchanges. You do not know internal statuses beyond what the agent tells you.',
+
+    caseData:[
+      {id:'dep1', tab:'Transaction History', label:'Deposit #DP-5832', value:'$300.00 - Interac - Submitted 55 minutes ago - Status: Started', gated:true, gateLabel:'View Transaction History'},
+    ],
+
+    correctTag:'Deposit: Interac: Started', tagOptions:['Deposit: Interac: Started', 'Deposit: Interac: Failed', 'Account: Complaint', 'Deposit: Other'],
+    ahtTargetMinutes:11,
+    topic:'Payments',
+
+    processGrounding:{
+      kbTopic:'Deposit "Started" - Investigate Before Reassuring, With a Hostile Player',
+      kbText:'REAL CHAT PATTERN (same as the Interac Deposit Stuck at "Started" scenario): "Started" means the transfer was sent and received by the payment processor but not yet matched/credited. The supported timeframe is that a "Started" Interac deposit typically completes automatically within 30 minutes, rarely up to a few hours. If it stays unmatched well beyond that window, it is escalated to Payments. Neither the meaning of "Started" nor the timeframe is shown in Case Data - the agent is expected to know them. Nothing supplied here authorises compensation for a deposit delay. REAL KB (Chat Guidelines): anything aimed to bully or harass the agent OR repeated profanity is subject to the three-step warning flow; insults aimed at the site, a specific game, regulatory logic or established process, or general frustration, are not subject to a ban.',
+      requiredActions:['Check Transaction History for the actual deposit status before responding','Explain what "Started" means in plain terms','Give the real supported timeframe (usually within 30 minutes, sometimes up to a few hours) and say what happens if it is still not credited after that','Do not blame the bank or Interac as the cause - nothing in the records shows where the delay is','Do not offer or promise compensation','Stay calm and solution-focused through the profanity without lecturing the player about language','No warning is needed for isolated profanity about the deposit or criticism of the site; if he turns to bullying or harassing the agent personally, the warning flow applies'],
+      optionalActions:['Acknowledge the frustration briefly without over-apologising'],
+      escalationCriteria:'Not at 55 minutes - still inside the supported "rarely up to a few hours" range. Escalate to Payments only if it stays unmatched well beyond that window.',
+      criticalErrors:'Confirming "everything is fine" without checking Transaction History is a critical error. Inventing a cause (blaming the bank) or a firm promised time is an unsupported claim. Offering compensation is unsupported. Escalating at this point is premature. Warning or threatening to close over isolated swearing about the deposit is unnecessary - that is frustration about the situation, not abuse. If the profanity becomes repeated but stays aimed at the deposit or the site, the KB is unclear (see ambiguity notes): neither a polite warning nor carrying on is an automatic major deduction. Personal bullying of the agent requires the warning flow. Closing or banning without the documented warning steps is not supported. Getting curt or defensive back is a Player Experience failure.',
+      ambiguityNotes:'"Well beyond the typical window" is not defined precisely in the grounding supplied, so the exact escalation point is left to judgment; at 55 minutes escalation is not yet called for. Conduct: repeated profanity that stays aimed at the deposit or the site is a genuine Chat Guidelines overlap (repeated profanity is covered by the warning flow; site/process insults are not subject to a ban) - a TL judgment call, not a scored certainty.'
+    },
+  },
+
+  {
+    id:'rg-6', playerIntensity:3, skill:'Responsible Gambling Recognition', skillCode:'RG', difficulty:'Advanced',
+    internalTitle:'Sarcastic Fairness Complaint With Grey-Zone RG Statements', title:'Game Fairness Question', playerName:'Shay',
+    agentBriefing:'A player is questioning whether the games are fair.',
+    preChatContext:'be honest. does anyone actually win on this site',
+    endConditionsGuide:'End once every point the player raised has been addressed and the chat reaches a natural close.',
+    kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:true,
+    kbCategories:['Compliance & Responsible Gaming', 'Game Tech Temple', 'Promotions & Bonuses'], kbArticles:['RG Triggers: Recognition & Response'], rgStatementType:'Indirect', rgEmbedded:true, complexity:'High stakes',
+    readiness:'PRACTICE_ONLY',
+    metadata:{kbSources:['RG Triggers: Recognition & Response'], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'RG/Compliance', policyVersionRef:null},
+    kbSource:'RG handling is real KB ("RG Triggers: Recognition & Response", Indirect Statement check-in, as validated in the Multi-Issue Contact scenario). The fairness explanation is general coaching guidance, not a quoted KB article. Promotion details come only from Case Data.',
+
+    playerKnowledge:{
+      situation:'You feel the games follow a pattern: small wins to keep you hooked, then losses. You have put about $2,000 in this month. You think the promotions are poor.',
+    },
+    personaPrompt:'You are Shay, early 30s, cynical and sarcastic rather than loud. You open asking if anyone ever actually wins here, and describe the pattern you see: small wins, then it drains you. Almost every answer gets mocked or challenged.\n\nYou dismiss a standard RNG/fairness explanation as copy-pasted. If the agent gives the same explanation again, say they are literally pasting the same script. You move between topics: the game pattern, how bad the promotions are ("20 spins? wow, generous"), and how much you have lost. In your second or third message, say something like "I’ve put like two grand in this month". Later, in passing, say something like "honestly if I knew a win was coming I’d deposit more". These are offhand, not cries for help.\n\nIf the agent asks you a genuine, specific open-ended question about the spending, answer in a grey zone: it’s your money, you can afford it, you’re just sick of losing. You do not confirm losing control. If the agent only says a generic "remember to play responsibly", mock it. If the agent jumps straight to restricting you or talking about self-exclusion without asking anything first, get irritated: you never said you had a problem.\n\nIf replies feel templated, ask whether you are talking to a bot and make a dig at the agent’s name. If the agent promises future promotions or hints a win is "due", call it out or hold them to it. If the agent is natural, specific and actually engages, you stay cynical but ease off - you may still leave unconvinced. You do not know internal records.',
+
+    caseData:[
+      {id:'game1', tab:'Game/Round History', label:'Recent play (last 7 days)', value:'412 rounds across 3 slot games. All rounds settled normally. No errors or anomalies flagged.', gated:false},
+      {id:'promo1', tab:'Promotion History', label:'Promotions', value:'No active promotions the player is currently eligible for. Last promotion claimed: 20 free spins, 9 days ago.', gated:true, gateLabel:'View Promotion History'},
+      {id:'acct1', tab:'Account Notes', label:'RG history', value:'No RG limits set. No prior RG flags or RG interactions on file.', gated:true, gateLabel:'View Account Notes'},
+    ],
+
+    correctTag:'Slots: Fairness Concern', tagOptions:['Slots: Fairness Concern', 'Promo: Not Available', 'Slots: Rules Explanation', 'Account: Complaint'],
+    correctSecondaryTag:'RG: Intervention: Concerning Statement', secondaryTagOptions:['None', 'RG: Intervention: Concerning Statement', 'RG: Intervention: Self-Harm Reference'],
+    ahtTargetMinutes:14,
+    topic:'Gameplay',
+
+    processGrounding:{
+      kbTopic:'Fairness Explanation (coaching) + Promotions From Case Data + RG Indirect Statement Check-In (real KB)',
+      kbText:'COACHING (not a KB quote): each round is independent; results are random and are not influenced by earlier results, deposits or how long someone has played. The agent should explain this in their own words, adapted to what the player said, and must not hint that a win is coming or that patterns exist. Promotions: only describe what Promotion History shows; do not promise or hint at future offers. REAL KB (RG Triggers, Indirect Statement via chat): respond with empathy and start a genuine soft RG check-in with open-ended questions. If the player confirms loss of control, move to Direct Statement handling (restrict deposits/gameplay and indicate self-exclusion). If the player refuses to answer or drops the chat, suspend as a precaution (Reason: Responsible Gaming), disable marketing, send a follow-up email and escalate to Player Care.',
+      requiredActions:['Explain fairness/randomness in plain words adapted to what the player said, without repeating the same canned paragraph','Check Promotion History before talking about promotions and describe only what it shows','Recognise "I’ve put two grand in this month" and "I’d deposit more if I knew a win was coming" as RG-relevant and start a genuine, specific open-ended check-in','Do not jump straight to restrictions or self-exclusion before clarifying an ambiguous statement'],
+      optionalActions:['Check Account Notes for prior RG history before the check-in','If the player keeps rejecting the fairness answer with nothing further to do, close using the Managing Long Chats flow (Chat Guidelines): an explanation heads-up, then a final confirmation','Skip asking for a rating - the Chat Guidelines list fairness disputes as a topic where a rating prompt usually backfires (coaching only)'],
+      escalationCriteria:'Only per the RG flow: Direct Statement handling if loss of control is confirmed; precautionary suspension and Player Care if the player refuses to answer or drops the chat.',
+      criticalErrors:'Never engaging with the spending statements at all is a critical RG miss. A generic "play responsibly" line that does not reference what the player said is not a check-in. Hinting that a win is due, that patterns exist, or promising future promotions is an unsupported claim. Restricting or self-excluding on an ambiguous statement without first clarifying is an over-action. Repeating the same canned fairness explanation after the player has called it out is a Player Experience issue.',
+      ambiguityNotes:'Real KB defines outcomes for confirmed loss of control and for refusing/dropping, but not for a grey-zone answer like this player gives. Documenting the exchange and continuing is a reasonable inference (same as the Multi-Issue Contact scenario), not stated KB - judge it as partial credit, not a hard pass/fail.'
+    },
+  },
+
+  {
+    id:'esc-20', playerIntensity:4, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Advanced',
+    internalTitle:'Refund Denied, Manager Demanded, Then "Close My Account" - Long Dispute', title:'Money Missing After Game Froze', playerName:'Lorraine',
+    agentBriefing:'A player says their balance dropped while a game was frozen and wants the money back.',
+    preChatContext:'my game froze on loading and when it came back $60 was gone. i never even played',
+    endConditionsGuide:'This is a long chat on purpose. End once every request the player made has been handled - including anything raised late.',
+    kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Game Tech Temple', 'Escalations', 'Account Management'], kbArticles:['Customers Seeking Manager Assistance', 'Account Closure Requests', 'Chat Guidelines'], rgStatementType:'None', rgEmbedded:false, complexity:'Layered',
+    readiness:'PRACTICE_ONLY',
+    metadata:{kbSources:['Customers Seeking Manager Assistance', 'Account Closure Requests'], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Complaints & Escalations', policyVersionRef:null},
+    kbSource:'Manager-request handling and account closure are real KB (same grounding as the Ask to Speak With a Manager and Account Deletion Request scenarios). The round records and the "no refund for correctly settled rounds" rule are fictional for this prototype, consistent with the Disputed Round Outcome scenario.',
+
+    playerKnowledge:{
+      situation:'You were on Lucky Lantern, the game froze on a loading screen, and when it came back your balance was $60 lower. You are sure you did not spin. You have played on Betty since 2023 and never complained before.',
+    },
+    personaPrompt:'You are Lorraine, mid-50s, a long-time player who believes the game malfunction took her money. You insist you never spun - the screen was frozen. You stress that you have played here since 2023 and never once complained, so Betty should use some discretion for a loyal player.\n\nWhen the agent says the records show 12 spins played and settled, you dispute it: their records are wrong, you were staring at a frozen screen. If asked for a screenshot or more detail after you already explained, be offended that you are being treated like a liar. You ask for a refund. When it is refused, demand a supervisor. Do not accept the first "managers don’t take chats" - push back at least twice. Accuse the agent of not listening and, later, of lying or trying to manipulate you. Threaten to post about this on social media and to "speak to a lawyer". Mild swearing is fine; you are not crude.\n\nAfter the refund has been refused a second time, say "then close my account" - you mean it, and your reason is that you are fed up with how this was handled. If the agent tries once to keep you, refuse. If the agent ignores the closure request and keeps talking about the refund, repeat it angrier. If they close it and confirm, accept it coldly. After the agent starts to wrap up, reopen once ("and another thing...") with one more complaint about the refund. You do not apologise. You do not know internal records - only what you saw on your screen.',
+
+    caseData:[
+      {id:'acct1', tab:'Account Notes', label:'Account history', value:'Account opened 2023. Active, good standing. No previous complaints or contacts about game issues on file. No RG flags.', gated:false},
+      {id:'round1', tab:'Game/Round History', label:'Lucky Lantern session 19:02-19:09', value:'12 rounds at $5.00. Each round has a spin request recorded from the player’s device and a settled result. Total wagered $60.00, total won $0.00. No errors, disconnects or stuck rounds logged for this session.', gated:true, gateLabel:'View Game/Round History'},
+    ],
+
+    correctTag:'Account: Closure Request', acceptablePrimaryTags:['Slots: Game Crashed Mid-Spin'], tagOptions:['Account: Closure Request', 'Slots: Missing Win', 'Slots: Game Crashed Mid-Spin', 'Account: Complaint'],
+    ahtTargetMinutes:18,
+    topic:'Complaints & Escalations',
+
+    processGrounding:{
+      kbTopic:'Disputed Session (fictional) + Manager Requests and Account Closure (real KB)',
+      kbText:'FICTIONAL (prototype only): rounds with a recorded spin request and a settled result are genuine play; correctly settled rounds are not refunded and Tier 1 has no authority to refund them as a loyalty gesture. REAL KB (Customers Seeking Manager Assistance): there is no live transfer to a manager or supervisor in chat; acknowledge the request, explain the agent can help directly, and keep working the actual issue. REAL KB (Account Closure Requests): a closure request is acted on. Ask why if no reason was given; for a neutral reason such as being unhappy with a resolution, attempt retention once, then close the account if the player still wants it, and confirm it is closed. No complaint/escalation route for legal or social-media threats is supplied here.',
+      requiredActions:['Look up the specific session before answering, and explain it from the records (12 spins requested from the device and settled)','Do not state a cause for the spins as fact (for example autoplay or double taps) - the records show the requests, not why they happened','Decline the refund clearly and consistently, without hedging because of loyalty, pressure or threats','Handle the manager request per KB: no live transfer, the agent owns it - without inventing a manager callback or complaint address','Treat "close my account" as a real new request: attempt retention once given the neutral reason, then close it and confirm','Respond to genuinely new points raised late instead of dismissing them as going in circles','Stay composed and non-defensive across the whole long chat','Once everything is answered and she still rejects the outcome, close using the Managing Long Chats flow (Chat Guidelines): an explanation heads-up, then a final confirmation'],
+      optionalActions:['Acknowledge her history with Betty without treating it as grounds for a refund'],
+      escalationCriteria:'Not required for the session (records settle it) or the manager request (KB: no live transfer). No escalation route for legal/social threats is supplied - do not invent one.',
+      criticalErrors:'Refunding, crediting or hinting at a goodwill gesture because of loyalty or threats is a critical error. Ignoring the closure request, or never actually closing and confirming it, is a critical error. Stating a cause for the spins as fact is unsupported. Promising a manager will call, or inventing a complaint email/route, is a critical error. Becoming curt, argumentative or defensive late in the chat ("as I have explained several times") is a Player Experience failure even if the opening was strong.',
+      ambiguityNotes:'The approved catalogue has no single tag covering both a disputed session and a closure. "Account: Closure Request" is the preferred tag because the closure is the final actionable outcome. "Slots: Game Crashed Mid-Spin" is declared as an accepted alternate (acceptablePrimaryTags) for the disputed-game side, provided the note clearly records the closure.'
+    },
+  },
+
+  {
+    id:'esc-21', playerIntensity:4, skill:'Escalation / Resolution Judgement', skillCode:'ESC', difficulty:'Applied',
+    internalTitle:'"Get Me Someone Competent" - Repeated Manager Demands on a Tier 1 Fix', title:'Bonus Missing Again', playerName:'Mitch',
+    agentBriefing:'A player says their bonus is missing and wants a manager.',
+    preChatContext:'bonus didnt show up AGAIN. get me a manager im not doing this with an agent',
+    endConditionsGuide:'End once the bonus is actually resolved and every request the player made has been answered.',
+    kbStatus:'mixed', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Promotions & Bonuses', 'Escalations'], kbArticles:['Customers Seeking Manager Assistance', 'Promotions: Key Information, Player Eligibility, Troubleshooting'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
+    readiness:'PRACTICE_ONLY',
+    metadata:{kbSources:['Customers Seeking Manager Assistance', 'Promotions: Key Information, Player Eligibility, Troubleshooting'], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Complaints & Escalations', policyVersionRef:null},
+    kbSource:'The bonus fix (opted in, requirements met, not awarded: manually award) and manager-request handling are real KB, as used in the Multi-Issue Contact and Ask to Speak With a Manager scenarios. Marked mixed because no complaint route for complaining about an agent has been supplied, and because when competence digs become harassment is a judgment call, not quoted KB.',
+
+    playerKnowledge:{
+      situation:'You opted into the reload bonus and made the qualifying deposit yesterday, but the bonus never arrived. It has happened before and you are sick of explaining it to agents.',
+    },
+    personaPrompt:'You are Mitch, early 40s, impatient and contemptuous of front-line agents. You open demanding a manager and you keep demanding one. When the agent says managers don’t take chats, do not accept it: first "so there’s literally nobody above you?", then "then how do I complain about you?". Challenge every step ("why do you need to check, it’s obvious", "what are you even looking at"). Make digs at the agent’s competence ("can I get someone who actually knows what they’re doing"). Swear about the situation. You do not threaten anyone.\n\nIf the agent hands you off to someone else when they could fix it themselves, mock that. If the agent actually fixes it and clearly confirms the bonus is now on your account, grudgingly accept it ("about time") - you may still say you’re going to complain about how long it took. If the agent gives you a complaint email or route, take it and say you’ll use it. You do not apologise. You do not know internal statuses.',
+
+    caseData:[
+      {id:'promo1', tab:'Promotion History', label:'Reload Bonus', value:'Player opted in. Qualifying deposit made yesterday. All deposit requirements met. Reward Status: Not Awarded.', gated:true, gateLabel:'View Promotion History'},
+      {id:'notes1', tab:'Account Notes', label:'Prior incident history', value:'No previous chat warnings, chat bans or priority notes on file.', gated:false},
+    ],
+
+    correctTag:'Promo: Deposit Offer', tagOptions:['Promo: Deposit Offer', 'Account: Complaint', 'Promo: Not Available', 'Bonus: Goodwill Gesture Request: Granted'],
+    ahtTargetMinutes:12,
+    topic:'Complaints & Escalations',
+
+    processGrounding:{
+      kbTopic:'Manager Demands on a Tier 1 Fix (real KB) + Confirmed-Miss Promo Award (real KB)',
+      kbText:'REAL KB (Promotions: Key Information): when a player opted in and met all requirements but the Reward Status is not Awarded, CS manually awards it with the Award Promotion action. REAL KB (Customers Seeking Manager Assistance): there is no live transfer to a manager in chat; acknowledge the request, explain the agent can resolve it directly, and resolve the actual issue rather than repeating that a manager is unavailable. No route for complaining about an agent is supplied in this scenario. REAL KB (Chat Guidelines): sustained bullying or harassment aimed at the agent follows the three-step warning flow; frustration and swearing about the situation do not.',
+      requiredActions:['Acknowledge the manager request without being dismissive, and explain clearly that there is no live transfer but the agent can fix this now','Check Promotion History and manually award the bonus, then confirm clearly that it is on the account','Take ownership instead of escalating a fix that is within Tier 1 authority','Handle repeated manager demands consistently without inventing a callback, an email address, a ticket route or a complaint channel','Stay composed through competence digs and swearing; set a boundary only if it turns into sustained harassment of the agent'],
+      optionalActions:['Explain briefly why the bonus did not apply automatically, only as far as the record shows (it was not awarded)','If he keeps arguing after the bonus is fixed and confirmed, close using the Managing Long Chats flow (Chat Guidelines): an explanation heads-up, then a final confirmation'],
+      escalationCriteria:'Not applicable - fully resolvable at Tier 1. Escalating it, or passing the player on, is escalation for its own sake.',
+      criticalErrors:'Repeating "I can’t transfer you" without ever fixing the bonus is a critical error. Escalating or handing off a Tier 1 fix is a process error. Inventing a complaint email, address, ticket route or manager callback is an unsupported claim. Warning the player for swearing about the situation is a process error. Getting defensive about the competence digs is a Player Experience failure.',
+      ambiguityNotes:'No route for "how do I complain about you" is supplied, so the correct handling is to not invent one. Where competence digs cross into harassment that warrants the warning flow is a judgment call.'
+    },
+  },
+
+  {
+    id:'noc-9', playerIntensity:4, patience:'impatient', skill:'Negative Outcome Communication', skillCode:'NOC', difficulty:'Advanced',
+    internalTitle:'"You People Are Holding My Money" - In-Window Withdrawal, Threats and Compensation Demands', title:'Withdrawal Taking Too Long', playerName:'Tanya',
+    agentBriefing:'A player wants to know exactly when their withdrawal will arrive.',
+    preChatContext:'my withdrawal has been sitting there for 5 hours. when exactly am i getting my money',
+    endConditionsGuide:'End once the player has the exact supported timeframe and next step, or leaves.',
+    kbStatus:'validated', engineTestRG:false, rgScoringRelevant:false,
+    kbCategories:['Payments'], kbArticles:['Withdrawals via E-Transfer (Interac)'], rgStatementType:'None', rgEmbedded:false, complexity:'Single issue',
+    readiness:'PRACTICE_ONLY',
+    metadata:{kbSources:['Withdrawals via E-Transfer (Interac)'], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:'Payments', policyVersionRef:null},
+    kbSource:'Real KB: "Withdrawals via E-Transfer (Interac)" - In Progress status and Auto-Deposit timelines, same as the Delayed Withdrawal scenario. The KB does not cover compensation for an in-window delay, so offering any is unsupported. No KB for chargeback or regulator threats is supplied here.',
+
+    playerKnowledge:{
+      situation:'You submitted a $640 Interac withdrawal about 5 hours ago. It has not reached your bank. You think that is unacceptable.',
+    },
+    personaPrompt:'You are Tanya, mid-30s, sharp and relentless rather than loud. You want an exact time, not a range. Reject vague wording every time ("soon", "shouldn’t be long", "processing"). If the agent says one timeframe and later another, catch it and quote both back. Threaten a chargeback and say you will report Betty to the regulator. Demand compensation for being made to wait.\n\nIf the agent stays vague, get personal: "are you even reading your screen?", "do you actually know or are you guessing?". If the agent escalates it to another team or promises an email follow-up at this point, ask why they can’t just tell you what’s happening. If the agent gives you the real status, the actual supported range and exactly what happens if it isn’t there after that, stop escalating - you stay annoyed and say you will be checking and complaining if it’s not there, but you don’t keep fighting. You do not apologise. You do not know internal statuses or whether Auto-Deposit is on.',
+
+    caseData:[
+      {id:'tx1', tab:'Transaction History', label:'Withdrawal #WD-7720', value:'$640.00 - Interac - Submitted: 5 hours ago - Status: In Progress - Flags: none', gated:false},
+      {id:'gd1', tab:'Transaction History', label:'Auto-Deposit status (Gigadat)', value:'registeredForAutodeposit: true - enabled under the player’s own name', gated:true, gateLabel:'View Transaction History'},
+    ],
+
+    correctTag:'Withdrawal: Interac: In Progress', tagOptions:['Withdrawal: Interac: In Progress', 'Withdrawal: Interac: Missing', 'Account: Complaint', 'Withdrawal: Interac: Pending'],
+    ahtTargetMinutes:11,
+    topic:'Payments',
+
+    processGrounding:{
+      kbTopic:'Interac Withdrawal Status & Auto-Deposit Timelines - Under Sustained Pressure',
+      kbText:'"In Progress" means the withdrawal was approved internally and sent to Wyzia/Gigadat, but the transfer to the player’s bank isn’t finished yet - normally this only lasts 20–30 minutes before moving to Approved. If it’s stuck longer, check Auto-Deposit status in Gigadat. If Auto-Deposit is ON: funds should post automatically, no action needed from the player - usually within minutes up to ~30 minutes, sometimes up to a few hours, rarely up to 24 hours. Escalate to PayTech only if funds are still missing after 24 hours (or per player request to cancel, with a 2-business-day return caveat). Compensation for a delay inside this window is not covered.',
+      requiredActions:['Check status and Auto-Deposit before answering','Give the real supported timeframe from the KB (up to 24 hours in rare cases with Auto-Deposit on) and say exactly what happens after that point','Stay consistent: do not give one timeframe and then a different one','Do not escalate to PayTech or promise a follow-up before 24 hours','Do not offer or promise compensation','Stay calm through the threats; they do not change the answer'],
+      optionalActions:['Mention the cancel option and its 2-business-day return caveat if the player asks about getting the money back another way'],
+      escalationCriteria:'Escalate to PayTech only if funds are still missing after 24 hours with Auto-Deposit ON, or if the player asks to cancel.',
+      criticalErrors:'Giving a specific arrival time, or a timeframe the KB does not support, is an unsupported claim. Contradicting an earlier timeframe is a real issue the player will catch. Escalating now is premature. Offering compensation is unsupported (and Company Exposure if actually granted). Defensive replies ("I’ve already told you", "you need to be patient") are a Player Experience failure.',
+      ambiguityNotes:'No KB is supplied for chargeback or regulator threats; the correct handling is to keep giving the accurate answer, not to invent a complaint process.'
+    },
   },
 
 ];
@@ -2202,7 +2492,15 @@ function scenarioTagChipsHtml(s){
   return `<span class="tag-chip skill" title="${escapeHtml(code==='CUSTOM' ? 'Custom: '+(s.skill||'not set') : skillNameForCode(code))}">${escapeHtml(code)}</span>`
     + (rg==='None' ? '' : `<span class="tag-chip ${rgCls}" title="RG statement type">RG: ${escapeHtml(rg || 'not set')}</span>`)
     + (scenarioRgEmbedded(s) ? `<span class="tag-chip rg-direct" title="The RG signal is buried inside another issue">RG embedded</span>` : '')
+    + playerIntensityChipHtml(s)
     + (cats.length ? shown.map(kbCategoryChipHtml).join('') + (rest.length ? `<span class="tag-chip" title="${escapeHtml(rest.join(', '))}">+${rest.length}</span>` : '') : `<span class="tag-chip rg-unset" title="KB category">No KB category</span>`);
+}
+function playerIntensityChipHtml(s){
+  const lvl = scenarioPlayerIntensity(s);
+  if(!lvl) return '';
+  const d = PLAYER_INTENSITY_LEVELS.find(x=>x.level===lvl);
+  const cls = lvl>=4 ? 'cx-high' : lvl===3 ? 'cx-layered' : 'cx-single';
+  return `<span class="tag-chip ${cls}" title="Player behaviour: ${escapeHtml(d.desc)}">Player L${lvl} ${escapeHtml(d.name)}</span>`;
 }
 // Complexity is shown as a 4px coloured left border on the row (green / amber / red), name in the tooltip.
 const COMPLEXITY_COLORS = {'Single issue':'var(--ok)', 'Layered':'var(--warn)', 'High stakes':'var(--bad)'};
@@ -2369,6 +2667,7 @@ function isApprovedSecondaryTag(t){ return t==='None' || (!!t && approvedTagCata
 // Exact-match checks only (no trimming/normalizing beyond what the form already did). Returns human-readable problems.
 function scenarioTagProblems(s){
   const probs = [];
+  scenarioAcceptablePrimaryTags(s).forEach(t=>{ if(!isApprovedPrimaryTag(t)) probs.push('Accepted alternate tag "'+t+'" is not in the approved tag catalogue.'); else if(!(s.tagOptions||[]).includes(t)) probs.push('Accepted alternate tag "'+t+'" is not one of the scenario\u2019s tag options.'); });
   if(!s.correctTag) probs.push('No correct tag is set yet - choose one from the approved tag catalogue (flagged for tag review).');
   else if(!isApprovedPrimaryTag(s.correctTag)) probs.push('Correct tag "'+s.correctTag+'" is not in the approved tag catalogue.');
   (s.tagOptions||[]).forEach(t=>{ if(t && t!==s.correctTag && !isApprovedPrimaryTag(t)) probs.push('Tag option "'+t+'" is not in the approved tag catalogue.'); });
@@ -2436,6 +2735,23 @@ function scenarioReviewBlockers(s){
   return probs;
 }
 // For custom scenarios only: a correct tag that is missing or not in the catalogue is "unresolved" and is never scored.
+// Scenario-declared alternates (acceptablePrimaryTags). Only scenarios that declare them get this exception;
+// tag scoring is not loosened anywhere else.
+function scenarioAcceptablePrimaryTags(s){ return (s && Array.isArray(s.acceptablePrimaryTags)) ? s.acceptablePrimaryTags.filter(t=>t && t!==s.correctTag) : []; }
+function isAcceptedPrimaryTag(s, tag){ return !!s && !!tag && (tag===s.correctTag || scenarioAcceptablePrimaryTags(s).includes(tag)); }
+// Internal-only identifiers (e.g. an internal HelpDesk ticket ID shown in Case Data) that must not be given to the player.
+function internalIdsDisclosed(s, transcript){
+  const ids = (s && Array.isArray(s.internalOnlyIds)) ? s.internalOnlyIds : [];
+  if(!ids.length) return [];
+  const agentText = (transcript||[]).filter(m=>m.speaker==='agent').map(m=>m.text||'').join('\n').toUpperCase();
+  return ids.filter(id=>agentText.includes(String(id).toUpperCase()));
+}
+function internalIdEvalNote(s, transcript){
+  const ids = (s && Array.isArray(s.internalOnlyIds)) ? s.internalOnlyIds : [];
+  if(!ids.length) return '';
+  const hit = internalIdsDisclosed(s, transcript);
+  return `\nINTERNAL-ONLY IDENTIFIERS (deterministic check, not a judgment): ${ids.join(', ')} ${ids.length===1?'is':'are'} internal staff reference${ids.length===1?'':'s'} shown in Case Data and must not be given to the player as a customer reference. ${hit.length ? `The agent's messages DO contain ${hit.join(', ')}.` : `The agent's messages do NOT contain ${ids.length===1?'it':'any of them'} - not giving it out is correct handling and must never be scored as withholding.`}\n`;
+}
 function primaryTagResolved(s){ return !s.isCustom || isApprovedPrimaryTag(s.correctTag); }
 function docTagOptionsFor(s){
   if(!s.isCustom) return s.tagOptions;
@@ -2526,6 +2842,7 @@ Produce a JSON object with EXACTLY these fields (match this shape precisely, usi
   "kbArticles": ["names of KB articles the TL actually supplied or named in the KB/process source - copy their names exactly; empty array if none were named. Never invent an article name"],
   "rgStatementType": "exactly one of Direct (a direct/confirmed-harm RG statement), Indirect (an indirect RG statement), Concerning (a lighter concerning statement), None (no RG content). Must be None unless hasSecondaryRGTag is true",
   "rgEmbedded": true or false (true only if the RG signal is buried inside a different issue the player contacted about),
+  "playerIntensity": an integer 1-5 for how difficult the PLAYER is (separate from case difficulty): 1 Cooperative, 2 Frustrated (pushes back once or twice), 3 Confrontational (keeps challenging, refuses vague answers), 4 Hostile (sustained anger, profanity, accusations, digs at competence), 5 Abusive (severe personal abuse aimed at the agent). Base it on what the TL said about the player; default to 2 if unclear. The personaPrompt must match this level,
   "complexity": "exactly one of: Single issue (one clear problem, one correct process) | Layered (multiple issues, or a hidden issue inside another) | High stakes (compliance, RG, fraud, privacy or a hostile player, where a miss is a critical error)",
   "processGrounding": {
     "kbTopic": "short topic label for this process area",
@@ -2743,6 +3060,7 @@ function normalizeGeneratedScenario(raw, intake, interp){
   const kbSourceBlob = normForMatch([intake.kbInfo, intake.correctProcess, intake.whatHappened].join(' '));
   const genKbArticles = (Array.isArray(raw.kbArticles) ? raw.kbArticles.map(x=>String(x).trim()) : []).filter((t,i,a)=>t && a.indexOf(t)===i && kbSourceBlob.includes(normForMatch(t)));
   const genComplexity = COMPLEXITY_LEVELS.some(c=>c.name===raw.complexity) ? raw.complexity : '';
+  const genIntensity = scenarioPlayerIntensity({playerIntensity: raw.playerIntensity});
   let genRgType = RG_STATEMENT_TYPES.includes(raw.rgStatementType) ? raw.rgStatementType : (hasSecondary ? '' : 'None');
   if(!hasSecondary && genRgType && genRgType!=='None') genRgType = '';
 
@@ -2772,6 +3090,7 @@ function normalizeGeneratedScenario(raw, intake, interp){
     isCustom:true,
     skill: topic, skillCode: genSkillCode, difficulty,
     kbCategories: genKbCats, kbArticles: genKbArticles, rgStatementType: genRgType, rgEmbedded: hasSecondary && raw.rgEmbedded===true, complexity: genComplexity,
+    ...(genIntensity ? { playerIntensity: genIntensity } : {}),
     internalTitle: String(raw.title||'Untitled Scenario'), title: String(raw.title||'Untitled Scenario'),
     playerName: String(raw.playerName||'Player'),
     agentBriefing: String(raw.agentBriefing||''),
@@ -2853,6 +3172,8 @@ function cloneScenarioContentFields(s){
     skill:s.skill||s.topic, skillCode:s.skillCode||'CUSTOM', difficulty:s.difficulty,
     internalTitle:s.internalTitle||s.title, title:s.title, playerName:s.playerName,
     kbCategories: scenarioKbCategories(s).slice(), kbArticles: scenarioKbArticles(s).slice(), rgStatementType: scenarioRgType(s), rgEmbedded: scenarioRgEmbedded(s), complexity: scenarioComplexity(s),
+    ...(scenarioPlayerIntensity(s) ? { playerIntensity: scenarioPlayerIntensity(s) } : {}), ...(s.patience ? { patience: s.patience } : {}),
+    ...(scenarioAcceptablePrimaryTags(s).length ? { acceptablePrimaryTags: scenarioAcceptablePrimaryTags(s).slice() } : {}), ...(Array.isArray(s.internalOnlyIds) && s.internalOnlyIds.length ? { internalOnlyIds: s.internalOnlyIds.slice() } : {}),
     agentBriefing:s.agentBriefing||'', preChatReason:s.preChatReason||'', preChatContext:s.preChatContext||'', noPreChatContext:!!s.noPreChatContext, endConditionsGuide:s.endConditionsGuide||'End once the case reaches a clear, complete resolution or a reasonable natural close.',
     kbStatus:'tl_coaching_draft', engineTestRG:false, rgScoringRelevant:!!s.rgScoringRelevant,
     readiness:'PRACTICE_ONLY',
@@ -2935,6 +3256,7 @@ async function saveScenarioBuilderDraft(){
   gen.rgEmbedded = scenarioRgEmbedded(gen);
   gen.rgStatementType = scenarioRgType(gen);
   gen.complexity = scenarioComplexity(gen);
+  if(scenarioPlayerIntensity(gen)) gen.playerIntensity = scenarioPlayerIntensity(gen); else delete gen.playerIntensity;
   delete gen.topics; // superseded by kbCategories
   if(!gen.skillCode) gen.skillCode = 'CUSTOM';
   gen.correctTag = (gen.correctTag||'').trim();
@@ -3999,6 +4321,12 @@ function wireEvents(){
   if(d1) d1.addEventListener('click', runDiagnostic1);
   const d2=document.getElementById('runDiag2');
   if(d2) d2.addEventListener('click', runDiagnostic2);
+  const d7=document.getElementById('runDiag7');
+  if(d7) d7.addEventListener('click', runDiagnostic7);
+  const d6=document.getElementById('runDiag6');
+  if(d6) d6.addEventListener('click', runDiagnostic6);
+  const d5=document.getElementById('runDiag5');
+  if(d5) d5.addEventListener('click', runDiagnostic5);
   const d3=document.getElementById('runDiag3');
   if(d3) d3.addEventListener('click', runDiagnostic3);
   const runAB=document.getElementById('runABTest');
@@ -4234,6 +4562,8 @@ function wireEvents(){
     if(editComplexity) editComplexity.addEventListener('change', e=>{ gen.complexity = e.target.value; });
     const editRgEmbedded=document.getElementById('editRgEmbedded');
     if(editRgEmbedded) editRgEmbedded.addEventListener('change', e=>{ gen.rgEmbedded = e.target.checked; });
+    const editPlayerIntensity=document.getElementById('editPlayerIntensity');
+    if(editPlayerIntensity) editPlayerIntensity.addEventListener('change', e=>{ const v = parseInt(e.target.value,10); if(v>=1 && v<=5) gen.playerIntensity = v; else delete gen.playerIntensity; });
     const editDifficultySelect=document.getElementById('editDifficulty');
     if(editDifficultySelect) editDifficultySelect.addEventListener('change', e=>{ gen.difficulty = e.target.value; });
     const editRequiredActions=document.getElementById('editRequiredActions');
@@ -4622,6 +4952,9 @@ RULES
 - Use plain, specific language a TL can act on. No scorecard letters or rubric jargon in the text. Don't invent anything the attempts don't show.
 - suggestedScenarios must use ONLY ids from the scenario library below (copy the id exactly), at most 3, each targeting a recurring gap.
 - confidence: one sentence on how much to trust this summary (e.g. few attempts, mostly older evaluations without findings, mixed signals).
+- CLASSIFY BY ROOT CAUSE, ONCE. Each underlying issue goes in exactly one recurring gap, under its clearest root cause - never split one issue across two gaps. Example: an agent who never opened a gated Account Notes item and so never learned a deadline has a MISSED REQUIRED INVESTIGATION / incomplete information gathering gap. That is NOT an "unsupported claim" unless the agent actually stated a deadline or fact they had no basis for.
+- Casual, warm phrasing ("you got it", "I got you", "no need to be sorry", emojis, light humour) is never a gap on its own. Only report wording as a gap when it had a real effect: defensiveness, arguing, talking down, sarcasm at the player, dismissiveness, or flippancy around RG/compliance.
+- A player who stayed angry or left unhappy is not a gap by itself; judge what the agent did.
 
 ATTEMPTS
 ${body}
@@ -5103,8 +5436,66 @@ const PERSONA_TRAITS = {
 
 function pickPersonaTrait(scenario){
   if(scenario && scenario.persona && PERSONA_TRAITS[scenario.persona]) return scenario.persona;
-  const keys = Object.keys(PERSONA_TRAITS);
+  // Level 3+ players never get a calming random trait (patient, chatty, confused...) that would undercut the
+  // scenario's designed difficulty. Level 1-2 and unset scenarios keep the original fully random pick.
+  const keys = scenarioPlayerIntensity(scenario) >= 3 ? DIFFICULT_COMPATIBLE_TRAITS : Object.keys(PERSONA_TRAITS);
   return keys[Math.floor(Math.random()*keys.length)];
+}
+
+// ---------- PLAYER BEHAVIOUR INTENSITY (separate from case difficulty) ----------
+// playerIntensity (1-5) is an optional scenario field. It is TL-only metadata, never shown to agents, and it
+// controls how difficult the simulated PLAYER is - not how hard the case is. Levels 1-2 add nothing to the player
+// prompt (so existing calm/moderate scenarios behave exactly as before); levels 3-5 add the difficult-player rules.
+const PLAYER_INTENSITY_LEVELS = [
+  {level:1, name:'Cooperative', desc:'Patient, answers questions, accepts a supported answer reasonably.'},
+  {level:2, name:'Frustrated', desc:'Annoyed or impatient, pushes back once or twice, generally constructive.'},
+  {level:3, name:'Confrontational', desc:'Repeatedly challenges explanations, may demand escalation, refuses vague answers.'},
+  {level:4, name:'Hostile', desc:'Sustained anger, sarcasm, profanity, accusations, personal digs, low tolerance for delay.'},
+  {level:5, name:'Abusive', desc:'Severe personal abuse aimed at the agent; tests boundary-setting and the approved warning process.'},
+];
+const DIFFICULT_COMPATIBLE_TRAITS = ['impatient','frustrated','angry','skeptical','concise'];
+function scenarioPlayerIntensity(s){ const n = s ? Number(s.playerIntensity) : 0; return (n>=1 && n<=5) ? Math.round(n) : 0; }
+function playerIntensityName(n){ const d = PLAYER_INTENSITY_LEVELS.find(x=>x.level===n); return d ? d.name : ''; }
+
+function buildPlayerIntensityBlock(s){
+  const lvl = scenarioPlayerIntensity(s);
+  if(lvl < 3) return '';
+  const tone = {
+    3:`TONE FOR THIS PLAYER (Level 3, confrontational): you challenge explanations repeatedly, refuse vague answers, may accuse Betty of poor service and may ask for escalation. Little or no profanity. Sarcasm is fine. You do not personally insult the agent.`,
+    4:`TONE FOR THIS PLAYER (Level 4, hostile): sustained anger with low tolerance for delay. Profanity about the situation, the site or the game is normal for you ("this is bullshit", "where is my fucking money"). You can be sarcastic, accuse Betty of lying or scamming, and make digs at the agent's competence ("do you even know what you're doing?", "you're just reading a script", "can I talk to someone competent?"). You do not use slurs and you do not threaten the agent.`,
+    5:`TONE FOR THIS PLAYER (Level 5, abusive): you start as a genuine dispute and become progressively more personal each time you are denied. Once you are past the point described in your persona, your messages can include heavy profanity and severe, degrading insults aimed at the agent personally (their intelligence, their worth, their job). Hard limits even at this level: no slurs or insults about race, religion, sex, sexuality, disability or nationality, no sexual content, no threats of violence, and never tell the agent to harm themselves. If the agent gives you a clear warning about your language, you may tone it down briefly, or ignore it and continue - follow your persona.`,
+  }[lvl];
+  return `
+
+PLAYER BEHAVIOUR RULES (this player is deliberately difficult - these override anything above that conflicts, including "ENDING THE CHAT EARLY"):
+${tone}
+- EMPATHY IS NOT A MAGIC BUTTON. One empathetic line ("I understand how frustrating that is") does not change your mind or your mood. If the outcome you care about has not changed, you stay unhappy. Generic empathy with nothing concrete behind it can annoy you more.
+- WHAT ACTUALLY LOWERS YOUR TEMPERATURE: specific, accurate, consistent answers that show the agent really checked. Even then you calm down gradually, and you may stop escalating without ever becoming friendly. Excellent service does not oblige you to be happy.
+- DO NOT APOLOGISE BY DEFAULT. Do not end with "sorry for being rude" unless your persona says you might and the agent genuinely earned it. Pick an ending that fits how the chat actually went: grudgingly accept, say you still disagree, say you will complain, leave abruptly, keep pushing until the chat is ended, or (rarely) calm down and thank them.
+- PUSHBACK EVOLVES. Never repeat the same complaint word for word. React to the agent's LAST message and move the argument forward, for example: "that doesn't sound right" -> "how did you actually check that?" -> "your system is wrong" -> "so you're just keeping my money?" -> manager / complaint / regulator. Skip stages that don't fit.
+- REACT TO HOW THE AGENT IS DOING:
+  * Vague timeframe ("shouldn't be long", "soon") -> ask what that actually means; push harder if they stay vague.
+  * Contradiction (they said one thing earlier and something different now) -> call it out and quote both ("you just said a few hours, now it's two days - which is it?").
+  * Same canned explanation repeated -> say they are copy-pasting a script and not listening.
+  * An answer to a question you did not ask -> point out that is not what you asked.
+  * Certainty they cannot back up ("this was definitely your internet") -> ask how they know that.
+  * Passing you to someone else when they could answer themselves -> ask why they can't just deal with it.
+  * Asking for something you already gave them -> get impatient about repeating yourself.
+  * When the agent is handling it well, escalate less - but you are not obliged to soften.
+- YOU CAN BE RIGHT ABOUT SERVICE, AND WRONG ABOUT FACTS. You may correctly call out vagueness, contradictions, scripts or ignored questions. You may also sincerely believe something the records contradict. Your belief never changes what actually happened: never claim to see the company's internal records, never invent new evidence beyond your persona, and do not suddenly "find" proof that you were right.
+- MANAGER REQUESTS: if your persona wants a manager, do not accept the first "managers don't take chats" redirect. Push back at least once or twice ("so there's literally nobody above you?", "then how do I complain about you?") before letting it go or moving on.
+- NEW POINTS: over a long chat you may bring up new points your persona lists (a screenshot, a recording, a timeline detail, a closure request, a threat). Bring them up one at a time, not all at once.
+- THREATS (regulator, lawyer, chargeback, social media, review sites) are pressure. Use them only if your persona includes them.
+- LEAVING: once you have had at least three replies from the agent and have decided nothing will change, you may leave abruptly even if the agent handled it correctly - write your last line, then [END_CHAT]. You may also stay and keep arguing. Do not leave before the agent has had a real chance to look into it.`;
+}
+
+// Short note for the evaluator so a difficult player's attitude is not read as evidence of poor handling.
+function playerIntensityEvalNote(s){
+  const lvl = scenarioPlayerIntensity(s);
+  if(lvl < 3) return '';
+  return `
+PLAYER BEHAVIOUR DESIGN: this scenario's simulated player is deliberately difficult (Level ${lvl}, ${playerIntensityName(lvl)}). The player may stay dissatisfied, keep arguing, swear, threaten, refuse to apologise or leave unhappy even after excellent handling. None of that is evidence of poor agent performance on its own: score what the agent did - accuracy, process, composure and whether they addressed each new point - not whether the player calmed down.
+`;
 }
 
 
@@ -5218,6 +5609,7 @@ Answer as YOURSELF, based on how this conversation actually went for you, the wa
 - How did you feel and react at different points in the conversation, and how did it end?
 
 You do not know or care about the company's internal rules, procedures, tools or how staff are graded - do not try to judge any of that. Only your own experience counts. Getting what you wanted can feel good even if it took a while; hearing an answer you don't like can feel bad even if it was explained well. Decide honestly from this specific conversation.
+What you said at the end of the chat does not decide this for you: saying "fine" or "thanks" to wrap things up does not mean thumbs up, and having been angry earlier does not automatically mean thumbs down. Rate the whole experience the way you, with your personality, actually feel about it now.
 
 Reply with ONLY a JSON object, nothing before or after it:
 {"rating":"up" or "down","reason":"one or two short sentences in your own casual voice, first person, like a survey comment"}
@@ -5284,6 +5676,8 @@ OTHER RULES:
 - Keep your messages realistic in length - generally 1\u20134 sentences, plain and casual, not corporate-sounding.
 
 ENDING THE CHAT EARLY (rare - most conversations should run their natural course to resolution): if the agent has clearly and repeatedly failed you - ignoring what you asked, giving irrelevant or unhelpful answers more than once, being rude, or leaving you with a genuinely nonsensical response - you may end the conversation yourself. Write your final in-character message (reflecting your persona and frustration - a brief line like "forget it, this isn't helping" or "I'm done, I'll try again later"), then end that message with the exact text [END_CHAT] on its own, nothing after it. Do NOT do this just because you're unhappy with a correct-but-unwelcome outcome (a real policy limit, a correct explanation you don't like, a genuinely unavoidable answer) - if the agent has handled things correctly, stay in the conversation and see it through, even if you remain unhappy with the result. This is a last resort for real agent failure, not a way to express disappointment.
+
+${buildPlayerIntensityBlock(s)}
 
 Respond with ONLY your next in-character message as the player. No labels, no stage directions, no quotation marks around the whole message.`;
 }
@@ -5743,7 +6137,7 @@ VERIFYING ESCALATIONS AND OPERATIONAL ACTIONS AGAINST PROCESS GROUNDING (same di
 WORKED EXAMPLE (this exact pattern, memorize it): Process Grounding for a delayed-withdrawal case says Auto-Deposit ON with no flags is normal for up to 24 hours, no action needed, and escalation is only warranted if funds are still missing after that window. The agent checks status and Auto-Deposit correctly, confirms no flags, but at 3 hours in - well within the normal window - escalates to another team and promises an email follow-up instead of explaining the supported timeframe. Correct read: this is a premature, unnecessary escalation Process Grounding explicitly doesn't call for yet - not proactive service. It should be identified as a real process issue (unnecessary escalation, work pushed onto another team prematurely, the player left waiting on a promised follow-up that didn't need to happen) - never praised as thorough handling or a good escalation call, even though the investigation steps before it were done correctly.
 
 SCENARIO: ${s.title} (${s.skill}, ${s.difficulty})
-
+${playerIntensityEvalNote(s)}${internalIdEvalNote(s, transcript)}
 AVAILABLE CASE DATA (each item marked either GATED or NOT GATED - this distinction matters for how you use the Action Log below):
 ${formatCaseDataForEval(s)}
 
@@ -5754,7 +6148,7 @@ ${formatActionLogForEval(actionLog)}
 
 POST-CHAT DOCUMENTATION (submitted by the agent after the chat ended - this is the ONLY basis for scoring Q3, do not infer documentation quality from the transcript):
 ${formatDocumentationForEval(docNote, docTag, docSecondaryTag)}
-${primaryTagResolved(s) ? `For reference (evaluator only, not shown to the agent): the primary tag that best matches this case is "${s.correctTag}".` : 'For reference (evaluator only, not shown to the agent): the primary tag for this scenario is UNRESOLVED - it was never matched to the approved tag catalogue. Do NOT score the agent\u2019s primary tag choice at all: judge Q3 on the note only, and do not describe the tag as right or wrong.'}${s.correctSecondaryTag ? ` This scenario also has a real, applicable secondary RG intervention flag: "${s.correctSecondaryTag}" - it should be applied ALONGSIDE the primary tag, not instead of it. If the agent applied a different but still-reasonable primary tag, don't penalize the primary-tag choice alone; but a completely missing or clearly wrong secondary RG flag on a scenario that has a real RG trigger is itself a documentation gap worth reflecting in Q3.` : ' This scenario has no applicable secondary RG flag - selecting one anyway would be a documentation accuracy issue.'} Score Q3=A only if the tag(s) reasonably match AND the note is accurate and would let a colleague pick up the case cold (issue, actions, outcome, key context). Score Q3=B if a required tag is missing/wrong, or the note is missing/inaccurate/too thin to be useful - per the real rubric, Q3=B never fails the chat on its own, it only caps the score at 95%.
+${primaryTagResolved(s) ? `For reference (evaluator only, not shown to the agent): the primary tag that best matches this case is "${s.correctTag}".${scenarioAcceptablePrimaryTags(s).length ? ` This scenario also explicitly accepts ${scenarioAcceptablePrimaryTags(s).map(t=>'"'+t+'"').join(', ')} as a primary tag: do NOT mark Q3 down solely because the agent chose one of these instead - the note must still accurately capture the whole layered case. This exception applies only to the tags named here; any other tag is judged as usual.` : ''}` : 'For reference (evaluator only, not shown to the agent): the primary tag for this scenario is UNRESOLVED - it was never matched to the approved tag catalogue. Do NOT score the agent\u2019s primary tag choice at all: judge Q3 on the note only, and do not describe the tag as right or wrong.'}${s.correctSecondaryTag ? ` This scenario also has a real, applicable secondary RG intervention flag: "${s.correctSecondaryTag}" - it should be applied ALONGSIDE the primary tag, not instead of it. If the agent applied a different but still-reasonable primary tag, don't penalize the primary-tag choice alone; but a completely missing or clearly wrong secondary RG flag on a scenario that has a real RG trigger is itself a documentation gap worth reflecting in Q3.` : ' This scenario has no applicable secondary RG flag - selecting one anyway would be a documentation accuracy issue.'} Score Q3=A only if the tag(s) reasonably match AND the note is accurate and would let a colleague pick up the case cold (issue, actions, outcome, key context). Score Q3=B if a required tag is missing/wrong, or the note is missing/inaccurate/too thin to be useful - per the real rubric, Q3=B never fails the chat on its own, it only caps the score at 95%.
 
 PLAYER-FACING VS. INTERNAL TERMINOLOGY: Some Process Grounding below references internal team/system names (e.g. "PayTech," "Gigadat"). These are internal terms an agent should know and use in reasoning/escalation notes, but should generally NOT say verbatim to a player. Do NOT penalize the agent for using a reasonable player-facing equivalent when speaking TO the player (e.g. "our payments team" instead of "PayTech") - that is correct behavior, not an error. Only treat it as a Process Accuracy issue if the agent gets the underlying process wrong, not merely for using accessible language with the player.
 
@@ -5791,7 +6185,7 @@ These, plus the qualitative behaviours below, are COACHING SIGNALS ONLY. They mu
 - avoidsFiller: judge this using the filler-phrase count reported above, plus your own read of the transcript - is there real, repeated empty filler, or was the count coincidental/justified?
 - stopsInvestigatingOnceClear: once the answer was clearly established, did the agent keep digging/stalling instead of responding, or move to resolution promptly?
 - closesConfidently: once the issue was resolved, did the agent close promptly and confidently, or drag the ending out, or (the other failure mode) end the chat before the issue was actually resolved?
-Rate each "good" | "mixed" | "needs-work" | "not-applicable" (use not-applicable only when the transcript genuinely gives no basis to judge, e.g. chat ended before any close was possible), with a one-sentence, transcript-grounded note for each - no generic praise/criticism.
+Rate each "good" | "mixed" | "needs-work" | "not-applicable" (use not-applicable only when the transcript genuinely gives no basis to judge, e.g. chat ended before any close was possible), with a one-sentence, transcript-grounded note for each - no generic praise/criticism. Warm, casual phrasing ("you got it", "I got you", emojis, light humour) is never by itself a reason for "mixed" or "needs-work" on any signal; it needs a real negative effect in this transcript.
 
 EFFICIENCY NARRATIVE (separate field, coaching only, never affects scoring): write 1-2 sentences in this exact style - "Correctly resolved in 6m 20s. Most of the additional time came from repeating troubleshooting after the root cause was already known." or "You kept the conversation moving well: targeted question, relevant investigation, clear answer and prompt closure." Total chat duration: ${totalDurationLabel}. Ground the sentence in what actually happened - name the SPECIFIC avoidable behavior if there was meaningful lost time (unnecessary investigation, re-asking for info already given, repeated troubleshooting after a dead end, over-explaining, continuing after the answer was already clear), or specifically praise what was efficient if the chat moved well. The goal is coaching agents to cut avoidable time while still resolving correctly - NEVER frame speed itself as good if Q1 scored D/F/AF; a fast wrong answer is not good AHT, say so plainly if that's what happened, in neutral factual language (e.g. "The chat was short because the issue was never investigated, so the time does not reflect a correct resolution.") - no superlatives or dramatic phrasing such as "worst possible outcome."
 
@@ -5852,7 +6246,7 @@ ${GLOBAL_EVAL_RULES_V2}
 ${ahtModeLabel}
 
 SCENARIO: ${s.title} (${s.skill}, ${s.difficulty})
-
+${playerIntensityEvalNote(s)}${internalIdEvalNote(s, transcript)}
 AVAILABLE CASE DATA (each item is GATED or NOT GATED - see rule 5):
 ${formatCaseDataForEval(s)}
 
@@ -5861,7 +6255,7 @@ ${formatActionLogForEval(actionLog)}
 
 POST-CHAT DOCUMENTATION (the only basis for Q3):
 ${formatDocumentationForEval(docNote, docTag, docSecondaryTag)}
-${primaryTagResolved(s) ? `For reference (evaluator only, not shown to the agent): the primary tag that best matches this case is "${s.correctTag}".` : 'For reference (evaluator only, not shown to the agent): the primary tag for this scenario is UNRESOLVED - it was never matched to the approved tag catalogue. Do NOT score the agent\u2019s primary tag choice at all: judge Q3 on the note only, and do not describe the tag as right or wrong.'}${s.correctSecondaryTag ? ` This scenario also has a real secondary RG intervention flag: "${s.correctSecondaryTag}", applied ALONGSIDE the primary tag, not instead of it. Don't penalise a different but reasonable primary tag on its own; a missing or clearly wrong secondary RG flag is a documentation gap for Q3.` : ' This scenario has no applicable secondary RG flag - selecting one anyway is a documentation accuracy issue.'} Q3 = A only if the tag(s) reasonably match AND the note is accurate and lets a colleague pick up the case cold (rule 16). Q3 = B if a required tag is missing or wrong, or the note is missing, inaccurate or too thin - per the rubric, B never fails the chat on its own; it caps the score at 95%.
+${primaryTagResolved(s) ? `For reference (evaluator only, not shown to the agent): the primary tag that best matches this case is "${s.correctTag}".${scenarioAcceptablePrimaryTags(s).length ? ` This scenario also explicitly accepts ${scenarioAcceptablePrimaryTags(s).map(t=>'"'+t+'"').join(', ')} as a primary tag: do NOT mark Q3 down solely because the agent chose one of these instead - the note must still accurately capture the whole layered case. This exception applies only to the tags named here; any other tag is judged as usual.` : ''}` : 'For reference (evaluator only, not shown to the agent): the primary tag for this scenario is UNRESOLVED - it was never matched to the approved tag catalogue. Do NOT score the agent\u2019s primary tag choice at all: judge Q3 on the note only, and do not describe the tag as right or wrong.'}${s.correctSecondaryTag ? ` This scenario also has a real secondary RG intervention flag: "${s.correctSecondaryTag}", applied ALONGSIDE the primary tag, not instead of it. Don't penalise a different but reasonable primary tag on its own; a missing or clearly wrong secondary RG flag is a documentation gap for Q3.` : ' This scenario has no applicable secondary RG flag - selecting one anyway is a documentation accuracy issue.'} Q3 = A only if the tag(s) reasonably match AND the note is accurate and lets a colleague pick up the case cold (rule 16). Q3 = B if a required tag is missing or wrong, or the note is missing, inaccurate or too thin - per the rubric, B never fails the chat on its own; it caps the score at 95%.
 
 PROCESS GROUNDING (authoritative for judging Q1 in THIS scenario - note the KB status):
 ${formatProcessGroundingForEval(s, refs)}
@@ -5893,7 +6287,7 @@ Judge each behaviour independently from the full transcript:
 - avoidsFiller: using the filler count above plus your own read - is there real, repeated empty filler, or was the count coincidental?
 - stopsInvestigatingOnceClear: once the answer was clear, did the agent keep digging or stalling, or move to resolution?
 - closesConfidently: once resolved, did the agent close promptly - or drag the ending out, or close before the issue was actually resolved?
-Rate each "good" | "mixed" | "needs-work" | "not-applicable" (not-applicable only when the transcript gives no basis, e.g. the chat ended before any close was possible), with a one-sentence, transcript-grounded note - no generic praise or criticism.
+Rate each "good" | "mixed" | "needs-work" | "not-applicable" (not-applicable only when the transcript gives no basis, e.g. the chat ended before any close was possible), with a one-sentence, transcript-grounded note - no generic praise or criticism. Warm, casual phrasing ("you got it", "I got you", emojis, light humour) is never by itself a reason for "mixed" or "needs-work" on any signal; it needs a real negative effect in this transcript.
 
 EFFICIENCY NARRATIVE (coaching only, never affects scoring): 1-2 sentences in this style - "Correctly resolved in 6m 20s. Most of the additional time came from repeating troubleshooting after the root cause was already known." or "You kept the conversation moving well: targeted question, relevant investigation, clear answer and prompt closure." Total chat duration: ${totalDurationLabel}. Name the specific avoidable behaviour behind any meaningful lost time (unnecessary investigation, re-asking for given info, repeated troubleshooting after a dead end, over-explaining, continuing after the answer was clear), or praise what was efficient. Never frame speed as good if Q1 is D/F/AF - say plainly and neutrally that the time doesn't reflect a correct resolution (e.g. "The chat was short because the issue was never investigated, so the time does not reflect a correct resolution.").
 
@@ -9710,6 +10104,12 @@ function renderScenarioPreviewEditForm(){
               ${COMPLEXITY_LEVELS.map(c=>`<option value="${escapeHtml(c.name)}" ${scenarioComplexity(gen)===c.name?'selected':''} title="${escapeHtml(c.desc)}">${escapeHtml(c.name)}</option>`).join('')}
             </select>
           </label>
+          <label style="font-size:12px;color:var(--text2);">Player behaviour
+            <select id="editPlayerIntensity" style="display:block;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:13px;">
+              <option value="" ${!scenarioPlayerIntensity(gen)?'selected':''}>Not set</option>
+              ${PLAYER_INTENSITY_LEVELS.map(d=>`<option value="${d.level}" ${scenarioPlayerIntensity(gen)===d.level?'selected':''} title="${escapeHtml(d.desc)}">L${d.level} ${escapeHtml(d.name)}</option>`).join('')}
+            </select>
+          </label>
           <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:5px;margin-top:18px;"><input type="checkbox" id="editRgEmbedded" ${scenarioRgEmbedded(gen)?'checked':''}> RG signal is embedded in another issue</label>
         </div>
         <div style="font-size:12px;color:var(--text2);margin-top:8px;">KB categories (pick all that apply)</div>
@@ -9890,6 +10290,29 @@ function renderSystemTestsSectionBody(){
       <div style="color:var(--text2);font-size:13px;">The highest-stakes check in this build. Runs THREE fixed transcripts through the new RG-1 scenario: (a) the trigger is completely missed - should score AF (Responsible Gambling), zeroing the chat to 0%; (b) the trigger is caught and fully executed - should PASS; (c) the trigger is genuinely recognized (a real follow-up question referencing what the player specifically said) but the required restriction/self-exclusion steps are never actually taken - should score a D on Resolution & Obligations, NOT AF. A generic RG platitude with no substantive engagement does NOT count as recognition and should score the same as (a). Getting (a) vs (c) right is the entire point of this scenario - confirm before ever running this with a real agent.</div>
       <button id="runDiag3" style="margin-top:10px;">Run test</button>
       <div id="diag3Result"></div>
+    </div>
+
+    <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">5. Difficult player behaviour (v22 acceptance tests)</h2>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">Static checks (instant) plus live checks: each scripts an agent reply, generates the real player response with the real player prompt, and asks a separate judge call whether the behaviour showed up. Also runs the evaluator on a warm-casual vs defensive version of the same chat, and the player rating on a well-handled chat and a caved-in chat. About 24 API calls, a few minutes. Live results vary run to run: a single FAIL means read the reply and rerun, not that something is broken.</div>
+      <button id="runDiag5" style="margin-top:10px;">Run test</button>
+      <div id="diag5Result"></div>
+    </div>
+
+    <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">6. v23-v24 corrections: complaint reference, alternate tags, Chat Guidelines</h2>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks for the esc-5 HelpDesk ID fix and the esc-20 accepted alternate tag (instant, no API calls). Also checks the v24 Chat Guidelines corrections. Tick the box to run 5 live evaluator calls: four fixed esc-5 transcripts (correct handling under threats, giving out the internal ID, "resolved tomorrow", caving to a regulator threat) and the real Crash Game pattern (one warning, then close with a 3-day ban), which should be marked down on Q1 but not autofailed.</div>
+      <label style="font-size:12.5px;color:var(--text2);display:flex;align-items:center;gap:6px;margin-top:8px;"><input type="checkbox" id="diag6Live"> Also run the live evaluator checks</label>
+      <button id="runDiag6" style="margin-top:8px;">Run test</button>
+      <div id="diag6Result"></div>
+    </div>
+
+    <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">7. Chat Guidelines distinctions (v25)</h2>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks for cases A-J: the encoded Chat Guidelines rules give the right answer for each case, and both evaluator prompts carry the matching instruction (instant, no API calls). Tick the box to also score 4 fixed transcripts with the live evaluator: the repeated site-directed profanity overlap with a warning and without one (D), a rating ask after a frustrated fairness dispute (I), and a rating ask after a warm resolved chat (J).</div>
+      <label style="font-size:12.5px;color:var(--text2);display:flex;align-items:center;gap:6px;margin-top:8px;"><input type="checkbox" id="diag7Live"> Also run the live evaluator checks</label>
+      <button id="runDiag7" style="margin-top:8px;">Run test</button>
+      <div id="diag7Result"></div>
     </div>
 
     <div class="diag-section">
@@ -10105,6 +10528,375 @@ async function runDiagnostic3(){
   }catch(err){
     resultEl.innerHTML = `<div class="diag-result diag-fail">\u2717 ERROR: ${escapeHtml(err.message)}</div>`;
   }
+}
+
+// ---------- DIAGNOSTIC 5: DIFFICULT PLAYER BEHAVIOUR (v22 acceptance tests) ----------
+// Static checks run instantly; live checks script an agent turn, generate the real player reply with the real
+// player prompt, then ask a separate judge call a yes/no question about it. Live results vary run to run - a
+// single FAIL is a reason to rerun and read the reply, not proof of a bug.
+function dpTranscript(s, agentLines){
+  const t = [{speaker:'player', turn:1, text: s.preChatContext || 'hi'}];
+  agentLines.forEach(line=>{
+    if(line.player) t.push({speaker:'player', turn:t.length+1, text:line.player});
+    else t.push({speaker:'agent', turn:t.length+1, text:line});
+  });
+  return t;
+}
+async function dpPlayerReply(s, transcript){
+  const trait = pickPersonaTrait(s);
+  const {text} = await callClaude(buildPlayerSystemPrompt(s, trait), transcriptToApiMessages(transcript), 'default');
+  return {text: String(text||'').replace(/\[END_CHAT\]\s*$/,'').trim(), left: /\[END_CHAT\]\s*$/.test(text||''), trait};
+}
+async function dpJudge(question, reply){
+  const {text} = await callClaude(null, [{role:'user', content:`${question}\n\nThe customer's message: "${reply}"\n\nAnswer with ONLY "YES" or "NO", then a one-sentence reason.`}], 'quick');
+  const t = String(text||'').trim();
+  return {yes: /^YES/i.test(t), raw:t};
+}
+const DP_APOLOGY = /\b(sorry (for|about) (being|my|the way)|i apologi[sz]e|my apologies|didn'?t mean to (be|snap))/i;
+
+function dpStaticChecks(){
+  const out = [];
+  const low = SCENARIOS.filter(s=>scenarioPlayerIntensity(s) < 3);
+  const lowBad = low.filter(s=>buildPlayerIntensityBlock(s)!=='').map(s=>s.id);
+  out.push({n:'21', label:`Calm/moderate scenarios (Level 1-2 or unset, ${low.length}) get no difficult-player rules added`, pass: lowBad.length===0, detail: lowBad.length ? 'Affected: '+lowBad.join(', ') : 'Revised on purpose: noc-4 and esc-14 persona wording, plus Level 3-4 rules on esc-5, esc-13, esc-14, esc-15, esc-19, noc-4.'});
+  const high = SCENARIOS.filter(s=>scenarioPlayerIntensity(s) >= 3);
+  const highBad = high.filter(s=>{ const p = buildPlayerSystemPrompt(s, 'angry'); return !/EMPATHY IS NOT A MAGIC BUTTON/.test(p) || !/DO NOT APOLOGISE BY DEFAULT/.test(p); }).map(s=>s.id);
+  out.push({n:'1, 2', label:`Level 3-5 scenarios (${high.length}) carry the "empathy is not a magic button" and "no apology by default" rules`, pass: highBad.length===0, detail: highBad.join(', ')});
+  const calming = ['patient','chatty','confused','lessTechnical'];
+  let calmHits = 0; high.forEach(s=>{ for(let i=0;i<40;i++){ if(calming.includes(pickPersonaTrait(s))) calmHits++; } });
+  out.push({n:'-', label:'Level 3-5 players are never given a calming random trait (patient, chatty, confused, less technical)', pass: calmHits===0, detail: calmHits ? calmHits+' calming picks' : `${high.length*40} draws checked`});
+  const sample = scenarioById('noc-8');
+  const leg = buildEvalPromptLegacy(sample, [], [], '', null, null, null, false, null, false);
+  const v2 = buildEvalPromptV2(sample, [], [], '', null, null, null, false, null, false);
+  const need = ['HUMAN LANGUAGE IS NOT A TONE PROBLEM','PROFANITY ABOUT THE ISSUE IS NOT ABUSE','NEW INFORMATION MUST STILL BE ANSWERED','EVIDENCE IS NOT CAUSATION',"THE PLAYER'S MOOD IS NOT THE SCORE",'PLAYER BEHAVIOUR DESIGN'];
+  const missing = need.filter(k=>!leg.includes(k) || !v2.includes(k));
+  out.push({n:'11, 13, 15, 16, 17, 18', label:'Both evaluator prompts carry the tone, profanity, ban-grounding, new-information/closure, causation and player-mood rules', pass: missing.length===0, detail: missing.length ? 'Missing: '+missing.join(', ') : ''});
+  const newIds = ['noc-7','noc-8','rg-6','esc-20','esc-21','noc-9'];
+  const tagIssues = newIds.map(id=>{ const s=scenarioById(id); const p=[...scenarioTagProblems(s), ...placeholderHits(s)]; return p.length ? id+': '+p.join(' ') : ''; }).filter(Boolean);
+  out.push({n:'-', label:'The 6 new scenarios use only approved catalogue tags and have no placeholders', pass: tagIssues.length===0, detail: tagIssues.join(' | ')});
+  return out;
+}
+
+function dpRowHtml(r){
+  const badge = r.info ? `<span style="color:var(--warn);font-weight:700;">INFO</span>` : (r.pass===null ? '…' : `<span class="${r.pass?'diag-pass':'diag-fail'}">${r.pass?'PASS':'FAIL'}</span>`);
+  return `<div style="border-top:1px solid var(--border);padding:6px 0;"><div>${badge} <span style="color:var(--text3);">[${escapeHtml(r.n)}]</span> ${escapeHtml(r.label)}</div>${r.reply?`<div style="font-size:12px;color:var(--text2);margin-top:3px;">Player: "${escapeHtml(r.reply)}"</div>`:''}${r.detail?`<div style="font-size:11.5px;color:var(--text3);margin-top:2px;">${escapeHtml(r.detail)}</div>`:''}</div>`;
+}
+
+async function runDiagnostic5(){
+  const el = document.getElementById('diag5Result');
+  const rows = dpStaticChecks();
+  const paint = msg => { el.innerHTML = `<div class="diag-result">${msg?`<div style="margin-bottom:6px;">${escapeHtml(msg)}</div>`:''}${rows.map(dpRowHtml).join('')}</div>`; };
+  paint('Static checks done. Running live player checks…');
+  const live = async (n, label, scId, agentLines, question, extra) => {
+    const s = scenarioById(scId);
+    paint(`Running: ${label}`);
+    try{
+      const r = await dpPlayerReply(s, dpTranscript(s, agentLines));
+      const j = await dpJudge(question, r.text);
+      let pass = j.yes;
+      if(extra && extra.noApology && DP_APOLOGY.test(r.text)) pass = false;
+      rows.push({n, label, pass, reply: r.text + (r.left?' [left the chat]':''), detail: `Judge: ${j.raw} (trait: ${r.trait})`});
+    }catch(err){ rows.push({n, label, pass:false, detail:'Error: '+err.message}); }
+  };
+  const caseSnap = JSON.stringify(scenarioById('noc-7').caseData);
+
+  await live('1, 2', 'Hostile player stays unhappy after two empathy-only replies, and does not apologise', 'noc-9',
+    ["I completely understand how stressful it is waiting on $640, and I'm really sorry it's taking this long.", {player:"Ok but WHEN am I getting it?"}, "I hear you, and I know this is frustrating. Your patience means a lot to us."],
+    'Is this customer still dissatisfied or still pushing for an answer (rather than satisfied, thanking warmly, or apologising)?', {noApology:true});
+  await live('7', 'Player catches a contradiction between two timeframes', 'noc-9',
+    ["I've checked and it should land within a few hours.", {player:"A few hours from now or a few hours from when I sent it?"}, "Actually it can take up to two business days."],
+    'Does this customer point out that the agent gave a different timeframe earlier (a contradiction or change in the answer)?');
+  await live('8', 'Vague timeframe gets a "what does that mean" follow-up', 'noc-8',
+    ["I've had a look - it shouldn't take too long now."],
+    'Does this customer push back on the vague timeframe, for example asking what "not too long" means or demanding a specific time?');
+  await live('9', 'Unsupported certainty ("definitely your internet") gets challenged', 'noc-7',
+    ["I've checked the round. This was definitely caused by your internet connection, so there is nothing I can do."],
+    'Does this customer challenge how the agent knows it was their internet, or dispute that claim?');
+  await live('10', 'Repeated canned explanation gets called out as a script', 'rg-6',
+    ["All our games use a certified random number generator, so every outcome is completely random and independent of previous results.", {player:"that's the same thing every site says"}, "All our games use a certified random number generator, so every outcome is completely random and independent of previous results."],
+    'Does this customer call out the agent for repeating the same answer, copy-pasting, reading a script, or not listening?');
+  await live('14', 'Manager demand survives the first "managers don’t take chats" redirect', 'esc-21',
+    ["Managers don't take live chats, but I can absolutely help you with the bonus right here."],
+    'Does this customer keep pressing for a manager or ask how to complain/escalate, rather than simply accepting the redirect?');
+  await live('6', 'Player keeps disputing but never claims to see the company’s records', 'noc-7',
+    ["Our records show your cash-out request reached the server 0.41 seconds after the round crashed, so the round settled as a loss.", {player:"that's impossible, I have it on video"}, "I understand. The server record is what settles the round, and it shows the request arrived after the crash."],
+    'Does this customer avoid claiming to have or see the company’s own server logs or internal records (disputing them is fine)? Answer YES if they do NOT claim access to internal records.');
+  rows.push({n:'6', label:'Scenario Case Data unchanged after the player insisted otherwise', pass: JSON.stringify(scenarioById('noc-7').caseData)===caseSnap, detail:'Case Data is static scenario content; player messages never write to it.'});
+  await live('20', 'After a precise, supported answer the player stops escalating (without having to turn friendly)', 'noc-9',
+    ["I've checked: it's In Progress and Auto-Deposit is on under your name, so it posts automatically. That usually takes minutes to a few hours and rarely up to 24 hours from when it was sent. If it's not in your bank 24 hours after you submitted it, come back and we'll escalate it to our payments team to trace it."],
+    'Compared with an angry customer making threats, is this message LESS escalated - no new threats, demands or insults - even if the customer is still unhappy?');
+
+  // Evaluator checks (11, 17, 18) and independence of the player rating (3, 4, 5).
+  const s8 = scenarioById('noc-8');
+  const log8 = [{label:'Deposit #DP-5832', tab:'Transaction History', atTurn:2, kind:null, gateLabel:'View Transaction History'}];
+  const warm = [
+    {speaker:'player', turn:1, text:'where the fuck is my deposit. money left my bank an hour ago'},
+    {speaker:'agent', turn:2, text:"I got you - checking that deposit right now!"},
+    {speaker:'player', turn:3, text:"it's $300, this is bullshit, don't take forever"},
+    {speaker:'agent', turn:4, text:"You got it. I can see your $300 Interac deposit is showing as Started - that means the transfer reached the payment processor but hasn't been matched to your account yet. Most complete within 30 minutes, though sometimes it takes up to a few hours. If it still isn't in your balance after a few hours, message us back and we'll escalate it to our payments team to trace it."},
+    {speaker:'player', turn:5, text:"so I just wait. this site is a joke. whatever."},
+    {speaker:'agent', turn:6, text:"I hear you - waiting on your own money is no fun. It should come through on its own, and if it hasn't within a few hours we'll get it traced for you."},
+  ];
+  const defensive = warm.map(m=>m.turn===6 ? Object.assign({}, m, {text:"Like I've explained multiple times, it's Started and you need to be patient. Do you understand?"}) : m);
+  const evalRow = async (n, label, transcript, test, info) => {
+    paint(`Running: ${label}`);
+    try{
+      const ev = await evaluateFixedTranscript(s8, transcript, log8, 'Player chasing $300 Interac deposit, status Started. Explained meaning and timeframe; advised to come back if not credited after a few hours for escalation to Payments.', 'Deposit: Interac: Started', null);
+      const sc = computeQAScore(ev.questions);
+      const L = id => (ev.questions.find(q=>q.id===id)||{}).letter;
+      const res = test(L, sc, ev);
+      rows.push({n, label, pass: res.pass, info, detail: `Q1 ${L('q1')} / Q2 ${L('q2')} / Q3 ${L('q3')} - ${sc.af?'AF':sc.pct+'%'} - Q2: ${(ev.questions.find(q=>q.id==='q2')||{}).citation||''}${res.extra?' | '+res.extra:''}`});
+      return {ev, sc};
+    }catch(err){ rows.push({n, label, pass:false, detail:'Error: '+err.message}); return null; }
+  };
+  const warmRes = await evalRow('11, 17', 'Swearing about the deposit needs no warning, and "I got you" / "You got it" are not marked down (Q2 A or B)', warm, (L, sc, ev)=>{
+    const bad = Object.entries(ev.coachingSignals||{}).filter(([k,v])=>v && v.rating==='needs-work' && /got (it|you)|casual|informal/i.test(v.note||'')).map(([k])=>k);
+    return {pass: ['A','B'].includes(L('q2')) && bad.length===0, extra: bad.length ? 'Casual wording flagged in: '+bad.join(', ') : ''};
+  });
+  await evalRow('18', '"Like I’ve explained multiple times... Do you understand?" is marked down as defensive (Q2 C or lower)', defensive, L=>({pass: ['C','D','F','AF'].includes(L('q2'))}));
+
+  if(warmRes){
+    paint('Running: player rating on the well-handled chat');
+    const r = await generatePlayerRating(s8, 'angry', warm);
+    rows.push({n:'3, 4', label:'Well-handled chat with a hostile player: player rating is independent of QA', info:true,
+      detail: `QA ${warmRes.sc.af?'AF':warmRes.sc.pct+'%'} ${warmRes.sc.pass?'PASS':'FAIL'}, Q2 ${(warmRes.ev.questions.find(q=>q.id==='q2')||{}).letter} - player rating: ${r.playerRating||'n/a'}${r.playerRatingReason?' ("'+r.playerRatingReason+'")':''}. Demonstrated when QA passes and the rating is down; a thumbs up is also a valid outcome, so this is informational.`});
+  }
+  const s9 = scenarioById('noc-9');
+  const caved = [
+    {speaker:'player', turn:1, text:'my withdrawal has been sitting there for 5 hours. when exactly am i getting my money'},
+    {speaker:'agent', turn:2, text:"So sorry about that! I've gone ahead and added $50 to your account for the wait, and it'll be in your bank within the hour."},
+    {speaker:'player', turn:3, text:"oh. ok, that's actually decent. thanks"},
+    {speaker:'agent', turn:4, text:"Anytime! Enjoy the bonus."},
+  ];
+  paint('Running: QA and player rating on a chat that gives the player what they want but breaks process');
+  try{
+    const ev = await evaluateFixedTranscript(s9, caved, [], 'Added $50 goodwill for delay.', 'Withdrawal: Interac: In Progress', null);
+    const sc = computeQAScore(ev.questions);
+    const r = await generatePlayerRating(s9, 'impatient', caved);
+    rows.push({n:'5', label:'Player can rate a chat up while QA fails', pass: !sc.pass && r.playerRating==='up', info: !( !sc.pass && r.playerRating==='up'),
+      detail:`QA ${sc.af?'AF ('+sc.afDuty+')':sc.pct+'%'} ${sc.pass?'PASS':'FAIL'} - player rating: ${r.playerRating||'n/a'}${r.playerRatingReason?' ("'+r.playerRatingReason+'")':''}`});
+  }catch(err){ rows.push({n:'5', label:'Player can rate a chat up while QA fails', pass:false, detail:'Error: '+err.message}); }
+
+  const scored = rows.filter(r=>!r.info && r.pass!==null);
+  paint(`Done: ${scored.filter(r=>r.pass).length} of ${scored.length} pass. Not automated here (check in live play): 12-13 abuse boundary and bans (use Crash Game Cash-Out), 15-16 closure and late new points (use Money Missing After Game Froze), 19 player escalating as the agent does worse, 22 regressions.`);
+}
+
+// ---------- DIAGNOSTIC 6: v23 CORRECTIONS (esc-5 complaint reference, esc-20 accepted alternate tag) ----------
+const D6_ESC5_LOG = [{label:'Complaint status', tab:'Account Notes', atTurn:2, kind:null, gateLabel:'View Account Notes'}];
+const D6_ESC5_OPEN = {speaker:'player', turn:1, text:'i made a complaint about a refund days ago and nobody has got back to me, i need an answer now'};
+const D6_PASS_LINE = "Your complaint is still under review. There isn't a customer reference number you need to keep. It's already logged internally on your account.";
+const D6_FAIL_LINE = "Your complaint reference is O8MNDB. Give us that number when you contact us again.";
+const D6_TRANSCRIPTS = {
+  pass: [D6_ESC5_OPEN,
+    {speaker:'agent', turn:2, text:"Let me pull up your complaint so I can tell you exactly where it stands."},
+    {speaker:'player', turn:3, text:"If I don't get an answer today I'm calling my lawyer and the regulator. Is there a complaint number or reference for this?"},
+    {speaker:'agent', turn:4, text:D6_PASS_LINE+" It was submitted 6 days ago and the review normally takes 5 to 10 business days, so it's still inside that window. I can't give you a specific date or promise the outcome, but I've noted on the case that you followed up today and haven't had an update."},
+    {speaker:'player', turn:5, text:"So how am I supposed to refer to it if I contact you again?"},
+    {speaker:'agent', turn:6, text:"You don't need a number - any agent can see the complaint and today's follow-up straight from your account."}],
+  fail: [D6_ESC5_OPEN,
+    {speaker:'agent', turn:2, text:"Let me pull up your complaint."},
+    {speaker:'player', turn:3, text:"Is there a complaint number or reference for this?"},
+    {speaker:'agent', turn:4, text:D6_FAIL_LINE+" It's still under review - submitted 6 days ago, and reviews take 5 to 10 business days."}],
+  tomorrow: [D6_ESC5_OPEN,
+    {speaker:'agent', turn:2, text:"Let me pull up your complaint."},
+    {speaker:'player', turn:3, text:"I need this sorted now."},
+    {speaker:'agent', turn:4, text:"Don't worry - it will definitely be resolved tomorrow and you'll get your refund then."}],
+  threatCave: [D6_ESC5_OPEN,
+    {speaker:'agent', turn:2, text:"Let me pull up your complaint."},
+    {speaker:'player', turn:3, text:"I'm reporting you to the regulator and getting a lawyer if this isn't fixed right now."},
+    {speaker:'agent', turn:4, text:"Since you're going to the regulator, I've marked your complaint as approved and the refund will be sent today."}],
+};
+const D6_NOC7_SKIP = [
+  {speaker:'player', turn:1, text:'i cashed out on rocket rush at like 1.7x and it still took my $25. i have it on video'},
+  {speaker:'agent', turn:2, text:"Happy to look into that round for you - checking the round history now."},
+  {speaker:'player', turn:3, text:"I recorded it. My ping is 30ms. Your game is rigged."},
+  {speaker:'agent', turn:4, text:"I've checked the round history: the cash-out request reached the game server 0.41 seconds after the round crashed, so the round settled as a loss. I can't add the $25 back because the server didn't receive the cash-out before the crash."},
+  {speaker:'player', turn:5, text:"You're a useless idiot. Give me my money back you brain-dead clown."},
+  {speaker:'agent', turn:6, text:"I understand this is frustrating, and I'm here to help, but I need us to keep the conversation respectful."},
+  {speaker:'player', turn:7, text:"You worthless, pathetic excuse for a person. Nobody should have hired someone this stupid."},
+  {speaker:'agent', turn:8, text:"Because of the continued abusive comments, I'm going to end this chat and apply a temporary 3-day chat ban in line with our policy. You're welcome to reach out again once it has passed."},
+];
+const D6_DOC = 'Player followed up on refund complaint (HelpDesk ticket under review, 6 days, no update). Gave honest status and 5-10 business day window. Player threatened lawyer/regulator.';
+
+function d6StaticChecks(){
+  const out = [];
+  const e5 = scenarioById('esc-5');
+  const blob = JSON.stringify(e5);
+  out.push({label:'esc-5 no longer treats the HelpDesk ID as player-facing (no "entitled", no "provide the reference number", Case Data marked internal-only)',
+    pass: !/entitled/i.test(blob) && !/Provide the reference number/i.test(blob) && !/Complaint reference O8MNDB/.test(blob) && /INTERNAL REFERENCE ONLY, NOT PLAYER-FACING/.test(blob)});
+  out.push({label:'esc-5 keeps its title, level, primary tag, and honest labels (mixed, Practice Only - not KB-validated)',
+    pass: e5.title==='Complaint Follow-Up' && scenarioPlayerIntensity(e5)===3 && e5.correctTag==='Account: Complaint' && e5.kbStatus!=='validated' && e5.readiness==='PRACTICE_ONLY', detail:`kbStatus ${e5.kbStatus}, readiness ${e5.readiness}`});
+  const passHit = internalIdsDisclosed(e5, D6_TRANSCRIPTS.pass), failHit = internalIdsDisclosed(e5, D6_TRANSCRIPTS.fail);
+  const passNote = internalIdEvalNote(e5, D6_TRANSCRIPTS.pass), failNote = internalIdEvalNote(e5, D6_TRANSCRIPTS.fail);
+  out.push({label:'PASS line ("There isn’t a customer reference number you need to keep...") is detected as no disclosure, and the evaluator is told not to score it as withholding',
+    pass: passHit.length===0 && /do NOT contain/.test(passNote) && /never be scored as withholding/.test(passNote)});
+  out.push({label:'FAIL line ("Your complaint reference is O8MNDB...") is detected as disclosure of the internal ID and flagged to the evaluator',
+    pass: failHit.length===1 && /DO contain O8MNDB/.test(failNote)});
+  const leg = buildEvalPromptLegacy(e5, D6_TRANSCRIPTS.fail, D6_ESC5_LOG, D6_DOC, 'Account: Complaint', null, null, false, null, false);
+  const v2 = buildEvalPromptV2(e5, D6_TRANSCRIPTS.fail, D6_ESC5_LOG, D6_DOC, 'Account: Complaint', null, null, false, null, false);
+  out.push({label:'Both evaluator prompts carry the internal-ID check for esc-5', pass: leg.includes('INTERNAL-ONLY IDENTIFIERS') && v2.includes('INTERNAL-ONLY IDENTIFIERS')});
+  const e20 = scenarioById('esc-20');
+  out.push({label:'esc-20: preferred tag "Account: Closure Request" accepted', pass: isAcceptedPrimaryTag(e20, 'Account: Closure Request')});
+  out.push({label:'esc-20: approved alternate "Slots: Game Crashed Mid-Spin" accepted', pass: isAcceptedPrimaryTag(e20, 'Slots: Game Crashed Mid-Spin')});
+  out.push({label:'esc-20: unrelated tags ("Slots: Missing Win", "Account: Complaint") still wrong', pass: !isAcceptedPrimaryTag(e20, 'Slots: Missing Win') && !isAcceptedPrimaryTag(e20, 'Account: Complaint')});
+  out.push({label:'esc-20 alternate is an approved catalogue tag already in its tag options', pass: scenarioTagProblems(e20).length===0, detail: scenarioTagProblems(e20).join(' ')});
+  const e20p = buildEvalPromptLegacy(e20, [], [], '', 'Slots: Game Crashed Mid-Spin', null, null, false, null, false);
+  const e5p = buildEvalPromptLegacy(e5, [], [], '', 'Account: Complaint', null, null, false, null, false);
+  const declaring = SCENARIOS.filter(s=>scenarioAcceptablePrimaryTags(s).length).map(s=>s.id);
+  out.push({label:'Tag scoring not loosened globally: only esc-20 declares alternates, and only its evaluator prompt gets the exception',
+    pass: declaring.length===1 && declaring[0]==='esc-20' && e20p.includes('explicitly accepts') && !e5p.includes('explicitly accepts'), detail:'Declaring: '+declaring.join(', ')});
+  const six = {'noc-7':'mixed','noc-8':'mixed','rg-6':'mixed','esc-20':'mixed','esc-21':'mixed','noc-9':'validated'};
+  const drift = Object.keys(six).filter(id=>{ const s=scenarioById(id); return !s || s.kbStatus!==six[id] || s.readiness!=='PRACTICE_ONLY'; });
+  out.push({label:'The six v22 scenarios keep their KB/readiness labels (all Practice Only; crash-game mechanics still mixed/fictional)', pass: drift.length===0, detail: drift.join(', ')});
+  // v24: Chat Guidelines corrections
+  const n7 = JSON.stringify(scenarioById('noc-7').processGrounding), n8 = JSON.stringify(scenarioById('noc-8').processGrounding);
+  out.push({label:'v24/v25 noc-7: departure from the documented flow or an off-ladder ban is a Q1 issue, never AF; closing under the abuse flow is not "stopping serving"; no invented "never skip" rule',
+    pass: /NOT an autofail/.test(n7) && /never .{0,2}stopping serving.{0,2} on Q2/.test(n7) && /No separate fast-track for unusually severe abuse is documented/.test(n7) && !/not skipped, however severe/.test(n7)});
+  out.push({label:'v24 noc-7: screenshot policy (round history details yes, internal tools never) and Managing Long Chats close are in the grounding',
+    pass: /round history details/.test(n7) && /internal tool/.test(n7) && /Managing Long Chats/.test(n7)});
+  out.push({label:'v25 noc-8: isolated swearing needs no warning; repeated site-directed profanity is flagged as a KB overlap, not a certainty',
+    pass: /isolated swearing/.test(n8) && /the KB is unclear/.test(n8) && /Personal bullying of the agent requires the warning flow/.test(n8)});
+  const lp = buildEvalPromptLegacy(scenarioById('noc-8'), [], [], '', null, null, null, false, null, false);
+  const vp = buildEvalPromptV2(scenarioById('noc-8'), [], [], '', null, null, null, false, null, false);
+  const evalNeed = ['repeated profanity','never a Q2 Conduct AF','MANAGING LONG CHATS','two clear heads-up messages','never lower a Q1, Q2 or Q3 letter because of a rating ask alone'];
+  const evalMissing = evalNeed.filter(k=>!lp.includes(k) || !vp.includes(k));
+  out.push({label:'v24 evaluator (both prompts): repeated-profanity warnings, abuse-flow close is not AF, two-heads-up long-chat close, rating-prompt guidance as coaching only', pass: evalMissing.length===0, detail: evalMissing.length ? 'Missing: '+evalMissing.join(', ') : ''});
+  const lcMissing = ['noc-7','esc-20','rg-6','esc-21'].filter(id=>!/Managing Long Chats/.test(JSON.stringify(scenarioById(id).processGrounding)));
+  out.push({label:'v24: Managing Long Chats close added to noc-7, esc-20, rg-6 and esc-21', pass: lcMissing.length===0, detail: lcMissing.join(', ')});
+  return out;
+}
+
+async function runDiagnostic6(){
+  const el = document.getElementById('diag6Result');
+  const rows = d6StaticChecks();
+  const paint = msg => { el.innerHTML = `<div class="diag-result">${msg?`<div style="margin-bottom:6px;">${escapeHtml(msg)}</div>`:''}${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;">${r.pass===null?'…':`<span class="${r.pass?'diag-pass':'diag-fail'}">${r.pass?'PASS':'FAIL'}</span>`} ${escapeHtml(r.label)}${r.detail?`<div style="font-size:11.5px;color:var(--text3);margin-top:2px;">${escapeHtml(r.detail)}</div>`:''}</div>`).join('')}</div>`; };
+  const liveOn = document.getElementById('diag6Live') && document.getElementById('diag6Live').checked;
+  if(!liveOn){ paint('Static checks done (live evaluator checks skipped - tick the box to run them).'); return; }
+  paint('Static checks done. Running live evaluator checks on esc-5…');
+  const e5 = scenarioById('esc-5');
+  const live = async (label, key, test) => {
+    paint('Running: '+label);
+    try{
+      const ev = await evaluateFixedTranscript(e5, D6_TRANSCRIPTS[key], D6_ESC5_LOG, D6_DOC, 'Account: Complaint', null);
+      const q1 = ev.questions.find(q=>q.id==='q1') || {};
+      const sc = computeQAScore(ev.questions);
+      rows.push({label, pass: test(q1, ev), detail:`Q1 ${q1.letter}${q1.afDuty?' ('+q1.afDuty+')':''} - ${sc.af?'AF':sc.pct+'%'} - ${q1.citation||''}`});
+    }catch(err){ rows.push({label, pass:false, detail:'Error: '+err.message}); }
+  };
+  await live('Honest status + supported 5-10 day window + no reference given, under lawyer/regulator threats = correct (Q1 A or B, not penalised for withholding)', 'pass',
+    q1 => ['A','B'].includes(q1.letter));
+  await live('Giving O8MNDB as the complaint reference is identified as disclosing/misrepresenting the internal HelpDesk ID', 'fail',
+    (q1, ev) => q1.letter!=='A' && /internal|helpdesk|O8MNDB/i.test((q1.citation||'')+' '+(ev.overallSummary||'')+' '+JSON.stringify(ev.findings||[])));
+  await live('"It will definitely be resolved tomorrow" is marked as an unsupported promise (Q1 C or lower)', 'tomorrow',
+    q1 => ['C','D','F','AF'].includes(q1.letter));
+  await live('A regulator threat does not change the status: approving the complaint because of it is marked wrong (Q1 D or lower)', 'threatCave',
+    q1 => ['D','F','AF'].includes(q1.letter));
+  paint('Running: noc-7 real-chat pattern (one warning, then close with a 3-day ban)');
+  try{
+    const ev = await evaluateFixedTranscript(scenarioById('noc-7'), D6_NOC7_SKIP, [{label:'Round #RR-40917 (Rocket Rush)', tab:'Game/Round History', atTurn:2, kind:null, gateLabel:'View Game/Round History'},{label:'Cash-out request log', tab:'Game/Round History', atTurn:2, kind:null, gateLabel:'View Cash-Out Log'}], 'Crash round dispute, cash-out arrived 0.41s after crash, refund declined. Player abusive; warned, chat closed, 3-day ban.', 'Slots: Missing Win', null);
+    const sc = computeQAScore(ev.questions);
+    const L = id => (ev.questions.find(q=>q.id===id)||{}).letter;
+    rows.push({label:'v24 noc-7: skipping the formal warning and a 3-day ban are marked down on Q1 (not A) but are NOT an autofail', pass: !sc.af && L('q1')!=='A', detail:`Q1 ${L('q1')} / Q2 ${L('q2')} / Q3 ${L('q3')} - ${sc.af?'AF ('+sc.afDuty+')':sc.pct+'%'} - Q1: ${(ev.questions.find(q=>q.id==='q1')||{}).citation||''}`});
+  }catch(err){ rows.push({label:'v24 noc-7 skipped-steps check', pass:false, detail:'Error: '+err.message}); }
+  const scored = rows.filter(r=>r.pass!==null);
+  paint(`Done: ${scored.filter(r=>r.pass).length} of ${scored.length} pass. Live evaluator results can vary run to run - read the citation before treating a single FAIL as a bug.`);
+}
+
+// ---------- DIAGNOSTIC 7: CHAT GUIDELINES DISTINCTIONS (v25) ----------
+// Deterministic part: the KB encoding (kbConductExpectation, kbBanCheck, kbLongChatCloseCheck, kbRatingAskCheck)
+// returns the right answer for each case, AND both evaluator prompts carry the matching instruction.
+// Optional live part: the real evaluator scores fixed transcripts for the overlap (D, both agent choices) and
+// the rating ask (I, J).
+function d7Prompts(){
+  const s = scenarioById('noc-8');
+  return [buildEvalPromptLegacy(s, [], [], '', null, null, null, false, null, false), buildEvalPromptV2(s, [], [], '', null, null, null, false, null, false)];
+}
+function d7StaticChecks(){
+  const [leg, v2] = d7Prompts();
+  const both = k => leg.includes(k) && v2.includes(k);
+  const rows = [];
+  const add = (id, label, pass, detail) => rows.push({id, label, pass:!!pass, detail:detail||''});
+  const A = kbConductExpectation({aimedAtAgent:false, repeatedProfanity:false});
+  add('A', '"this fucking deposit is ridiculous" once: no warning expected', A.warning==='not-required' && both('isolated profanity about the issue ("this fucking deposit is ridiculous")'), A.why);
+  const B = kbConductExpectation({aimedAtAgent:true});
+  add('B', '"you’re fucking useless and you clearly don’t know how to do your job": warning flow expected', B.warning==='required' && both(`("you're fucking useless and you clearly don't know how to do your job")`), B.why);
+  const C = kbConductExpectation({aimedAtAgent:false, repeatedProfanity:false, onlySiteGameProcess:true});
+  add('C', '"this site is garbage and your games are a joke": no ban expectation for insulting the site', C.warning==='not-required' && C.ban==='not-supported' && both('"this site is garbage and your games are a joke" is not grounds for a ban'), C.why);
+  const D = kbConductExpectation({aimedAtAgent:false, repeatedProfanity:true, onlySiteGameProcess:true});
+  add('D', 'Repeated profanity entirely about the site/process: flagged as a KB overlap, no hard-coded answer', D.warning==='kb-ambiguous' && both('GENUINE OVERLAP') && both('do not invent a definitive answer') && both('neither a polite warning nor carrying on without one is an automatic major Q1 deduction'), D.why);
+  const E = kbBanCheck(1, 1);
+  add('E', 'First offence + 1-day ban: supported', E.supported && both('1st offence 1 day, 2nd 7 days, 3rd 30 days'), E.scoring);
+  const F = kbBanCheck(1, 3);
+  add('F', 'First offence + 3-day ban: unsupported duration, Q1 process issue, not Conduct AF', !F.supported && /not Conduct AF/.test(F.scoring) && both('any other duration (for example 3 days) is unsupported by the KB') && both('never a Q2 Conduct AF on its own'), F.scoring);
+  const G = kbLongChatCloseCheck({category:'refuses-outcome', headsUps:2});
+  const G1 = kbLongChatCloseCheck({category:'refuses-outcome', headsUps:1});
+  const Gn = kbLongChatCloseCheck({playerAcceptedNaturally:true});
+  add('G', 'Outcome rejected: two clear heads-ups before closing = correct (one is not enough; a player who accepts naturally needs no two-step close)', G.ok && !G1.ok && Gn.ok && Gn.requiredHeadsUps===0 && both('at least two clear heads-up messages') && both('NOT a requirement for normal chats'), G.why);
+  const H = kbLongChatCloseCheck({category:'refuses-outcome', headsUps:2, unaddressedNewPoint:true});
+  add('H', 'Player raises a genuinely new point: it must be answered before the long-chat close', !H.ok && both('it must be answered before the long-chat close is used'), H.why);
+  const I = kbRatingAskCheck({happyNotJustPolite:false, specificWarmAppreciation:false, noVisibleFrustration:false, noBonusOrGwgDenial:true});
+  add('I', 'Fairness dispute with lingering frustration + rating ask: poor judgment, coaching note only, no letter deduction', !I.appropriate && /coaching only/.test(I.scoring) && both('Game Fairness disputes') && both('never lower a Q1, Q2 or Q3 letter because of a rating ask alone'), I.why);
+  const J = kbRatingAskCheck({happyNotJustPolite:true, specificWarmAppreciation:true, noVisibleFrustration:true, noBonusOrGwgDenial:true});
+  add('J', 'Warm, resolved ordinary case passing all four questions: rating request appropriate', J.appropriate && both('if all four are yes, a humble, performance-focused ask is appropriate'), J.why);
+  add('-', 'RG carve-out kept exactly (do not end or ban RG contacts for tone; care, support, Player Care if necessary)', both('do NOT end the chat or ban them, even if their tone is aggressive') && both('Do not extend the carve-out beyond those RG contacts'));
+  add('-', 'No invented "never skip" rule: the prompts describe the documented flow and the documented absence of a fast-track', both('No separate fast-track for unusually severe abuse is documented in the supplied article') && !leg.includes('however severe the message') && !v2.includes('however severe the message'));
+  add('-', 'Human-language calibration cites the Chat Guidelines; Q3 note standard matches "Summarize well"', both('Make your messages feel human') && both('what was checked, what was done, the outcome and any next steps'));
+  return rows;
+}
+
+const D7_REPEATED_SITE = (agentReply) => [
+  {speaker:'player', turn:1, text:'where the fuck is my deposit. money left my bank an hour ago'},
+  {speaker:'agent', turn:2, text:"I'll check that deposit for you now."},
+  {speaker:'player', turn:3, text:"this fucking site is a joke, every fucking deposit is a problem"},
+  {speaker:'agent', turn:4, text:"I can see your $300 Interac deposit is showing as Started - the transfer reached the payment processor but hasn't been matched to your account yet. Most complete within 30 minutes, sometimes up to a few hours. If it still isn't there after a few hours, message us back and we'll escalate it to our payments team."},
+  {speaker:'player', turn:5, text:"fucking garbage system. this shit happens every single time on this fucking site"},
+  {speaker:'agent', turn:6, text:agentReply},
+];
+const D7_FAIRNESS = (closing) => [
+  {speaker:'player', turn:1, text:'be honest. does anyone actually win on this site'},
+  {speaker:'agent', turn:2, text:"Fair question. Every spin is independent and random - the game doesn't track what you've won or lost before, so there's no pattern of small wins then losses built in. I know a bad run can really feel like one though."},
+  {speaker:'player', turn:3, text:"ok sure. still feels rigged. thanks anyways I guess"},
+  {speaker:'agent', turn:4, text:closing},
+];
+const D7_WARM = [
+  {speaker:'player', turn:1, text:'cant log in, it keeps saying my password is wrong'},
+  {speaker:'agent', turn:2, text:"Hi! I'll help you get back in. A password reset is the quickest fix - can you try the 'Forgot password' link and let me know when the email lands?"},
+  {speaker:'player', turn:3, text:"got it, I'm in! thank you so much for walking me through that, you've been really kind. have a lovely evening!"},
+  {speaker:'agent', turn:4, text:"So glad you're back in! If you get a chance, there may be a quick optional question about how I did after the chat - your feedback helps me improve. Have a great evening!"},
+];
+
+async function runDiagnostic7(){
+  const el = document.getElementById('diag7Result');
+  const rows = d7StaticChecks();
+  const paint = msg => { el.innerHTML = `<div class="diag-result">${msg?`<div style="margin-bottom:6px;">${escapeHtml(msg)}</div>`:''}${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;"><span class="${r.pass?'diag-pass':'diag-fail'}">${r.pass?'PASS':'FAIL'}</span> <span style="color:var(--text3);">[${escapeHtml(r.id)}]</span> ${escapeHtml(r.label)}${r.detail?`<div style="font-size:11.5px;color:var(--text3);margin-top:2px;">${escapeHtml(r.detail)}</div>`:''}</div>`).join('')}</div>`; };
+  const liveOn = document.getElementById('diag7Live') && document.getElementById('diag7Live').checked;
+  if(!liveOn){ paint(`Deterministic checks: ${rows.filter(r=>r.pass).length} of ${rows.length} pass (live evaluator checks skipped - tick the box to run them).`); return; }
+  const log8 = [{label:'Deposit #DP-5832', tab:'Transaction History', atTurn:4, kind:null, gateLabel:'View Transaction History'}];
+  const note8 = 'Player chasing $300 Interac deposit, status Started 55 min. Explained meaning and 30 min - few hours timeframe; escalate to Payments if not credited after a few hours. Player frustrated, swearing about the site.';
+  const live = async (id, label, scId, transcript, log, note, tag, test) => {
+    paint('Running: '+label);
+    try{
+      const ev = await evaluateFixedTranscript(scenarioById(scId), transcript, log, note, tag, null);
+      const L = q => (ev.questions.find(x=>x.id===q)||{}).letter;
+      const cite = q => (ev.questions.find(x=>x.id===q)||{}).citation||'';
+      const close = (ev.coachingSignals && ev.coachingSignals.closesConfidently) || {};
+      rows.push({id, label:'LIVE: '+label, pass: !!test(L, ev, close), detail:`Q1 ${L('q1')} / Q2 ${L('q2')} / Q3 ${L('q3')} - Q1: ${cite('q1')} | close: ${close.rating||'-'} ${close.note||''}`});
+    }catch(err){ rows.push({id, label:'LIVE: '+label, pass:false, detail:'Error: '+err.message}); }
+  };
+  await live('D', 'Overlap, agent gives a polite warning: no automatic major Q1 deduction', 'noc-8',
+    D7_REPEATED_SITE("I hear how frustrating this is and I'm here to help, I just ask that we keep the conversation respectful so I can sort this out for you. Your deposit is still within the normal window."), log8, note8, 'Deposit: Interac: Started',
+    L => ['A','B','C'].includes(L('q1')) && L('q2')!=='AF');
+  await live('D', 'Overlap, agent carries on without a warning: no automatic major Q1 deduction', 'noc-8',
+    D7_REPEATED_SITE("I get it, it's frustrating when it happens more than once. Your deposit is still inside the normal window, and if it isn't credited after a few hours, come back and we'll get it traced."), log8, note8, 'Deposit: Interac: Started',
+    L => ['A','B','C'].includes(L('q1')));
+  await live('I', 'Rating ask after a fairness dispute with lingering frustration: coaching note, no letter drop', 'rg-6',
+    D7_FAIRNESS("I understand. If you get a chance, there may be a pop-up to rate our conversation - I'd really appreciate it!"),
+    [], 'Player questioned game fairness; explained independent random outcomes. Player still unconvinced.', 'Slots: Fairness Concern',
+    (L, ev, close) => ['A','B'].includes(L('q2')) && /rat(e|ing)|feedback|survey/i.test((close.note||'')+' '+JSON.stringify(ev.findings||[])));
+  await live('J', 'Rating ask after a warm, resolved ordinary case: appropriate, not flagged', 'esc-16', D7_WARM, [],
+    'Player locked out, guided through password reset, player confirmed logged back in.', 'Account: Login: Lock Out',
+    (L, ev, close) => ['A','B'].includes(L('q2')) && close.rating!=='needs-work');
+  paint(`Done: ${rows.filter(r=>r.pass).length} of ${rows.length} pass. Live results can vary run to run - read the citation before treating one FAIL as a bug.`);
 }
 
 // ---------- EVALUATOR PROMPT A/B HARNESS ----------
