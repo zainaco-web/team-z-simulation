@@ -2992,6 +2992,13 @@ const SCENARIO_AUDIT_V33 = {
 };
 applyScenarioAudit(SCENARIO_AUDIT_V33, 'auditedV33');
 
+// ---------- v34: promotion to Pilot Ready (Zainab, Oct 23) ----------
+// Every scored rule in these scenarios now traces to real Betty KB or documented TL direction (audit v27-v33).
+// They are promoted without a separate live test run, at Zainab's call; a grade that looks off in real use gets fixed per scenario.
+const PROMOTED_V34 = ['noc-2','adv-1','adv-2','rg-2','rg-3','rg-4','esc-5','esc-7','esc-11','noc-5','ssc-1','ssc-2','ssc-3','aht-3','noc-7','noc-8','rg-6','esc-20','esc-21','noc-9'];
+PROMOTED_V34.forEach(id=>{ const s=SCENARIOS.find(x=>x.id===id); if(!s) return; s.kbStatus='validated'; s.readiness='PILOT_READY'; s.kbNeeded=[]; if(s.metadata) s.metadata.lastValidatedDate='2026-10-23'; });
+(function(){ const s=SCENARIOS.find(x=>x.id==='esc-10'); if(s){ s.kbStatus='validated'; s.readiness='PRACTICE_ONLY'; } })();
+
 const PILOT_SCENARIOS = SCENARIOS.filter(s => s.readiness !== 'ENGINE_TEST_ONLY');
 
 // ---------- TL-ONLY SCENARIO TAGS ----------
@@ -11345,8 +11352,8 @@ function d6StaticChecks(){
   const blob = JSON.stringify(e5);
   out.push({label:'esc-5 no longer treats the HelpDesk ID as player-facing (no "entitled", no "provide the reference number", Case Data marked internal-only)',
     pass: !/entitled/i.test(blob) && !/Provide the reference number/i.test(blob) && !/Complaint reference O8MNDB/.test(blob) && /INTERNAL REFERENCE ONLY, NOT PLAYER-FACING/.test(blob)});
-  out.push({label:'esc-5 keeps its title, level and primary tag; v28: KB-validated (Complaints + Refund KB) but still Practice Only until run live',
-    pass: e5.title==='Complaint Follow-Up' && scenarioPlayerIntensity(e5)===3 && e5.correctTag==='Account: Complaint' && e5.kbStatus==='validated' && e5.readiness==='PRACTICE_ONLY', detail:`kbStatus ${e5.kbStatus}, readiness ${e5.readiness}`});
+  out.push({label:'esc-5 keeps its title, level and primary tag; v28: KB-validated (Complaints + Refund KB); v34: Pilot Ready',
+    pass: e5.title==='Complaint Follow-Up' && scenarioPlayerIntensity(e5)===3 && e5.correctTag==='Account: Complaint' && e5.kbStatus==='validated' && e5.readiness==='PILOT_READY', detail:`kbStatus ${e5.kbStatus}, readiness ${e5.readiness}`});
   const passHit = internalIdsDisclosed(e5, D6_TRANSCRIPTS.pass), failHit = internalIdsDisclosed(e5, D6_TRANSCRIPTS.fail);
   const passNote = internalIdEvalNote(e5, D6_TRANSCRIPTS.pass), failNote = internalIdEvalNote(e5, D6_TRANSCRIPTS.fail);
   out.push({label:'PASS line ("There isn’t a customer reference number you need to keep...") is detected as no disclosure, and the evaluator is told not to score it as withholding',
@@ -11365,9 +11372,9 @@ function d6StaticChecks(){
   const e5p = buildEvalPromptLegacy(e5, [], [], '', 'Account: Complaint', null, null, false, null, false);
   const declaring = SCENARIOS.filter(s=>scenarioAcceptablePrimaryTags(s).length).map(s=>s.id);
   out.push({label:'Tag scoring only loosened where a scenario explicitly declares accepted alternates (v32: esc-14, esc-15, esc-20, noc-7), and only those prompts get the exception', pass: declaring.slice().sort().join(',')==='esc-14,esc-15,esc-20,noc-7' && e20p.includes('explicitly accepts') && !e5p.includes('explicitly accepts'), detail:'Declaring: '+declaring.join(', ')});
-  const six = {'noc-7':'mixed','noc-8':'validated','rg-6':'mixed','esc-20':'mixed','esc-21':'mixed','noc-9':'validated'};
-  const drift = Object.keys(six).filter(id=>{ const s=scenarioById(id); return !s || s.kbStatus!==six[id] || s.readiness!=='PRACTICE_ONLY'; });
-  out.push({label:'The six v22 scenarios keep their KB/readiness labels (all Practice Only; crash-game mechanics still mixed/fictional)', pass: drift.length===0, detail: drift.join(', ')});
+  const six = {'noc-7':'validated','noc-8':'validated','rg-6':'validated','esc-20':'validated','esc-21':'validated','noc-9':'validated'};
+  const drift = Object.keys(six).filter(id=>{ const s=scenarioById(id); return !s || s.kbStatus!==six[id] || s.readiness!=='PILOT_READY'; });
+  out.push({label:'The six v22 scenarios: KB-validated and Pilot Ready after the v27-v33 audit (v34 promotion)', pass: drift.length===0, detail: drift.join(', ')});
   // v24: Chat Guidelines corrections
   const n7 = JSON.stringify(scenarioById('noc-7').processGrounding), n8 = JSON.stringify(scenarioById('noc-8').processGrounding);
   out.push({label:'v24/v25 noc-7: departure from the documented flow or an off-ladder ban is a Q1 issue, never AF; closing under the abuse flow is not "stopping serving"; no invented "never skip" rule',
@@ -11511,6 +11518,7 @@ function d7StaticChecks(){
   add('v32-5', 'Only esc-10 (and hidden aht-2) still have an unconfirmed primary tag', SCENARIOS.filter(s=>s.tagUnverified && s.readiness!=='ENGINE_TEST_ONLY').map(s=>s.id).join(',')==='esc-10');
   add('v33-1', 'esc-11 / aht-3: documents accepted in chat (escalate to Risk with chat ID) or by email; no process point left unscored (only an illustrative case detail)', ['esc-11','aht-3'].every(id=>/in the chat to the agent/.test(pgs(id)) && !/NOT SCORED/.test(pgs(id).replace(/NOT SCORED: the .{0,4}1 day remaining[^.]*\./,''))));
   add('v33-2', 'rg-1 and rg-2 both follow the TL joke rule (RG process still applies; clear = keep playing + Player Care FYI)', ['rg-1','rg-2'].every(id=>/not that kind of joke/.test(pgs(id))) && /chasing losses, so the full Direct Statement handling applies/.test(pgs('rg-1')) && !/QA alignment/.test(pgs('rg-2')));
+  add('v34-1', 'v34: the 20 fully grounded scenarios are Pilot Ready; only esc-10 stays Practice Only (primary tag pending QA); none still marked mixed/fictional among visible scenarios except the coaching ones', PROMOTED_V34.every(id=>S(id).readiness==='PILOT_READY' && S(id).kbStatus==='validated') && SCENARIOS.filter(s=>s.readiness==='PRACTICE_ONLY').map(s=>s.id).join(',')==='esc-10');
   return rows;
 }
 
