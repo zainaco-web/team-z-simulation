@@ -2367,6 +2367,7 @@ let state = {
   categoryFilter:null,     // topic string when browsing scenarios by category via Home, null otherwise
   view:'categories',       // opens to Home by default, not the empty chat pane
   theme:'dark',            // 'dark' | 'light' - saved per device, see loadTheme/saveTheme
+  coachingSession:null, // {coachName} while a senior/coach is running a coaching session on this device (in-memory, resets on reload)
   tlUnlocked:false,   // session-only gate for the TL/management area - never persisted, resets on reload
   chatStartedAt:null,        // Date.now() at scenario start - ALWAYS set, unlike ahtStartTime (AHT-only)
   silenceCheckInterval:null, // setInterval handle for the ambient silence watcher (runs regardless of AHT Mode)
@@ -4189,6 +4190,10 @@ function renderTopbarGlobal(){
       ${icon('clock',14)}<span>AHT Mode</span>
       <label class="aht-switch"><input type="checkbox" id="ahtModeCheckbox" ${state.ahtMode?'checked':''}><span class="aht-slider"></span></label>
     </div>
+    <div class="aht-toggle-wrap" id="coachingToggleWrap" title="Turn on while a coach is running a practice session with you - those chats won't count toward your stats" style="${state.coachingSession?'border-color:var(--warn);color:var(--warn);':''}">
+      ${icon('users',14)}<span>${state.coachingSession ? 'Coaching: '+escapeHtml(state.coachingSession.coachName) : 'Coaching session'}</span>
+      <label class="aht-switch"><input type="checkbox" id="coachingModeCheckbox" ${state.coachingSession?'checked':''}><span class="aht-slider"></span></label>
+    </div>
     <div class="aht-toggle-wrap" id="themeToggleWrap" title="Switch between dark and light mode">
       ${icon('moon',14)}
       <label class="aht-switch"><input type="checkbox" id="themeModeCheckbox" ${state.theme==='light'?'checked':''}><span class="aht-slider"></span></label>
@@ -4728,6 +4733,9 @@ function wireEvents(){
   if(feedbackTextarea) feedbackTextarea.addEventListener('input', e=>{ state.feedbackText = e.target.value; state.feedbackJustSubmitted=false; });
   const btnSubmitFeedback=document.getElementById('btnSubmitFeedback');
   if(btnSubmitFeedback) btnSubmitFeedback.addEventListener('click', submitFeedback);
+
+  const coachingCheckbox=document.getElementById('coachingModeCheckbox');
+  if(coachingCheckbox) coachingCheckbox.addEventListener('change', e=>{ if(e.target.checked) renderCoachNameModal(); else { state.coachingSession=null; render(); } });
 
   const themeCheckbox=document.getElementById('themeModeCheckbox');
   if(themeCheckbox) themeCheckbox.addEventListener('change', e=>{ setTheme(e.target.checked ? 'light' : 'dark'); });
@@ -5473,6 +5481,34 @@ async function runSessionSummary(id){
   render();
 }
 
+// ---------- COACHING SESSIONS ----------
+// When a coach (senior agent, trainer, TL) runs a practice chat with an agent, the agent switches on "Coaching session".
+// Attempts finished while it is on are saved as coaching runs with the coach's name: still visible everywhere, but
+// excluded from averages, pass counts and pattern summaries. The TL can still change this in the TL review.
+function coachingFieldsNow(){ return state.coachingSession ? {coachingRun:true, coachName: state.coachingSession.coachName} : {}; }
+function coachingFieldsOf(rec){ return rec && rec.coachingRun ? {coachingRun:true, coachName: rec.coachName||null} : {}; }
+function coachingRunLabel(rec){ return rec && rec.coachingRun ? ('Coaching run' + (rec.coachName ? ' with ' + rec.coachName : '')) : ''; }
+function coachingBannerHtml(rec){
+  if(!rec || !rec.coachingRun) return '';
+  return `<div class="box" style="border-color:var(--warn);background:var(--warn-bg);color:var(--warn);font-size:12.5px;">${escapeHtml(coachingRunLabel(rec))} - practice with a coach, not counted in team averages or pattern summaries.</div>`;
+}
+function renderCoachNameModal(){
+  const overlay=document.createElement('div');
+  overlay.id='coachNameOverlay'; overlay.className='modal-overlay';
+  overlay.innerHTML = `<div class="modal" style="max-width:420px;">
+    <h2>Coaching session</h2>
+    <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Chats you finish while this is on are saved as coaching runs. Your TL still sees them, but they don't count toward your averages or pattern summaries. Turn it off when the session ends.</div>
+    <input id="coachNameInput" type="text" placeholder="Coach's name (e.g. Jude)" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
+    <div style="margin-top:16px;display:flex;gap:10px;"><button id="btnCancelCoach">Cancel</button><button id="btnStartCoach" class="primary">Start coaching session</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  const input=document.getElementById('coachNameInput'); input.focus();
+  const start=()=>{ const v=input.value.trim(); if(!v){ input.focus(); return; } state.coachingSession={coachName:v}; overlay.remove(); render(); };
+  document.getElementById('btnStartCoach').addEventListener('click', start);
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter') start(); });
+  document.getElementById('btnCancelCoach').addEventListener('click', ()=>{ overlay.remove(); render(); });
+}
+
 // ---------- TEAM PROGRESS LOG (shared via the backend server - see note above) ----------
 async function loadTeamProgressLog(){
   // Try the shared backend first - this is what makes it genuinely team-wide, not just this device.
@@ -5518,7 +5554,7 @@ function applyTlReviews(list){
   });
   const local = loadLocalTlReviews(); // this device's own saved reviews, in case the shared save didn't go through
   Object.keys(local).forEach(k=>{ const prev = reviews[k]; if(!prev || (local[k].tlReviewedAt||0) > (prev.tlReviewedAt||0)) reviews[k] = local[k]; });
-  attempts.forEach(e=>{ const r = reviews[reviewKeyFor(e)]; if(r && r.tlOverrides){ e.tlOverrides = r.tlOverrides; e.tlReviewedAt = r.tlReviewedAt; e.coachingRun = !!r.coachingRun; } });
+  attempts.forEach(e=>{ const r = reviews[reviewKeyFor(e)]; if(r && r.tlOverrides){ e.tlOverrides = r.tlOverrides; e.tlReviewedAt = r.tlReviewedAt; if(r.coachingRun!==undefined) e.coachingRun = !!r.coachingRun; } });
   state.patternSummaries = Object.values(summaries).sort((a,b)=>(b.generatedAt||0)-(a.generatedAt||0));
   return attempts;
 }
@@ -5650,7 +5686,7 @@ async function saveTlReview(){
   const reviewedAt = Date.now();
   entry.tlOverrides = draft;
   entry.tlReviewedAt = reviewedAt;
-  entry.coachingRun = !!state.tlReviewCoachingRun;
+  entry.coachingRun = !!state.tlReviewCoachingRun; if(!entry.coachingRun) delete entry.coachName;
   const key = reviewKeyFor(entry);
   const record = { type:'tl-review', reviewKey:key, agentName:entry.agentName, scenarioId:entry.scenarioId, tlOverrides:draft, tlReviewedAt:reviewedAt, coachingRun: entry.coachingRun };
   try{ const local = loadLocalTlReviews(); local[key] = record; localStorage.setItem(TL_REVIEWS_KEY, JSON.stringify(local)); }
@@ -5723,6 +5759,7 @@ function archiveAttempt(attemptContext){
     playerLeftReason: attemptContext.playerLeftReason,
     playerRating: attemptContext.playerRating || null,
     playerRatingReason: attemptContext.playerRatingReason || null,
+    ...coachingFieldsOf(attemptContext),
     scenarioMeta: scenarioMetaOf(attemptContext.scenario),
   });
   attemptContext.archived = true;
@@ -5749,6 +5786,7 @@ function archiveAttempt(attemptContext){
     playerLeftReason: attemptContext.playerLeftReason,
     playerRating: attemptContext.playerRating || null,
     playerRatingReason: attemptContext.playerRatingReason || null,
+    ...coachingFieldsOf(attemptContext),
     // Full record below - safe to include now that Team Progress is TL-facing only, not agent-visible.
     // Lets a TL click into any teammate's attempt and see exactly what happened, not just the score.
     attemptNum,
@@ -6995,6 +7033,7 @@ function renderDocModal(){
       ahtLateStart: state.ahtLateStart,
       agentName: state.agentName,
       assignmentId: state.activeAssignmentId,
+      ...coachingFieldsNow(),
       evaluation: {loading:true},
       tlOverrides: {},
       archived: false,
@@ -7176,7 +7215,7 @@ function renderTeamProgressModal(filterRoster){
       const hasFullData = !!e.evaluation;
       const es = teamEntryScore(e);
       return `<div class="info-row" style="${hasFullData?'cursor:pointer;':''}${e.coachingRun?'opacity:.6;':''}" ${hasFullData?`data-view-team-attempt="${globalIdx}"`:''}>
-        <span class="ilabel">${escapeHtml(e.scenarioTitle)}<br><span style="font-size:10.5px;">${new Date(e.timestamp).toLocaleString()} \u00b7 ${ahtCell}${hasFullData?' \u00b7 <span style="color:var(--accent);">review attempt</span>':''}${es.reviewed?' \u00b7 <span style="color:var(--ok);">TL-reviewed</span>':''}${e.coachingRun?' \u00b7 <span style="color:var(--warn);font-weight:700;">Coaching run - excluded</span>':''}${hasFullData ? ' \u00b7 <span title="Simulated player rating - not part of the QA score">Player '+(e.playerRating==='up'?'\u{1F44D}':e.playerRating==='down'?'\u{1F44E}':'n/a')+'</span>' : ''}</span></span>
+        <span class="ilabel">${escapeHtml(e.scenarioTitle)}<br><span style="font-size:10.5px;">${new Date(e.timestamp).toLocaleString()} \u00b7 ${ahtCell}${hasFullData?' \u00b7 <span style="color:var(--accent);">review attempt</span>':''}${es.reviewed?' \u00b7 <span style="color:var(--ok);">TL-reviewed</span>':''}${e.coachingRun?' \u00b7 <span style="color:var(--warn);font-weight:700;">'+escapeHtml(coachingRunLabel(e))+' - excluded</span>':''}${hasFullData ? ' \u00b7 <span title="Simulated player rating - not part of the QA score">Player '+(e.playerRating==='up'?'\u{1F44D}':e.playerRating==='down'?'\u{1F44E}':'n/a')+'</span>' : ''}</span></span>
         <span class="ival" style="color:${e.coachingRun?'var(--text3)':es.af?'var(--bad)':es.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${es.af?`AF (${es.afDuty})`:es.pct+'%'} \u00b7 ${e.coachingRun?'not counted':(es.af||!es.pass?'FAIL':'PASS')}</span>
       </div>`;
     }).join('');
@@ -9167,6 +9206,7 @@ function archiveChallengeSlotAttempt(slot){
     playerLeftReason: slot.playerLeftReason,
     challengeTier: state.challenge.tier,
     challengeSessionId: state.challenge.sessionId,
+    ...coachingFieldsNow(),
     playerRating: slot.playerRating || null,
     playerRatingReason: slot.playerRatingReason || null,
     scenarioMeta: scenarioMetaOf(slot.scenario),
@@ -9184,6 +9224,7 @@ function archiveChallengeSlotAttempt(slot){
     ahtElapsedMinutes: record.ahtElapsedMinutes, ahtTargetMinutes: slot.scenario.ahtTargetMinutes,
     playerLeftEarly: slot.playerLeftEarly, playerLeftReason: slot.playerLeftReason,
     playerRating: slot.playerRating || null, playerRatingReason: slot.playerRatingReason || null,
+    ...coachingFieldsOf(record),
     challengeTier: state.challenge.tier,
     attemptNum, transcript: slot.transcript, actionLog: slot.actionLog,
     reviewOutcome: (slot.scenario && slot.scenario.reviewOutcome)||null, evaluation: slot.evaluation,
@@ -9581,6 +9622,7 @@ function evalModalContent(){
     return `<div class="modal">
       <h2>Attempt ${att.attemptNum} - ${tlMode ? 'TL Review' : 'Read-Only'}</h2>
       <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">${escapeHtml((s.internalTitle||s.title))} - ${new Date(att.timestamp).toLocaleString()}${att.agentName ? ' - '+escapeHtml(att.agentName) : ''}</div>
+      ${coachingBannerHtml(att)}
       ${kbBannerFor(s)}
       ${scoreHeaderHtml(ev, reviewDraft, att.ahtElapsedMinutes, att.ahtTargetMinutes, att.ahtLateStart, tlMode)}
       ${playerRatingBoxHtml(att, false)}
@@ -9684,6 +9726,7 @@ function evalModalContent(){
   return `<div class="modal">
     <h2>Assessment Report - Attempt ${attemptNum}</h2>
     <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">${escapeHtml(s.title)} - scored against Betty's real QA Chat Scorecard</div>
+    ${coachingBannerHtml(state.currentAttemptContext && state.currentAttemptContext.transcript===state.transcript ? state.currentAttemptContext : null)}
     ${kbBannerFor(s)}
     ${scoreHeaderHtml(ev, null, state.ahtElapsedMinutes, s.ahtTargetMinutes, state.ahtLateStart, false)}
     ${(()=>{ const ctx = state.currentAttemptContext && state.currentAttemptContext.transcript===state.transcript ? state.currentAttemptContext : null; return playerRatingBoxHtml(ctx, false); })()}
