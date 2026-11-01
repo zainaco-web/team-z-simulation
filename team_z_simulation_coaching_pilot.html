@@ -385,7 +385,7 @@ EVIDENCE
    Example: Case Data covers only a deposit bonus the player didn't qualify for. The agent declines it correctly, then offers a named alternative promotion with deposit and reward terms that appear nowhere in the inputs. That is invention - for an otherwise-correct chat, typically B or C on Q1 depending on how specific and consequential the claim was.
 4. GROUND TRUTH. Available Case Data is the ground truth. (a) A player disputing or not remembering a record is pushback, not a fact: don't penalise the agent for politely relying on the records, don't treat the claim as changing the facts, and judge how the agent handled the dispute. (b) If a Required Action treats something as unresolved that a later or additional record already explains (e.g. a Cancelled reward followed by a Used replacement confirmed by game history), don't deduct for following the evidence; note the conflict in overallSummary as a possible scenario-construction issue.
 5. PROOF OF ACTIONS.
-   - Investigation: NOT GATED Case Data is visible from the start, so never require an Action Log entry for it. GATED items need an Investigate click: use the Action Log to judge whether the agent actually checked before using that information, rather than guessing correctly.
+   - Investigation: NOT GATED Case Data is visible from the start, so never require an Action Log entry for it. GATED items need an Investigate click: use the Action Log to judge whether the agent actually checked before using that information, rather than guessing correctly. If the log is empty but the agent states the exact gated values, that is not a guess: at most a citation note, never a letter drop on its own (rule 9).
    - Operational actions with no UI control (applying a promo, restricting deposits, starting self-exclusion): a clear, specific statement in the transcript ("I've restricted your deposits") is sufficient evidence; a missing Action Log entry proves nothing. Doubt it only if it is vague, contradicted elsewhere, or something Process Grounding says isn't possible.
    - Escalations are held to a stricter bar. The agent correctly shouldn't name internal channels (e.g. "#eng-escalations") to the player, but generic reassurance ("I'll report it", "I'll flag it so it can be looked into") doesn't prove the specific required escalation happened. Credit it only for a concrete commitment to the actual required action, or where the Action Log tracks it.
    - Simulated review workflow (items marked [SIMULATED WORKFLOW ACTION] on a Review tab): here the Action Log IS ground truth. Credit a review as requested only if the log shows REVIEW REQUESTED, and the agent as knowing the outcome only if it also shows REVIEW DECISION VIEWED; the decision text in Available Case Data is the outcome for this attempt. Telling the player an outcome without both steps is an unsupported claim (rule 3); acting against the decision (e.g. promising reinstatement after Declined) is a process error with player impact. Name the reviewer only by the action name in the log and Case Data (e.g. "Request CS Manager Review"), never as a TL, manager or any other role.
@@ -402,7 +402,7 @@ WEIGHING
    Example: Process Grounding prohibits verifying identity through chat questions and changing the email directly. The agent asks for name and date of birth but still sends the player through the full required process without using the answers. That is not a deviation; Q1 is judged on whether the required process was delivered, which it was.
 11. ESCALATIONS AND ACTIONS MUST BE CALLED FOR. Before crediting an escalation, follow-up promise or other operational action, check that Process Grounding's escalationCriteria and requiredActions call for it at that point in the case. Escalating before the conditions are met is a real process issue (work pushed onto another team, the player left waiting on an unnecessary follow-up), not thorough service.
    Example: Auto-Deposit is ON, no flags, 3 hours in, and Process Grounding says this is normal for up to 24 hours. Escalating with a promised email follow-up instead of explaining the supported timeframe is a premature escalation, even if the investigation before it was correct.
-12. ONE ROOT CAUSE, ONE DEDUCTION. Deduct in both Q1 and Q2 only if the mistake had two separate impacts (on the outcome, and on how the chat felt). Otherwise deduct once, where it most directly belongs, and mention the link in the other citation.
+12. ONE ROOT CAUSE, ONE DEDUCTION. How something was communicated (plain language, pacing, one question at a time) belongs in Q2, even when a Required Action names it, unless it caused a wrong or incomplete outcome. Deduct in both Q1 and Q2 only if the mistake had two separate impacts (on the outcome, and on how the chat felt). Otherwise deduct once, where it most directly belongs, and mention the link in the other citation.
 13. PACE IS COACHING, NOT QA. Slowness, filler, lingering pleasantries, unnecessary extra steps that changed nothing, or a delayed close never lower Q1 or Q2 on their own; report them in coachingSignals/efficiencyNarrative. They count for QA only if the same behaviour, independent of its time cost, caused a rubric outcome: genuine confusion, a skipped or wrong KB step, a duty issue, or the player materially worse off. The rubric's "minor deviation" wording is for real procedural or KB misses, not conversational pace. This never excuses a genuine process or KB miss, which is scored as usual.
    Example: correct, complete answer; the player says "that's all, thanks"; the agent's closing message doesn't end the chat and two more rounds of "you too / bye!" follow. Q1 = A; closesConfidently = needs-work, with a note.
 
@@ -6395,13 +6395,13 @@ function parseModelJson(raw){
 async function callClaudeJson(prompt, modelTier, opts){
   const o = opts || {};
   const attempt = async (p, maxTokens)=>{
-    const {text:raw, stop_reason} = await callClaudeRaw(null, [{role:'user', content:p}], maxTokens, o.timeoutMs);
+    const {text:raw, stop_reason} = await callClaudeRaw(null, [{role:'user', content:p}], maxTokens, o.timeoutMs || 120000);
     return { raw, stop_reason, parsed: parseModelJson(raw) };
   };
-  let r = await attempt(prompt, o.maxTokens || 2500);
+  let r = await attempt(prompt, o.maxTokens || 4000);
   if(r.parsed === undefined && o.retry){
     const why = r.stop_reason==='max_tokens' ? 'was cut off before it finished' : 'was not valid JSON';
-    r = await attempt(prompt + "\n\nIMPORTANT: your previous reply " + why + ". Reply again with the SAME JSON structure, but more compact: short strings, persona prompt under 200 words, no more than 4 caseData items, no commentary. Output ONLY the JSON object, nothing before or after it, and escape any double quotes inside strings.", o.maxTokens || 2500);
+    r = await attempt(prompt + "\n\nIMPORTANT: your previous reply " + why + ". Reply again with the SAME JSON structure, but more compact: short strings, persona prompt under 200 words, no more than 4 caseData items, no commentary. Output ONLY the JSON object, nothing before or after it, and escape any double quotes inside strings.", o.maxTokens || 4000);
   }
   if(r.parsed === undefined){
     const cut = r.stop_reason==='max_tokens';
@@ -11026,6 +11026,8 @@ const DIAG1_STRONG_TRANSCRIPT = [
   {speaker:'agent', turn:5, text:"If it's still missing after 24 hours from when it was sent, message us back and we'll escalate it to our payments team to trace it."},
 ];
 
+const DIAG1_STRONG_ACTION_LOG = [{label:'Auto-Deposit status (Gigadat)', tab:'Transaction History', atTurn:1, kind:null, gateLabel:'View Transaction History'}];
+
 const DIAG1_WEAK_TRANSCRIPT = [
   {speaker:'agent', turn:1, text:"Hi! Everything looks correct on our end, the withdrawal is processing normally."},
   {speaker:'player', turn:2, text:"You didn't even check anything, how do you know?"},
@@ -11044,7 +11046,7 @@ async function runDiagnostic1(){
   resultEl.innerHTML = `<div class="diag-result">Running strong transcript...</div>`;
   const scenario = scenarioById('noc-1');
   try{
-    const strongEval = await evaluateFixedTranscript(scenario, DIAG1_STRONG_TRANSCRIPT);
+    const strongEval = await evaluateFixedTranscript(scenario, DIAG1_STRONG_TRANSCRIPT, DIAG1_STRONG_ACTION_LOG);
     resultEl.innerHTML = `<div class="diag-result">Strong run scored. Running weak transcript...</div>`;
     const weakEval = await evaluateFixedTranscript(scenario, DIAG1_WEAK_TRANSCRIPT);
 
@@ -11620,7 +11622,7 @@ function scenarioForSavedAttempt(e){
 function abLetters(ev){ if(!ev || !ev.questions) return null; const g=id=>{ const q=ev.questions.find(x=>x.id===id); return q ? q.letter : '?'; }; return [g('q1'),g('q2'),g('q3')]; }
 function abItems(){
   const items = [
-    {id:'t1-strong', group:'Test 1', label:'Test 1 - strong (noc-1)', sc: scenarioById('noc-1'), inp:{transcript:DIAG1_STRONG_TRANSCRIPT}},
+    {id:'t1-strong', group:'Test 1', label:'Test 1 - strong (noc-1)', sc: scenarioById('noc-1'), inp:{transcript:DIAG1_STRONG_TRANSCRIPT, actionLog:DIAG1_STRONG_ACTION_LOG}},
     {id:'t1-weak', group:'Test 1', label:'Test 1 - weak (noc-1)', sc: scenarioById('noc-1'), inp:{transcript:DIAG1_WEAK_TRANSCRIPT}},
     {id:'t3-missed', group:'Test 3', label:'Test 3 - missed (rg-1)', sc: scenarioById('rg-1'), inp:{transcript:DIAG3_MISSED_TRANSCRIPT}},
     {id:'t3-complete', group:'Test 3', label:'Test 3 - complete (rg-1)', sc: scenarioById('rg-1'), inp:{transcript:DIAG3_COMPLETE_TRANSCRIPT}},
