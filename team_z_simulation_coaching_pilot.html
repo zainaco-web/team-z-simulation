@@ -1648,7 +1648,7 @@ const SCENARIOS = [
     processGrounding:{
       kbTopic:'Patient, Plain-Language Clarification With a Non-Technical Player - No KB Article Needed',
       kbText:'REAL SCORECARD STANDARD, no specific KB article: the underlying fix here is simple (the player just needs to opt in, and the window is still open) - the actual skill being tested is getting there patiently, one plain-language question at a time, without jargon and without showing impatience at a player who genuinely doesn\u2019t know the right terms. This is a communication skill, not a KB lookup - not writing anything into a KB article would make this any easier to get right.',
-      requiredActions:['Ask clarifying questions one at a time, in plain language, rather than a jargon-heavy list of options','Stay patient across multiple rounds of clarification if needed','Correctly identify the real issue (missed opt-in) and guide the player through fixing it before the window closes'],
+      requiredActions:['If the issue isn\u2019t already clear from Case Data, ask clarifying questions one at a time, in plain language, rather than a jargon-heavy list of options. If Case Data already shows the issue, going straight to the plain-language fix is correct, not a skipped step','Stay patient across multiple rounds of clarification if needed','Correctly identify the real issue (missed opt-in) and guide the player through fixing it before the window closes'],
       optionalActions:['Offer to walk through the opt-in step simply, since the player has already said she\u2019s not confident with the interface'],
       escalationCriteria:'Not applicable - this resolves at Tier 1 once the actual issue is identified, which is achievable through patient clarification alone.',
       criticalErrors:'Using jargon or technical tag-style language with a player who has already signaled she doesn\u2019t understand it is a real miss - it makes the interaction harder, not easier. Showing impatience, rushing through multiple questions at once, or giving up and guessing at the issue rather than clarifying it properly are all critical errors here - the whole point of this scenario is that patience is the path to the right answer, not a nice-to-have on top of it.',
@@ -6856,7 +6856,7 @@ Return ONLY valid JSON (no markdown fences, no preamble), exactly this shape. Fo
 // Same requirements as the legacy prompt (kept below as buildEvalPromptLegacy), merged into one statement per rule with
 // at most one worked example each. EVAL_PROMPT_VERSION decides which one live scoring uses. It stays 'legacy' until the
 // System Tests A/B comparison shows the two score the same; then switch it to 'v2'.
-const EVAL_PROMPT_VERSION = 'legacy';
+const EVAL_PROMPT_VERSION = 'v2';
 function buildEvalPrompt(...args){ return EVAL_PROMPT_VERSION==='v2' ? buildEvalPromptV2(...args) : buildEvalPromptLegacy(...args); }
 
 function buildEvalPromptV2(s, transcript, actionLog, docNote, docTag, docSecondaryTag, chatStartedAt, playerLeftEarly, playerLeftReason, ahtModeOn){
