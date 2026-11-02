@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Team Z Coaching Pilot - Simulation Engine (Phase 1 Prototype)</title>
+<title>Team Z Coaching Pilot - Simulation Engine (Phase 1 Prototype) - v39</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3005,6 +3005,100 @@ const SCENARIO_AUDIT_V37 = {
 };
 applyScenarioAudit(SCENARIO_AUDIT_V37, 'auditedV37');
 
+// ---------- v39: RESTORE OF THE v38 RG CORRECTIONS (lost in a later branch) ----------
+// Applied as one more audit layer on top of v27-v37, so every later change in this file is kept. Source of truth:
+// the CURRENT supplied RG guide (RG Triggers: Recognition & Response). Older Compliance examples stay on record as
+// historical context but do not override the current guide where they conflict (TL direction, Zainab).
+// Guarded by the "RG regression guard" System Test so these fixes cannot silently disappear again.
+const RG_DIRECT_BUNDLE = 'DIRECT STATEMENT BUNDLE (current RG guide, via chat): (1) restrict deposits and gameplay; (2) state intent to place the account under self-exclusion; (3) give the player a chance to choose the duration; (4) apply the chosen duration, or the 6-month default if the chat ends before confirmation; (5) send a follow-up email confirming the SE and offering support and longer SE options - required, not optional; (6) once RG tools are applied, the chat goes to Player Care as an FYI with context and chat ID (RG Triggers reminder). A loss limit, a check-in or empathy on its own does not replace this bundle.';
+const RG_DIRECT_BUNDLE_ACTIONS = [
+  'Direct Statement bundle (1): restrict deposits and gameplay',
+  'Direct Statement bundle (2)-(3): state intent to place the account under self-exclusion and give the player a chance to choose the duration',
+  'Direct Statement bundle (4): apply the duration the player chooses, or the 6-month default if the chat ends before confirmation',
+  'Direct Statement bundle (5): send the follow-up email confirming the SE and offering support and longer SE options - required, not optional',
+  'Direct Statement bundle (6): because RG tools were applied, send the chat to Player Care as an FYI with context and chat ID (RG Triggers reminder), and leave a clear note'
+];
+const RG_DIRECT_BUNDLE_NOT_REPLACED = ' A loss limit, a check-in or empathy on its own does not replace the Direct Statement bundle. A bundle that is started but left incomplete is incomplete execution, not a complete miss, and is graded on the existing impact-based rubric: missing a single follow-up step (for example the follow-up email or the Player Care FYI) is not an automatic D - weigh the real or predictable cost to the player.';
+const RG3_CURRENT_TREE = 'CURRENT RG GUIDE DECISION TREE FOR THIS SCENARIO: an essentials-framed statement (bills, rent, food, kids’ needs) is an Indirect Statement. Respond with empathy and do a genuine open-ended RG check-in. If the player confirms loss of control or risk behaviour, follow Direct Statement handling. If the player refuses to answer or drops, apply the precautionary steps: suspend (Reason: Responsible Gaming), disable marketing preferences, send the follow-up email offering support and SE options, and escalate to Player Care with context and chat ID. If the player cooperates and does NOT confirm loss of control or risk behaviour, suspension and escalation are NOT automatically required, and no other mandatory action is added beyond what the guide states. Self-exclusion without a confirmed Direct Statement is not supported. IN THIS SCENARIO the player cooperates with the check-in and denies using essentials money to gamble, chasing losses, and being unable to afford gambling - the intended branch is cooperative Indirect, no confirmed harm.';
+const RG3_AUGUST_CONTEXT = 'HISTORICAL CONTEXT ONLY - does not override the current RG guide: REAL COMPLIANCE RULING (August, this exact statement): "I just need the money to buy my kids clothes for school" "should fall under indirect statements ... the account should have been suspended not self-excluded." Still valid from that ruling: the statement is an Indirect Statement, and self-exclusion was wrong. Its suspension outcome is NOT a mandatory step when the player cooperates and confirms no harm; under the current guide, suspension belongs to the refuse/drop branch.';
+const SCENARIO_AUDIT_V38_RESTORE = {
+  'rg-3': {
+    set:{ internalTitle:'Indirect Hardship Statement - Genuine Check-In; Suspend Only on Refusal/Drop, Never Self-Exclude',
+      kbSource:'Current supplied RG guide (RG Triggers: Recognition & Response) - authoritative. Built from a real Compliance QA escalation (August): a player said "I just need the money to buy my kids clothes for school," which Compliance classified as an indirect statement and noted the agent wrongly self-excluded. That ruling is kept as historical context; where it differs from the current guide (mandatory suspension after a cooperative answer), the current guide wins.' },
+    personaReplace:[[
+      'If the agent asks a genuine follow-up question about how you’re doing financially, answer honestly but without drama - you’re stretched thin this month, not in crisis.',
+      'If the agent asks genuine RG check-in questions, cooperate and answer honestly without drama - you’re stretched thin this month, not in crisis. If asked, say plainly that you have NOT used money meant for essentials (bills, rent, food, the kids) to gamble, that you are NOT chasing losses, and that you CAN afford what you play with. Do not drift into confirming loss of control or risk behaviour.'
+    ]],
+    pg:{
+      kbTopic:'Indirect Essentials-Framed Statement - Genuine RG Check-In; Suspend Only If the Player Refuses or Drops; Never Self-Exclude Without Confirmed Harm',
+      kbText: KB_RG_INDIRECT + ' ' + RG3_CURRENT_TREE + ' ' + RG3_AUGUST_CONTEXT,
+      requiredActions:[
+        'Answer the withdrawal question with the real Interac KB: check status AND Auto-Deposit before responding',
+        'Recognise the essentials comment as an Indirect Statement (the KB lists "I need this to pay rent / buy food / cover essentials")',
+        'Respond with empathy and start a genuine soft RG check-in with open-ended questions (RG Questions Repository) that reference what she said',
+        'If she confirms loss of control or risk behaviour: follow Direct Statement handling',
+        'If she refuses to answer or drops: suspend as a precaution (Reason: Responsible Gaming). Disable marketing preferences, send the follow-up email offering support and SE options, and escalate to Player Care with context and chat ID',
+        'Intended branch - she cooperates and does not confirm loss of control or risk behaviour: no suspension or escalation is automatically required; close the check-in supportively and document the statement, the check-in and her answers (note + RG: Intervention: Concerning Statement flag)'
+      ],
+      optionalActions:['Check prior RG history for context (none on file)', 'Mentioning RG tools or support resources after a cooperative answer is fine and never penalised'],
+      escalationCriteria:'Only if she refuses or drops (precautionary suspension, then Player Care with context and chat ID) or confirms harm (Direct Statement handling). Not required in the intended cooperative, no-harm branch.',
+      criticalErrors:'Ignoring the essentials statement entirely is a critical RG miss. A generic platitude with no genuine open-ended question is not a check-in. Self-excluding without a confirmed Direct Statement is not supported - the exact error Compliance flagged in August. NOT suspending or NOT escalating after she cooperates and confirms no harm is NOT an error under the current guide and must never be coached as a gap. Suspending or escalating anyway in that branch is not a duty breach; at most it is an unnecessary step (Q1 minor process point), judged on how clearly it was explained to her.',
+      ambiguityNotes:'Current supplied RG guide is authoritative over the older August Compliance example where they conflict (TL direction). The August ruling stays as historical context: it confirms the Indirect classification and that self-exclusion was wrong; its suspension outcome now applies only to the refuse/drop branch.'
+    } },
+  'rg-4': {
+    set:{ internalTitle:'Concerning Statement - Clarify RG vs RNG First; Direct Handling if Chasing Is Confirmed or He Will Not Specify' },
+    caseAdd:[{id:'stat1', tab:'Statistics', label:'Deposits this week (Statistics)', value:'$320 total deposited this week (fictional training value)', gated:true, gateLabel:'View Statistics'}],
+    pgReplace:[['kbText','Self-exclusion is only an over-action if the player never confirmed chasing losses or loss of control.',
+      'Self-exclusion is only an over-action if the player clarified it as a non-RG (RNG/platform) complaint without confirming chasing losses or loss of control; if he will not specify after being asked, the current RG guide says to follow Direct Statement handling.']],
+    pg:{
+      kbTextAppend:' CURRENT RG GUIDE ORDER FOR THIS SCENARIO: "I’ve been losing too much / spent more than I should" first needs clarification - is it an RG concern or an RNG/platform complaint? Do NOT restrict deposits or gameplay automatically before that branch is established. If clarification confirms chasing losses or other harm, follow Direct Statement handling. If he still will not specify after being asked, follow Direct Statement handling (current RG guide). If he clarifies it is an RNG/platform complaint with no RG concern, no RG restriction is required. The August example settles the restriction SCOPE (deposits and gameplay, not withdrawals) when RG tools are applied; it does not make restriction automatic. Withdrawals stay available unless there is a separate payment-method reason. ACCOUNT QUESTION: he asks how much he has deposited this week; Statistics shows $320 (fictional training value) - the agent checks Statistics before answering. ' + RG_DIRECT_BUNDLE,
+      requiredActions:[
+        'Check Statistics (Case Data) before answering, then resolve his actual account question: how much he has deposited this week ($320)',
+        'Make the player elaborate on "I probably spent more than I should have" with open-ended questions BEFORE any restriction (KB: find out whether it is RG or an RNG complaint)',
+        'If he confirms chasing losses or other RG harm, or still will not specify after being asked: full Direct Statement handling (restrict deposits and gameplay, state self-exclusion intent, let him choose the duration, 6-month default if the chat ends first, follow-up email)',
+        'Whatever the branch, check for a separate payment-method issue before touching withdrawals - with none, leave withdrawal access open',
+        'Escalate to Player Care with context and chat ID, and leave a clear note'
+      ],
+      optionalActions:['If suspending or self-excluding while the $140 balance is there, ask the player to withdraw it first (RG Triggers note)'],
+      criticalErrors:'Restricting withdrawals with no separate payment-method reason is the exact error Compliance flagged. Ignoring the statement is a critical RG miss. Restricting deposits/gameplay before asking him to clarify (RG vs RNG) is a process gap - the branch has to be established first. Answering the deposit question without checking Statistics is an accuracy/process miss. Applying self-exclusion after he has confirmed chasing losses, or after he will not specify when asked, is NOT an error - it is the required Direct Statement handling.' + RG_DIRECT_BUNDLE_NOT_REPLACED,
+      ambiguityNotesAppend:' v39 restore: clarification comes before any restriction; the RG intervention flag is the secondary tag, never the primary.'
+    } },
+  'rg-1': {
+    pg:{
+      kbTextAppend:' ' + RG_DIRECT_BUNDLE,
+      requiredActions:[
+        'Notice the trigger even though it is delivered casually as a joke - a joke-framed RG statement still gets the RG process (TL direction)',
+        'Resolve the original Daily Wheel question',
+        'Ask genuine RG check-in questions about the comment before deciding the outcome (TL direction); going straight to Direct handling is KB-consistent and is not penalised',
+        'Because his answers confirm chasing losses, apply the full Direct Statement bundle and leave a clear note:'
+      ].concat(RG_DIRECT_BUNDLE_ACTIONS),
+      optionalActions:[],
+      escalationCriteria:'Player Care FYI with context and chat ID once RG tools are applied (RG Triggers reminder). No other escalation is needed.',
+      criticalErrorsAppend: RG_DIRECT_BUNDLE_NOT_REPLACED
+    } },
+  'esc-13': {
+    pgReplace:[
+      ['requiredActions','Restrict deposits/gameplay AND initiate self-exclusion for the Direct Statement - do NOT end the chat or ban for this',
+        'Apply the full Direct Statement bundle for the RG statement - do NOT end the chat or ban for this: restrict deposits and gameplay; state self-exclusion intent and let him choose the duration; apply his choice or the 6-month default if the chat ends first; send the follow-up email confirming the SE with support and longer SE options; and, because RG tools were applied, send the chat to Player Care as an FYI with context and chat ID'],
+      ['escalationCriteria','escalate to Player Care after if warranted','send the chat to Player Care as an FYI with context and chat ID once RG tools are applied (RG Triggers reminder)']
+    ],
+    pg:{ kbTextAppend:' ' + RG_DIRECT_BUNDLE, criticalErrorsAppend: RG_DIRECT_BUNDLE_NOT_REPLACED } },
+  'rg-2': {
+    pgReplace:[
+      ['kbText','and the RG Triggers reminder to escalate to Player Care as FYI.',
+        'and the RG Triggers reminder to escalate to Player Care as FYI when RG tools are applied. LABEL: the Player Care FYI after a player CLEARS the checks (no RG tools applied) is TL direction (Zainab), not a current RG-guide requirement.'],
+      ['requiredActions','If the player clears the checks: let them carry on, and escalate the chat to Player Care as an FYI with context and chat ID, plus a clear internal note',
+        'If the player clearly explains it away and harm is not confirmed: do not treat it as confirmed harm - let them carry on, and (TL direction, not a current RG-guide requirement) send the chat to Player Care as an FYI with context and chat ID, plus a clear internal note'],
+      ['requiredActions','If the checks raise concern (loss of control, risk behaviour): Direct Statement handling - restrict deposits and gameplay, indicate self-exclusion intent, let them choose the duration',
+        'If the checks confirm harm (loss of control, risk behaviour): full Direct Statement handling - restrict deposits and gameplay, state self-exclusion intent, let them choose the duration (6-month default if the chat ends first), send the follow-up email confirming the SE with support options, and Player Care FYI once RG tools are applied'],
+      ['criticalErrors','Clearing the player but not sending the chat to Player Care as an FYI misses a required step.',
+        'Clearing the player but not sending the chat to Player Care as an FYI misses a TL-directed step (TL direction, not a current RG-guide requirement). Treating a joke that was clearly explained away as confirmed harm invents harm the player did not confirm.']
+    ],
+    pg:{ kbTextAppend:' ' + RG_DIRECT_BUNDLE,
+      ambiguityNotesAppend:' v39 restore: Direct handling needs confirmed harm. A grey answer that neither confirms harm nor clearly explains the joke away keeps this scenario’s existing grey-zone treatment.' } }
+};
+applyScenarioAudit(SCENARIO_AUDIT_V38_RESTORE, 'auditedV38Restore');
+
 // ---------- v34: promotion to Pilot Ready (Zainab, Oct 23) ----------
 // Every scored rule in these scenarios now traces to real Betty KB or documented TL direction (audit v27-v33).
 // They are promoted without a separate live test run, at Zainab's call; a grade that looks off in real use gets fixed per scenario.
@@ -4814,6 +4908,17 @@ function wireEvents(){
   });
   const teamProgressDashFilterSelect=document.getElementById('teamProgressDashFilterSelect');
   if(teamProgressDashFilterSelect) teamProgressDashFilterSelect.addEventListener('change', e=>{ state.teamProgressDashFilter = e.target.value; });
+  // v39 Team View
+  const teamViewFilterSelect=document.getElementById('teamViewFilterSelect');
+  if(teamViewFilterSelect) teamViewFilterSelect.addEventListener('change', e=>{ state.teamViewFilter = e.target.value; render(); });
+  document.querySelectorAll('[data-team-view-mode]').forEach(b=>b.addEventListener('click', ()=>{ state.teamViewMode = b.getAttribute('data-team-view-mode'); render(); }));
+  document.querySelectorAll('[data-team-view-open]').forEach(el=>{
+    const go = ()=>openTeamViewAttempt(parseInt(el.getAttribute('data-team-view-open'),10));
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', ev=>{ if(ev.key==='Enter' || ev.key===' '){ ev.preventDefault(); go(); } });
+  });
+  const btnTeamViewRefresh=document.getElementById('btnTeamViewRefresh');
+  if(btnTeamViewRefresh) btnTeamViewRefresh.addEventListener('click', ()=>{ btnTeamViewRefresh.disabled = true; btnTeamViewRefresh.textContent = 'Refreshing\u2026'; loadTeamProgressLog().then(()=>render()).catch(()=>render()); });
 
   document.querySelectorAll('[data-open-tl-progress]').forEach(el=>{
     el.addEventListener('click', ()=>{
@@ -4926,6 +5031,8 @@ function wireEvents(){
   if(d2) d2.addEventListener('click', runDiagnostic2);
   const d7=document.getElementById('runDiag7');
   if(d7) d7.addEventListener('click', runDiagnostic7);
+  const d8=document.getElementById('runDiag8');
+  if(d8) d8.addEventListener('click', runDiagnostic8);
   const d6=document.getElementById('runDiag6');
   if(d6) d6.addEventListener('click', runDiagnostic6);
   const d5=document.getElementById('runDiag5');
@@ -5554,7 +5661,7 @@ function applyTlReviews(list){
   });
   const local = loadLocalTlReviews(); // this device's own saved reviews, in case the shared save didn't go through
   Object.keys(local).forEach(k=>{ const prev = reviews[k]; if(!prev || (local[k].tlReviewedAt||0) > (prev.tlReviewedAt||0)) reviews[k] = local[k]; });
-  attempts.forEach(e=>{ const r = reviews[reviewKeyFor(e)]; if(r && r.tlOverrides){ e.tlOverrides = r.tlOverrides; e.tlReviewedAt = r.tlReviewedAt; if(r.coachingRun!==undefined) e.coachingRun = !!r.coachingRun; } });
+  attempts.forEach(e=>{ const r = reviews[reviewKeyFor(e)]; if(r && r.tlOverrides){ e.tlOverrides = r.tlOverrides; e.tlReviewedAt = r.tlReviewedAt; if(r.coachingRun!==undefined) e.coachingRun = !!r.coachingRun; e.reviewedBy = r.reviewedBy||null; e.reviewHistory = Array.isArray(r.reviewHistory) ? r.reviewHistory : []; } });
   state.patternSummaries = Object.values(summaries).sort((a,b)=>(b.generatedAt||0)-(a.generatedAt||0));
   return attempts;
 }
@@ -5566,6 +5673,30 @@ const PATTERN_SUMMARIES_KEY = 'zteamz_patternSummaries_v1';
 function loadLocalPatternSummaries(){ try{ const v=JSON.parse(localStorage.getItem(PATTERN_SUMMARIES_KEY)||'[]'); return Array.isArray(v)?v:[]; }catch(err){ return []; } }
 function scoredAttemptsFor(canonical){ return state.teamProgressLog.filter(e=>e && e.type!=='tl-review' && !e.coachingRun && e.evaluation && Array.isArray(e.evaluation.questions) && namesMatch(e.agentName, canonical)).sort((a,b)=>(a.timestamp||0)-(b.timestamp||0)); }
 function patternSummariesFor(canonical){ return (state.patternSummaries||[]).filter(s=>namesMatch(s.agentName, canonical)); }
+// v39 restore: historical findings on scenarios whose grounding was corrected are read clause by clause.
+// Only the named obsolete requirement is ignored; every other clause in the same finding stays valid evidence.
+// Stored attempts are never rewritten - this only changes what the pattern-summary prompt is told.
+const PATTERN_SUPERSEDED_STANDARDS = {
+  'rg-3': { obsolete:'any requirement to suspend, disable marketing, send the follow-up email, or escalate to Player Care/Compliance after the player cooperated with the RG check-in and did not confirm harm (current RG guide: those steps belong only to the refuse/drop branch)',
+    stillValid:'a missed or generic check-in, incorrect self-exclusion, withdrawal investigation errors (status / Auto-Deposit), note and tagging issues, tone and wording' },
+  'rg-4': { obsolete:'any requirement to restrict deposits/gameplay automatically, before the RG-vs-RNG clarification was established',
+    stillValid:'not asking him to clarify, restricting withdrawals without a payment-method reason, not checking Statistics before answering, incomplete Direct Statement handling once harm was confirmed or he would not specify, a missing Player Care escalation, note and tagging issues' }
+};
+function patternHistoricalCheckLine(e){
+  const s = e && PATTERN_SUPERSEDED_STANDARDS[e.scenarioId];
+  if(!s) return '';
+  return `  HISTORICAL STANDARD CHECK: this scenario's grounding was corrected after some attempts were evaluated. Obsolete clause (ignore ONLY this): ${s.obsolete}. Still valid (keep): ${s.stillValid}.\n`;
+}
+function patternTlReviewLines(e){
+  if(!e || !e.tlReviewedAt || !e.tlOverrides || !e.evaluation) return '';
+  const parts = QA_SCORECARD.questions.map(q=>{
+    const t = e.tlOverrides[q.id]; const a = (e.evaluation.questions||[]).find(x=>x.id===q.id) || {};
+    if(!t || !t.letter || (t.letter===a.letter && (t.afDuty||null)===(a.afDuty||null))) return '';
+    const why = [t.basis, t.basisArticle, t.reason, t.notes].filter(Boolean).join(' - ');
+    return `${q.id.toUpperCase()} AI ${a.letter} -> TL ${t.letter}${why?' ('+why+')':''}`;
+  }).filter(Boolean);
+  return parts.length ? `  TL REVIEW (authoritative - use the TL letters; a point the TL overturned is not a gap): ${parts.join('; ')}\n` : '';
+}
 function buildPatternSummaryPrompt(canonical, attempts){
   const lettersOf = e => QA_SCORECARD.questions.map(q=>{ const t=e.tlOverrides&&e.tlOverrides[q.id]; const a=e.evaluation.questions.find(x=>x.id===q.id)||{}; return q.label+': '+((e.tlReviewedAt && t && t.letter) || a.letter || '?'); }).join(', ');
   const body = attempts.map((e,k)=>{
@@ -5573,7 +5704,7 @@ function buildPatternSummaryPrompt(canonical, attempts){
     const detail = hasFindings(ev)
       ? ev.findings.map(f=>`  - [${f.type}${f.strength?', strength':', '+f.severity}] standard: ${f.kbSays} | agent: ${f.agentDid} | impact: ${f.impact} | next time: ${f.nextTime}`).join('\n')
       : `  - summary: ${ev.overallSummary||''}\n` + (ev.questions||[]).map(q=>`  - ${q.id} citation: ${q.citation||''}`).join('\n');
-    return `ATTEMPT ${k+1} - ${new Date(e.timestamp).toLocaleDateString()} - scenario "${e.scenarioTitle||e.scenarioId}" (${e.scenarioId})${e.tlReviewedAt?' - TL-reviewed':''}\n  letters: ${lettersOf(e)}\n${detail}`;
+    return `ATTEMPT ${k+1} - ${new Date(e.timestamp).toLocaleDateString()} - scenario "${e.scenarioTitle||e.scenarioId}" (${e.scenarioId})${e.tlReviewedAt?' - TL-reviewed':''}\n  letters: ${lettersOf(e)}\n${patternTlReviewLines(e)}${patternHistoricalCheckLine(e)}${detail}`;
   }).join('\n\n');
   const library = practicePoolFor(canonical).map(s=>`${s.id}: "${s.title}" - ${s.internalTitle||''} [${scenarioSkillCode(s)}; ${scenarioKbCategories(s).join(', ')}]`).join('\n');
   return `You are helping a Team Lead at Betty (iGaming customer support) coach one agent, ${canonical}. Below are the agent's ${attempts.length} scored practice attempts, oldest first. Identify patterns across attempts. Output ONLY a single JSON object, no markdown.
@@ -5586,6 +5717,8 @@ RULES
 - CLASSIFY BY ROOT CAUSE, ONCE. Each underlying issue goes in exactly one recurring gap, under its clearest root cause - never split one issue across two gaps. Example: an agent who never opened a gated Account Notes item and so never learned a deadline has a MISSED REQUIRED INVESTIGATION / incomplete information gathering gap. That is NOT an "unsupported claim" unless the agent actually stated a deadline or fact they had no basis for.
 - Casual, warm phrasing ("you got it", "I got you", "no need to be sorry", emojis, light humour) is never a gap on its own. Only report wording as a gap when it had a real effect: defensiveness, arguing, talking down, sarcasm at the player, dismissiveness, or flippancy around RG/compliance.
 - A player who stayed angry or left unhappy is not a gap by itself; judge what the agent did.
+- TL-REVIEWED ATTEMPTS: the letters shown are the TL-reviewed result where a TL review exists. Treat a TL REVIEW line as authoritative and do not report a gap that a TL review overturned.
+- HISTORICAL FINDINGS - CLAUSE BY CLAUSE. Some attempts carry a HISTORICAL STANDARD CHECK line: that scenario's grounding was corrected after the attempt was evaluated. Read each of that attempt's findings clause by clause. Ignore ONLY the clauses that rely on the obsolete requirement named there; keep every other clause as valid evidence (for example a missed or generic check-in, incorrect self-exclusion, withdrawal investigation errors, note or tagging issues). A finding can be PARTLY OBSOLETE: drop the obsolete clause and keep the rest. Never discard a whole finding just because it mentions words like "suspend", "Compliance" or "Player Care" - only the specific obsolete requirement is ignored, and never report it as a recurring gap.
 
 ATTEMPTS
 ${body}
@@ -5668,13 +5801,294 @@ function teamEntryScore(e){
   }
   return {pct:e.pct, af:e.af, afDuty:e.afDuty, pass:e.pass, reviewed:false};
 }
+// ---------- v39: TL MANAGEMENT LAYER - review audit trail, Team View, Review Recommended ----------
+// Management-layer only. Reads saved attempts, AI evaluations and TL reviews; never changes scenario grounding,
+// RG logic, evaluator prompts, pattern-summary logic, player personas, scoring (computeQAScore / QA_SCORECARD)
+// or the system tests. Makes no model calls.
+const TL_OVERRIDE_BASIS_OPTIONS = ['KB article', 'Compliance/QA direction', 'TL coaching standard', 'Scenario-grounding correction', 'Evaluator error'];
+const REVIEW_SWING_PTS = 30; // "sharp swing" = final score moved this many points or more vs the agent's previous counted attempt
+function aiQuestionOf(entry, qid){ return ((entry && entry.evaluation && entry.evaluation.questions) || []).find(x=>x.id===qid) || {}; }
+function overrideChanged(ai, o){
+  if(!o || !o.letter) return false;
+  if(o.letter !== ai.letter) return true;
+  return o.letter==='AF' && (o.afDuty||null) !== (ai.afDuty||null);
+}
+function letterWithDuty(letter, duty){ return (letter||'?') + (letter==='AF' && duty ? ' ('+duty+')' : ''); }
+function overrideValidationErrors(entry, draft){
+  const errs = [];
+  QA_SCORECARD.questions.forEach(q=>{
+    const ai = aiQuestionOf(entry, q.id), o = draft && draft[q.id];
+    if(!overrideChanged(ai, o)) return;
+    const lbl = q.id.toUpperCase()+' '+q.label;
+    if(!o.basis) errs.push(lbl+': choose a basis for the override');
+    else if(o.basis==='KB article' && !(o.basisArticle||'').trim()) errs.push(lbl+': name the KB article');
+    if(!(o.reason||'').trim()) errs.push(lbl+': explain why the letter changed');
+  });
+  return errs;
+}
+function tlReviewerNameNow(){ const v = (state.tlReviewerName!==undefined && state.tlReviewerName!==null) ? state.tlReviewerName : getLastAssigningTL(); return (v||'').trim(); }
+function tlReviewerFieldHtml(){
+  return `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);">Reviewed by <input id="tlReviewerName" placeholder="Your name (TL) - required" value="${escapeHtml(tlReviewerNameNow())}" style="min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-family:inherit;font-size:13px;"></label>`;
+}
+// The per-question editor fields that appear only when the TL's letter differs from the AI's.
+function tlOverrideBasisFieldsHtml(qid, aiQ, override){
+  if(!overrideChanged(aiQ, override)) return '';
+  const inputStyle = 'background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-family:inherit;font-size:12.5px;';
+  return `<div style="margin-top:8px;padding:8px 10px;border:1px solid var(--warn-border);background:var(--warn-bg);border-radius:8px;">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">AI: <strong>${escapeHtml(letterWithDuty(aiQ.letter, aiQ.afDuty))}</strong> → TL: <strong>${escapeHtml(letterWithDuty(override.letter, override.afDuty))}</strong> - a basis and an explanation are required to save this change.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <select class="tlBasisSelect" data-id="${qid}" aria-label="Basis for override" style="${inputStyle}">
+        <option value="" ${override.basis?'':'selected'}>Basis for override (required)…</option>
+        ${TL_OVERRIDE_BASIS_OPTIONS.map(b=>`<option value="${escapeHtml(b)}" ${override.basis===b?'selected':''}>${escapeHtml(b)}</option>`).join('')}
+      </select>
+      ${override.basis==='KB article' ? `<input class="tlBasisArticle" data-id="${qid}" placeholder="KB article name (required)" value="${escapeHtml(override.basisArticle||'')}" style="flex:1;min-width:200px;${inputStyle}">` : ''}
+    </div>
+    <textarea class="notes tlReason" data-id="${qid}" placeholder="Why the letter changed (required)" style="margin-top:6px;">${escapeHtml(override.reason||'')}</textarea>
+  </div>`;
+}
+// Saved review record shown in the attempt view: AI letter -> TL letter, basis, reason, reviewer, date.
+function tlReviewRecordHtml(entry){
+  if(!entry || !entry.tlReviewedAt || !entry.tlOverrides || !entry.evaluation) return '';
+  const rows = QA_SCORECARD.questions.map(q=>{
+    const ai = aiQuestionOf(entry, q.id), o = entry.tlOverrides[q.id];
+    if(!o) return '';
+    const label = `<strong>${escapeHtml(q.id.toUpperCase()+' '+q.label)}</strong>`;
+    if(!overrideChanged(ai, o)) return `<div style="font-size:12.5px;margin-top:4px;color:var(--text2);">${label}: AI ${escapeHtml(letterWithDuty(ai.letter, ai.afDuty))} - confirmed by TL</div>`;
+    const basis = o.basis ? escapeHtml(o.basis) + (o.basis==='KB article' && o.basisArticle ? ' - '+escapeHtml(o.basisArticle) : '') : '<span style="color:var(--text3);">not recorded (reviewed before the audit trail)</span>';
+    return `<div style="font-size:12.5px;margin-top:6px;padding:6px 8px;border-left:3px solid var(--warn);background:var(--panel2);border-radius:4px;">
+      ${label}: AI: <strong>${escapeHtml(letterWithDuty(ai.letter, ai.afDuty))}</strong> → TL: <strong>${escapeHtml(letterWithDuty(o.letter, o.afDuty))}</strong>
+      <div style="margin-top:2px;"><span style="color:var(--text3);">Basis:</span> ${basis}</div>
+      <div style="margin-top:2px;"><span style="color:var(--text3);">Reason:</span> ${o.reason ? escapeHtml(o.reason) : '<span style="color:var(--text3);">not recorded</span>'}</div>
+    </div>`;
+  }).join('');
+  const hist = Array.isArray(entry.reviewHistory) ? entry.reviewHistory : [];
+  const histHtml = hist.length ? `<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--text2);">Earlier reviews of this attempt (${hist.length})</summary>${[...hist].reverse().map(h=>`<div style="font-size:12px;color:var(--text2);margin-top:4px;">${escapeHtml(h.reviewedBy||'Reviewer not recorded')} · ${escapeHtml(new Date(h.tlReviewedAt).toLocaleString())} · ${QA_SCORECARD.questions.map(q=>{ const o=(h.tlOverrides||{})[q.id]||{}; return q.id.toUpperCase()+' '+escapeHtml(letterWithDuty(o.letter, o.afDuty)); }).join(' · ')}</div>`).join('')}</details>` : '';
+  return `<div class="box" style="border-color:var(--accent);">
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><strong>TL review record</strong><span style="font-size:12px;color:var(--text3);">Reviewed by ${entry.reviewedBy ? escapeHtml(entry.reviewedBy) : 'not recorded (reviewed before the audit trail)'} · ${escapeHtml(new Date(entry.tlReviewedAt).toLocaleString())}${entry.coachingRun ? ' · coaching run' : ''}</span></div>
+    ${rows}${histHtml}
+  </div>`;
+}
+function tlReviewRecordText(entry){
+  if(!entry || !entry.tlReviewedAt || !entry.tlOverrides || !entry.evaluation) return '';
+  let out = `TL review by: ${entry.reviewedBy || '(not recorded)'} - ${new Date(entry.tlReviewedAt).toLocaleString()}\n`;
+  QA_SCORECARD.questions.forEach(q=>{
+    const ai = aiQuestionOf(entry, q.id), o = entry.tlOverrides[q.id];
+    if(!overrideChanged(ai, o)) return;
+    out += `  ${q.id.toUpperCase()} ${q.label}: AI ${letterWithDuty(ai.letter, ai.afDuty)} -> TL ${letterWithDuty(o.letter, o.afDuty)} | Basis: ${o.basis ? o.basis + (o.basis==='KB article' && o.basisArticle ? ' - '+o.basisArticle : '') : '(not recorded)'} | Reason: ${o.reason || '(not recorded)'}\n`;
+  });
+  return out;
+}
+
+// ---- Review Recommended: only signals computable from data already saved (no grounding-change tracking) ----
+function isCountedTeamAttempt(e){ return !!(e && e.type!=='tl-review' && e.type!=='pattern-summary' && !e.coachingRun && e.scenarioId); }
+function entryFinalPct(e){ const sc = teamEntryScore(e); return sc.af ? 0 : (Number(sc.pct)||0); }
+// Computed once per change of the team log (attempt count + review stamps), then looked up per attempt.
+let reviewFlagsCache = {key:null, map:null};
+function reviewRecommendedReasons(entry){
+  const log = state.teamProgressLog || [];
+  const key = log.length + ':' + log.reduce((t,e)=>t+((e&&e.tlReviewedAt)||0),0);
+  if(reviewFlagsCache.key!==key || reviewFlagsCache.log!==log){ reviewFlagsCache = {key, log, map: computeReviewRecommendedAll(log)}; }
+  return reviewFlagsCache.map.get(entry) || [];
+}
+function computeReviewRecommendedAll(log){
+  const map = new Map();
+  const counted = log.filter(isCountedTeamAttempt);
+  const nameOf = new Map(counted.map(e=>[e, canonicalNameFor(e.agentName||'')]));
+  const byAgent = {};
+  counted.forEach(e=>{ const k = nameOf.get(e); (byAgent[k]=byAgent[k]||[]).push(e); });
+  Object.values(byAgent).forEach(list=>list.sort((a,b)=>(a.timestamp||0)-(b.timestamp||0)));
+  const overridesByScenario = {};
+  log.forEach(e=>{
+    if(e && e.tlReviewedAt && e.tlOverrides && e.evaluation && QA_SCORECARD.questions.some(q=>overrideChanged(aiQuestionOf(e, q.id), e.tlOverrides[q.id])))
+      (overridesByScenario[e.scenarioId]=overridesByScenario[e.scenarioId]||[]).push(e);
+  });
+  counted.forEach(entry=>{
+    if(entry.tlReviewedAt) return;
+    const out = [];
+    if(entry.evaluation){
+      let blob = ''; try{ blob = JSON.stringify(entry.evaluation); }catch(err){}
+      if(/cannot determine/i.test(blob)) out.push('The evaluator returned "Cannot Determine" on at least one point');
+    }
+    const list = byAgent[nameOf.get(entry)] || [];
+    const prev = list.filter(e=>e!==entry && (e.timestamp||0) < (entry.timestamp||0)).pop();
+    if(prev){
+      const a = entryFinalPct(prev), b = entryFinalPct(entry), d = b - a;
+      if(Math.abs(d) >= REVIEW_SWING_PTS) out.push(`Score swung ${d>0?'+':''}${d} pts from this agent\u2019s previous attempt (${a}% \u2192 ${b}%)`);
+    }
+    const others = (overridesByScenario[entry.scenarioId]||[]).filter(e=>e!==entry);
+    if(others.length){
+      const by = [...new Set(others.map(e=>e.reviewedBy).filter(Boolean))];
+      out.push(`A TL has already overridden the AI on this scenario (${others.length} attempt${others.length===1?'':'s'}${by.length ? ', by '+by.join(', ') : ''})`);
+    }
+    if(out.length) map.set(entry, out);
+  });
+  return map;
+}
+function reviewRecommendedChipHtml(entry){
+  const r = reviewRecommendedReasons(entry);
+  return r.length ? ` <span class="tag-chip" title="${escapeHtml(r.join('\n'))}" style="color:var(--warn);border-color:var(--warn-border);background:var(--warn-bg);">Review recommended</span>` : '';
+}
+function reviewRecommendedBannerHtml(entry){
+  const r = reviewRecommendedReasons(entry);
+  if(!r.length) return '';
+  return `<div class="box" style="border-color:var(--warn-border);background:var(--warn-bg);"><strong style="color:var(--warn);">Review recommended</strong>
+    ${r.map(x=>`<div style="font-size:12.5px;margin-top:4px;">• ${escapeHtml(x)}</div>`).join('')}
+    <div style="font-size:11.5px;color:var(--text3);margin-top:6px;">A prompt to look closer, not a verdict - the AI score stands until a TL saves a review.</div></div>`;
+}
+function openTeamViewAttempt(idx){
+  const entry = state.teamProgressLog[idx];
+  if(!entry || !entry.evaluation) return;
+  state.teamProgressReturn = null; state.tlCopy = null;
+  state.historicalView = { scenarioId: entry.scenarioId, attempt: entry, standalone: true, fromTeamProgress: true };
+  state.tlReviewDraft = buildReviewDraft(entry); state.tlReviewCoachingRun = !!entry.coachingRun;
+  state.tlReviewStatus = '';
+  state.historicalTranscriptExpanded = false;
+  renderEvalModal();
+}
+
+// ---- Team View: agent x scenario / skill / scorecard question ----
+function teamViewEntries(filter){
+  let log = state.teamProgressLog.filter(isCountedTeamAttempt);
+  if(filter && filter.startsWith('tl:')){
+    const r = state.tlRosters.find(x=>x.tlName===filter.slice(3));
+    const agents = r ? r.agents : [];
+    log = log.filter(e=>agents.some(a=>namesMatch(a, canonicalNameFor(e.agentName))));
+  } else if(filter && filter.startsWith('agent:')){
+    const n = filter.slice(6);
+    log = log.filter(e=>namesMatch(n, canonicalNameFor(e.agentName)));
+  }
+  return log;
+}
+function finalQuestionLetter(e, qid){
+  const ai = aiQuestionOf(e, qid);
+  const t = e.tlReviewedAt && e.tlOverrides && e.tlOverrides[qid];
+  return (t && t.letter) ? {letter:t.letter, afDuty:t.afDuty||null} : {letter:ai.letter, afDuty:ai.afDuty||null};
+}
+function teamViewTone(ratio, okAt, warnAt){ return ratio===null ? '' : ratio>=okAt ? 'ok' : ratio>=warnAt ? 'warn' : 'bad'; }
+function teamViewCell(text, tone, opts){
+  opts = opts || {};
+  const bg = tone==='ok' ? 'var(--ok-bg)' : tone==='warn' ? 'var(--warn-bg)' : tone==='bad' ? 'var(--bad-bg)' : 'transparent';
+  const fg = tone==='ok' ? 'var(--ok)' : tone==='warn' ? 'var(--warn)' : tone==='bad' ? 'var(--bad)' : 'var(--text3)';
+  const click = opts.openIdx!==undefined && opts.openIdx>=0 ? ` data-team-view-open="${opts.openIdx}" role="button" tabindex="0"` : '';
+  return `<td${click} title="${escapeHtml(opts.title||'')}" style="padding:6px 8px;text-align:center;white-space:nowrap;background:${bg};color:${fg};font-weight:${tone?700:400};border:1px solid var(--border);${click?'cursor:pointer;':''}">${text}${opts.flag?' <span style="color:var(--warn);" aria-label="Review recommended">●</span>':''}</td>`;
+}
+function teamViewColumns(mode, log){
+  if(mode==='question') return [...QA_SCORECARD.questions.map(q=>({key:q.id, label:q.id.toUpperCase(), title:q.label})), {key:'AF', label:'AF', title:'Automatic fails (final, after any TL review)'}];
+  if(mode==='skill'){
+    const codes = [...new Set(log.map(e=>scenarioSkillCode(scenarioById(e.scenarioId))))].sort();
+    return codes.map(c=>({key:c, label:c, title:skillNameForCode(c)}));
+  }
+  const order = id => { const i = SCENARIOS.findIndex(s=>s.id===id); return i<0 ? 1e6 : i; };
+  const ids = [...new Set(log.map(e=>e.scenarioId))].sort((a,b)=>order(a)-order(b) || String(a).localeCompare(String(b)));
+  return ids.map(id=>{ const s = scenarioById(id); const ex = log.find(e=>e.scenarioId===id); return {key:id, label:id, title:(s && (s.internalTitle||s.title)) || (ex && ex.scenarioTitle) || id}; });
+}
+function teamViewCellFor(mode, col, entries){
+  if(mode==='scenario'){
+    const list = entries.filter(e=>e.scenarioId===col.key).sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+    if(!list.length) return teamViewCell('–', '', {title:'Not attempted'});
+    const latest = list[0], sc = teamEntryScore(latest);
+    const text = (sc.af ? 'AF' : sc.pct+'%') + (list.length>1 ? `<span style="font-weight:400;font-size:10.5px;"> ×${list.length}</span>` : '');
+    const tone = sc.af ? 'bad' : sc.pass ? 'ok' : 'warn';
+    const title = `Latest: ${sc.af ? 'AF ('+sc.afDuty+')' : sc.pct+'%'} ${sc.af||!sc.pass?'FAIL':'PASS'}${sc.reviewed?' (TL-reviewed)':''} · ${new Date(latest.timestamp).toLocaleDateString()} · ${list.length} attempt${list.length===1?'':'s'}`;
+    return teamViewCell(text, tone, {title, openIdx: latest.evaluation ? state.teamProgressLog.indexOf(latest) : -1, flag: list.some(e=>reviewRecommendedReasons(e).length)});
+  }
+  if(mode==='skill'){
+    const list = entries.filter(e=>scenarioSkillCode(scenarioById(e.scenarioId))===col.key);
+    if(!list.length) return teamViewCell('–', '', {title:'Not attempted'});
+    const pass = list.filter(e=>{ const sc=teamEntryScore(e); return sc.pass && !sc.af; }).length;
+    const avg = Math.round(list.reduce((t,e)=>t+entryFinalPct(e),0)/list.length);
+    return teamViewCell(`${pass}/${list.length}`, teamViewTone(pass/list.length, 0.8, 0.5), {title:`${pass} of ${list.length} passed · average ${avg}%`, flag: list.some(e=>reviewRecommendedReasons(e).length)});
+  }
+  const withEval = entries.filter(e=>e.evaluation && Array.isArray(e.evaluation.questions));
+  if(!withEval.length) return teamViewCell('–', '', {title:'No scored attempts with a full evaluation'});
+  if(col.key==='AF'){
+    const afs = withEval.map(e=>QA_SCORECARD.questions.map(q=>finalQuestionLetter(e,q.id)).find(x=>x.letter==='AF')).filter(Boolean);
+    const duties = {}; afs.forEach(x=>{ duties[x.afDuty||'unspecified'] = (duties[x.afDuty||'unspecified']||0)+1; });
+    return teamViewCell(afs.length ? String(afs.length) : '0', afs.length ? 'bad' : 'ok', {title: afs.length ? Object.entries(duties).map(([d,n])=>`${d}: ${n}`).join(' · ') : 'No automatic fails'});
+  }
+  const qDef = QA_SCORECARD.questions.find(q=>q.id===col.key);
+  const counts = {}; let pts = 0;
+  withEval.forEach(e=>{ const f = finalQuestionLetter(e, qDef.id); counts[f.letter] = (counts[f.letter]||0)+1; pts += ((qDef.letters[f.letter]||{}).pts||0); });
+  const avg = Math.round(pts / (qDef.maxPts*withEval.length) * 100);
+  return teamViewCell(avg+'%', teamViewTone(avg/100, 0.85, 0.7), {title:`Average ${avg}% of ${qDef.label} points over ${withEval.length} attempt${withEval.length===1?'':'s'} · letters: ${Object.keys(qDef.letters).filter(l=>counts[l]).map(l=>l+'×'+counts[l]).join(' ')}`});
+}
+function teamViewFooterCell(mode, col, byAgent, agents){
+  if(mode==='scenario'){
+    const latest = agents.map(a=>byAgent[a].filter(e=>e.scenarioId===col.key).sort((x,y)=>(y.timestamp||0)-(x.timestamp||0))[0]).filter(Boolean);
+    if(!latest.length) return teamViewCell('–', '');
+    const pass = latest.filter(e=>{ const sc=teamEntryScore(e); return sc.pass && !sc.af; }).length;
+    return teamViewCell(`${pass}/${latest.length}`, teamViewTone(pass/latest.length, 0.8, 0.5), {title:`${pass} of ${latest.length} agents passed on their latest attempt`});
+  }
+  if(mode==='skill'){
+    const all = agents.flatMap(a=>byAgent[a]); return teamViewCellFor('skill', col, all);
+  }
+  const all = agents.flatMap(a=>byAgent[a]);
+  if(col.key==='AF'){
+    const n = agents.filter(a=>byAgent[a].some(e=>e.evaluation && QA_SCORECARD.questions.some(q=>finalQuestionLetter(e,q.id).letter==='AF'))).length;
+    return teamViewCell(`${n} agent${n===1?'':'s'}`, n ? 'bad' : 'ok', {title:'Agents with at least one automatic fail'});
+  }
+  const qDef = QA_SCORECARD.questions.find(q=>q.id===col.key);
+  const below = agents.filter(a=>{
+    const w = byAgent[a].filter(e=>e.evaluation && Array.isArray(e.evaluation.questions)); if(!w.length) return false;
+    const p = w.reduce((t,e)=>t+((qDef.letters[finalQuestionLetter(e,qDef.id).letter]||{}).pts||0),0) / (qDef.maxPts*w.length);
+    return p < 0.7;
+  }).length;
+  const base = teamViewCellFor('question', col, all);
+  return base.replace(/<\/td>$/, `<div style="font-size:10.5px;font-weight:400;">${below} below 70%</div></td>`);
+}
+function renderTeamViewSectionBody(){
+  const mode = state.teamViewMode || 'scenario';
+  const filter = state.teamViewFilter || 'everyone';
+  const log = teamViewEntries(filter);
+  const options = [`<option value="everyone" ${filter==='everyone'?'selected':''}>Everyone</option>`];
+  if(state.tlRosters.length) options.push(`<optgroup label="Team Leads">${state.tlRosters.map(r=>`<option value="tl:${escapeHtml(r.tlName)}" ${filter==='tl:'+r.tlName?'selected':''}>${escapeHtml(r.tlName)}’s team</option>`).join('')}</optgroup>`);
+  if(state.agentDirectory.length) options.push(`<optgroup label="Individual Agents">${[...state.agentDirectory].sort((a,b)=>a.canonicalName.localeCompare(b.canonicalName)).map(a=>`<option value="agent:${escapeHtml(a.canonicalName)}" ${filter==='agent:'+a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}</optgroup>`);
+  const modeBtn = (m, label) => `<button class="small${mode===m?' primary':''}" data-team-view-mode="${m}" aria-pressed="${mode===m}">${label}</button>`;
+  const controls = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+    <select id="teamViewFilterSelect" aria-label="Whose results" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;min-width:200px;">${options.join('')}</select>
+    <span style="display:flex;gap:4px;">${modeBtn('scenario','By scenario')}${modeBtn('skill','By skill')}${modeBtn('question','By scorecard question')}</span>
+    <button class="small" id="btnTeamViewRefresh">Refresh</button>
+  </div>`;
+  const intro = `<div style="color:var(--text2);font-size:13px;margin-bottom:10px;">Where to look across the team. Scores use the TL-reviewed result where one exists, otherwise the AI score. Coaching runs are excluded.</div>`;
+  if(!log.length) return intro + controls + `<div class="empty">No counted attempts for this selection yet.</div>`;
+  const byAgent = {};
+  log.forEach(e=>{ const k = canonicalNameFor(e.agentName||'(unnamed)'); (byAgent[k]=byAgent[k]||[]).push(e); });
+  const agents = Object.keys(byAgent).sort((a,b)=>a.localeCompare(b));
+  const cols = teamViewColumns(mode, log);
+  const th = 'padding:6px 8px;border:1px solid var(--border);font-size:11.5px;color:var(--text2);font-weight:600;white-space:nowrap;background:var(--panel2);';
+  const head = `<tr><th style="${th}text-align:left;position:sticky;left:0;">Agent</th>${cols.map(c=>`<th style="${th}" title="${escapeHtml(c.title)}">${escapeHtml(c.label)}</th>`).join('')}</tr>`;
+  const body = agents.map(a=>`<tr><th scope="row" style="${th}text-align:left;font-weight:500;color:var(--text);position:sticky;left:0;">${escapeHtml(a)}${agentStatusSuffix(a) ? `<span style="color:var(--text3);font-weight:400;">${escapeHtml(agentStatusSuffix(a))}</span>` : ''}</th>${cols.map(c=>teamViewCellFor(mode, c, byAgent[a])).join('')}</tr>`).join('');
+  const foot = `<tr><th scope="row" style="${th}text-align:left;position:sticky;left:0;">Team</th>${cols.map(c=>teamViewFooterCell(mode, c, byAgent, agents)).join('')}</tr>`;
+  const legend = {
+    scenario: 'Each cell is the agent’s latest attempt on that scenario (×n = number of attempts). Click a cell to open and review it. Green pass · amber fail · red AF.',
+    skill: 'Each cell is passes / counted attempts on scenarios for that skill. Green 80%+ · amber 50-79% · red under 50%. Hover for the average score.',
+    question: 'Each cell is the average share of that question’s points earned (final letters). Green 85%+ · amber 70-84% · red under 70%. AF = automatic fails. The Team row counts agents averaging below 70% on each question.'
+  }[mode];
+  const flagged = log.filter(e=>reviewRecommendedReasons(e).length).sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+  const flaggedHtml = `<div style="margin-top:14px;"><strong style="font-size:13px;">Review recommended (${flagged.length})</strong>
+    ${flagged.length ? flagged.slice(0,15).map(e=>{ const idx = state.teamProgressLog.indexOf(e); const sc = teamEntryScore(e); return `<div class="info-row" ${e.evaluation?`style="cursor:pointer;" data-team-view-open="${idx}" role="button" tabindex="0"`:''}>
+      <span class="ilabel">${escapeHtml(canonicalNameFor(e.agentName||''))} · ${escapeHtml(e.scenarioTitle||e.scenarioId)}<br><span style="font-size:10.5px;">${new Date(e.timestamp).toLocaleString()} · ${reviewRecommendedReasons(e).map(escapeHtml).join(' · ')}</span></span>
+      <span class="ival" style="color:${sc.af?'var(--bad)':sc.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${sc.af?'AF':sc.pct+'%'}</span></div>`; }).join('') + (flagged.length>15 ? `<div style="font-size:11.5px;color:var(--text3);margin-top:4px;">Showing the newest 15.</div>` : '')
+    : `<div style="font-size:12.5px;color:var(--text3);margin-top:4px;">Nothing flagged. Unreviewed attempts are flagged when the evaluator said "Cannot Determine", the score swung ${REVIEW_SWING_PTS}+ points from the agent’s previous attempt, or a TL has already overridden the AI on the same scenario.</div>`}
+  </div>`;
+  return intro + controls + `<div style="overflow-x:auto;max-width:100%;"><table style="border-collapse:collapse;font-size:12.5px;">${head}${body}${foot}</table></div>
+    <div style="font-size:11.5px;color:var(--text3);margin-top:8px;">${legend} <span style="color:var(--warn);">●</span> = an unreviewed attempt in that cell is flagged Review recommended.</div>` + flaggedHtml;
+}
+function teamViewDashSummary(){
+  const log = state.teamProgressLog.filter(isCountedTeamAttempt);
+  const flagged = log.filter(e=>reviewRecommendedReasons(e).length).length;
+  const agents = new Set(log.map(e=>canonicalNameFor(e.agentName||''))).size;
+  return `${agents} agent${agents===1?'':'s'} · ${flagged} review recommended`;
+}
+
 // Working copy the TL edits before saving; starts from the saved review, or the AI letters if none yet.
 function buildReviewDraft(entry){
   const d = {};
   QA_SCORECARD.questions.forEach(q=>{
     const ai = entry.evaluation.questions.find(x=>x.id===q.id) || {};
     const t = entry.tlOverrides && entry.tlOverrides[q.id];
-    d[q.id] = { letter: (t&&t.letter) || ai.letter, afDuty: t ? (t.afDuty||null) : (ai.afDuty||null), notes: (t&&t.notes)||'' };
+    d[q.id] = { letter: (t&&t.letter) || ai.letter, afDuty: t ? (t.afDuty||null) : (ai.afDuty||null), notes: (t&&t.notes)||'',
+      basis: (t&&t.basis)||'', basisArticle: (t&&t.basisArticle)||'', reason: (t&&t.reason)||'' }; // v39 audit trail
   });
   return d;
 }
@@ -5682,13 +6096,26 @@ async function saveTlReview(){
   const hv = state.historicalView;
   if(!state.tlUnlocked || !hv || !hv.fromTeamProgress || !state.tlReviewDraft) return {ok:false, shared:false};
   const entry = hv.attempt;
+  // v39 audit trail: a reviewer name is required, and every changed letter needs a basis + explanation.
+  const reviewer = tlReviewerNameNow();
+  const errors = [...(reviewer ? [] : ['add your name as the reviewer']), ...overrideValidationErrors(entry, state.tlReviewDraft)];
+  if(errors.length) return {ok:false, shared:false, errors};
   const draft = JSON.parse(JSON.stringify(state.tlReviewDraft));
+  QA_SCORECARD.questions.forEach(q=>{
+    const ai = aiQuestionOf(entry, q.id), o = draft[q.id]; if(!o) return;
+    o.aiLetter = ai.letter || null; o.aiAfDuty = ai.afDuty || null;
+    if(!overrideChanged(ai, o)){ delete o.basis; delete o.basisArticle; delete o.reason; }
+    else { o.reason = (o.reason||'').trim(); if(o.basis==='KB article') o.basisArticle = (o.basisArticle||'').trim(); else delete o.basisArticle; }
+  });
+  const reviewHistory = [...(Array.isArray(entry.reviewHistory) ? entry.reviewHistory : []),
+    ...(entry.tlReviewedAt ? [{reviewedBy: entry.reviewedBy||null, tlReviewedAt: entry.tlReviewedAt, tlOverrides: entry.tlOverrides, coachingRun: !!entry.coachingRun}] : [])].slice(-20);
   const reviewedAt = Date.now();
   entry.tlOverrides = draft;
   entry.tlReviewedAt = reviewedAt;
+  entry.reviewedBy = reviewer; entry.reviewHistory = reviewHistory;
   entry.coachingRun = !!state.tlReviewCoachingRun; if(!entry.coachingRun) delete entry.coachName;
   const key = reviewKeyFor(entry);
-  const record = { type:'tl-review', reviewKey:key, agentName:entry.agentName, scenarioId:entry.scenarioId, tlOverrides:draft, tlReviewedAt:reviewedAt, coachingRun: entry.coachingRun };
+  const record = { type:'tl-review', reviewKey:key, agentName:entry.agentName, scenarioId:entry.scenarioId, tlOverrides:draft, tlReviewedAt:reviewedAt, coachingRun: entry.coachingRun, reviewedBy: reviewer, reviewHistory };
   try{ const local = loadLocalTlReviews(); local[key] = record; localStorage.setItem(TL_REVIEWS_KEY, JSON.stringify(local)); }
   catch(err){ console.error('Saving TL review locally failed:', err); }
   try{ localStorage.setItem(TEAM_PROGRESS_KEY, JSON.stringify(state.teamProgressLog)); }catch(err){}
@@ -7215,7 +7642,7 @@ function renderTeamProgressModal(filterRoster){
       const hasFullData = !!e.evaluation;
       const es = teamEntryScore(e);
       return `<div class="info-row" style="${hasFullData?'cursor:pointer;':''}${e.coachingRun?'opacity:.6;':''}" ${hasFullData?`data-view-team-attempt="${globalIdx}"`:''}>
-        <span class="ilabel">${escapeHtml(e.scenarioTitle)}<br><span style="font-size:10.5px;">${new Date(e.timestamp).toLocaleString()} \u00b7 ${ahtCell}${hasFullData?' \u00b7 <span style="color:var(--accent);">review attempt</span>':''}${es.reviewed?' \u00b7 <span style="color:var(--ok);">TL-reviewed</span>':''}${e.coachingRun?' \u00b7 <span style="color:var(--warn);font-weight:700;">'+escapeHtml(coachingRunLabel(e))+' - excluded</span>':''}${hasFullData ? ' \u00b7 <span title="Simulated player rating - not part of the QA score">Player '+(e.playerRating==='up'?'\u{1F44D}':e.playerRating==='down'?'\u{1F44E}':'n/a')+'</span>' : ''}</span></span>
+        <span class="ilabel">${escapeHtml(e.scenarioTitle)}${reviewRecommendedChipHtml(e)}<br><span style="font-size:10.5px;">${new Date(e.timestamp).toLocaleString()} \u00b7 ${ahtCell}${hasFullData?' \u00b7 <span style="color:var(--accent);">review attempt</span>':''}${es.reviewed?' \u00b7 <span style="color:var(--ok);">TL-reviewed</span>':''}${e.coachingRun?' \u00b7 <span style="color:var(--warn);font-weight:700;">'+escapeHtml(coachingRunLabel(e))+' - excluded</span>':''}${hasFullData ? ' \u00b7 <span title="Simulated player rating - not part of the QA score">Player '+(e.playerRating==='up'?'\u{1F44D}':e.playerRating==='down'?'\u{1F44E}':'n/a')+'</span>' : ''}</span></span>
         <span class="ival" style="color:${e.coachingRun?'var(--text3)':es.af?'var(--bad)':es.pass?'var(--ok)':'var(--bad)'};font-weight:700;">${es.af?`AF (${es.afDuty})`:es.pct+'%'} \u00b7 ${e.coachingRun?'not counted':(es.af||!es.pass?'FAIL':'PASS')}</span>
       </div>`;
     }).join('');
@@ -7487,6 +7914,24 @@ function renderEvalModal(){
           const st=document.getElementById('tlReviewStatus'); if(st) st.textContent = state.tlReviewStatus;
         });
       });
+      document.querySelectorAll('.tlBasisSelect').forEach(sel=>{
+        sel.addEventListener('change', e=>{
+          const id=e.target.getAttribute('data-id');
+          state.tlReviewDraft[id].basis = e.target.value;
+          state.tlReviewStatus = 'Unsaved changes';
+          renderEvalModal();
+        });
+      });
+      document.querySelectorAll('.tlBasisArticle, .tlReason').forEach(inp=>{
+        inp.addEventListener('input', e=>{
+          const id=e.target.getAttribute('data-id');
+          state.tlReviewDraft[id][e.target.classList.contains('tlReason') ? 'reason' : 'basisArticle'] = e.target.value;
+          state.tlReviewStatus = 'Unsaved changes';
+          const st=document.getElementById('tlReviewStatus'); if(st) st.textContent = state.tlReviewStatus;
+        });
+      });
+      const reviewerInput=document.getElementById('tlReviewerName');
+      if(reviewerInput) reviewerInput.addEventListener('input', e=>{ state.tlReviewerName = e.target.value; });
       const crCheck=document.getElementById('tlCoachingRunCheck');
       if(crCheck) crCheck.addEventListener('change', e=>{ state.tlReviewCoachingRun = e.target.checked; state.tlReviewStatus = 'Unsaved changes'; const st=document.getElementById('tlReviewStatus'); if(st) st.textContent = state.tlReviewStatus; });
       const saveBtn=document.getElementById('btnSaveTlReview');
@@ -7495,10 +7940,11 @@ function renderEvalModal(){
         saveBtn.disabled = true; if(st) st.textContent = 'Saving...';
         const res = await saveTlReview();
         saveBtn.disabled = false;
-        state.tlReviewStatus = !res.ok ? 'Could not save.' : res.shared
+        state.tlReviewStatus = !res.ok ? (res.errors && res.errors.length ? 'Not saved - ' + res.errors.join('; ') + '.' : 'Could not save.') : res.shared
           ? '\u2713 Saved - visible to the whole team\u2019s TLs.'
           : '\u26a0 Saved on this device only - the shared server did not accept it, so other TLs will not see it yet.';
         const st2=document.getElementById('tlReviewStatus'); if(st2) st2.textContent = state.tlReviewStatus;
+        if(res.ok) renderEvalModal(); // v39: show the saved review record straight away
       });
     }
     return;
@@ -7541,6 +7987,7 @@ function scorecardRowsHtml(ev, tlOverrides, mode, opts){
           ${dutyOptions.map(d=>`<option value="${escapeHtml(d)}" ${override.afDuty===d?'selected':''}>${escapeHtml(d)}${allowedDuties.includes(d)?'':' (not a valid '+qDef.id.toUpperCase()+' duty)'}</option>`).join('')}
         </select>` : ''}
       </div>
+      ${tlOverrideBasisFieldsHtml(qDef.id, aiQ, override)}
       <textarea class="notes tlNotes" data-id="${qDef.id}" placeholder="TL coaching note (optional)">${escapeHtml(override.notes)}</textarea>` : ''}
     </div>`;
   }).join('');
@@ -9623,13 +10070,14 @@ function evalModalContent(){
       <h2>Attempt ${att.attemptNum} - ${tlMode ? 'TL Review' : 'Read-Only'}</h2>
       <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">${escapeHtml((s.internalTitle||s.title))} - ${new Date(att.timestamp).toLocaleString()}${att.agentName ? ' - '+escapeHtml(att.agentName) : ''}</div>
       ${coachingBannerHtml(att)}
+      ${state.historicalView.fromTeamProgress ? reviewRecommendedBannerHtml(att) + tlReviewRecordHtml(att) : ''}
       ${kbBannerFor(s)}
       ${scoreHeaderHtml(ev, reviewDraft, att.ahtElapsedMinutes, att.ahtTargetMinutes, att.ahtLateStart, tlMode)}
       ${playerRatingBoxHtml(att, false)}
       ${hasFindings(ev) ? `
       ${tlMode ? `<div class="box" style="border-color:var(--accent);"><strong>TL / Management review.</strong> The AI\u2019s assessment stays on record as-is. Use the override and note on each question below where the AI got something wrong or the case deserves leniency, then save.${att.tlReviewedAt ? `<div style="color:var(--text3);font-size:12px;margin-top:4px;">Last reviewed ${new Date(att.tlReviewedAt).toLocaleString()}</div>` : ''}</div>` : ''}
       ${scorecardRowsHtml(ev, reviewDraft, tlMode ? 'tl' : 'agent', {compact:true})}
-      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);" title="For practice runs used in a coaching session, not a real attempt"><input type="checkbox" id="tlCoachingRunCheck" ${state.tlReviewCoachingRun?'checked':''}> Coaching run - exclude from averages, pass counts and pattern summaries</label><button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}
+      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);" title="For practice runs used in a coaching session, not a real attempt"><input type="checkbox" id="tlCoachingRunCheck" ${state.tlReviewCoachingRun?'checked':''}> Coaching run - exclude from averages, pass counts and pattern summaries</label>${tlReviewerFieldHtml()}<button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}
       ${renderFindingsSection(ev)}
       <div class="box" style="margin-top:12px;">${escapeHtml(ev.overallSummary)}</div>
       ${renderEfficiencyNarrativeBox(ev)}
@@ -9640,7 +10088,7 @@ function evalModalContent(){
       <div class="box">${escapeHtml(ev.overallSummary)}</div>
       ${tlMode ? `<div class="box" style="border-color:var(--accent);"><strong>TL / Management review.</strong> The AI\u2019s assessment stays on record as-is. Use the override and note on each question below where the AI got something wrong or the case deserves leniency, then save.${att.tlReviewedAt ? `<div style="color:var(--text3);font-size:12px;margin-top:4px;">Last reviewed ${new Date(att.tlReviewedAt).toLocaleString()}</div>` : ''}</div>` : ''}
       ${scorecardRowsHtml(ev, reviewDraft, tlMode ? 'tl' : 'agent')}
-      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);" title="For practice runs used in a coaching session, not a real attempt"><input type="checkbox" id="tlCoachingRunCheck" ${state.tlReviewCoachingRun?'checked':''}> Coaching run - exclude from averages, pass counts and pattern summaries</label><button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}`}
+      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);" title="For practice runs used in a coaching session, not a real attempt"><input type="checkbox" id="tlCoachingRunCheck" ${state.tlReviewCoachingRun?'checked':''}> Coaching run - exclude from averages, pass counts and pattern summaries</label>${tlReviewerFieldHtml()}<button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}`}
       <div class="box" style="margin-top:16px;">
         <div class="box title" style="margin-bottom:6px;">Documentation submitted</div>
         Note: ${escapeHtml(att.docNote||'(none)')}<br>Primary tag: ${escapeHtml(att.docTag||'(none)')}${att.docSecondaryTag && att.docSecondaryTag!=='None' ? `<br>Secondary RG flag: ${escapeHtml(att.docSecondaryTag)}` : ''}
@@ -9860,6 +10308,7 @@ function buildTlReviewText(att, s){
       return {id:q.id, letter: t && t.letter ? t.letter : ai.letter, afDuty: t ? t.afDuty : ai.afDuty};
     }));
     out += `TL-validated Score: ${fmtScore(tlScore)}\n`;
+    out += tlReviewRecordText(att);
   }
   if(att.ahtElapsedMinutes!==null && att.ahtElapsedMinutes!==undefined && att.ahtTargetMinutes){
     out += `Handling Time: ${formatElapsed(att.ahtElapsedMinutes*60000)} (target: ${att.ahtTargetMinutes} min)${att.ahtLateStart?' - AHT Mode started mid-chat':''}\n`;
@@ -10971,6 +11420,13 @@ function renderSystemTestsSectionBody(){
     </div>
 
     <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">8. RG regression guard (v39)</h2>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks (instant, no API calls) that lock in the restored v38 RG corrections: rg-3 current decision tree and Danielle\u2019s cooperative persona, rg-4 clarification-first order with Statistics and tags, the full Direct Statement bundle (rg-1, esc-13), the rg-2 joke split with the TL-direction label, the corrected grounding reaching both evaluator prompts, and clause-by-clause historical findings in pattern summaries (including the Talara case).</div>
+      <button id="runDiag8" style="margin-top:10px;">Run test</button>
+      <div id="diag8Result"></div>
+    </div>
+
+    <div class="diag-section">
       <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">4. Evaluator prompt A/B: legacy vs consolidated (v2)</h2>
       <div style="color:var(--text2);font-size:13px;line-height:1.6;">Scores the same inputs with both prompts and shows the letters side by side: Tests 1 and 3 above, plus the 5 most recent Team Progress attempts that have a full saved record. With the noise check on, the legacy prompt runs twice, so you can tell a real prompt difference (legacy agrees with itself, v2 differs) from the evaluator's normal run-to-run variation. Live scoring currently uses: <strong>${EVAL_PROMPT_VERSION==='v2' ? 'v2 (consolidated)' : 'legacy'}</strong>. Up to 30 scoring calls; takes several minutes.</div>
       <label style="font-size:12.5px;color:var(--text2);display:flex;align-items:center;gap:6px;margin-top:8px;"><input type="checkbox" id="abNoiseCheck" ${(state.abTest && state.abTest.noFlag) ? '' : 'checked'}> Noise check (run legacy twice)</label>
@@ -11010,6 +11466,7 @@ function renderDiagnostics(){
     ${renderDashSection('assign-scenarios', 'Assign Scenarios', `${pendingCount} pending assignment${pendingCount===1?'':'s'}`, renderAssignScenariosSectionBody, 'bolt', '#5b7cff')}
     ${renderDashSection('create-scenario', 'Create Scenario', `${customScenariosCreatedBy(state.scenarioBuilderTLName||getLastAssigningTL()).length} created by you`, renderCreateScenarioSectionBody, 'chat', '#e05a8e')}
     ${renderDashSection('tl-agent-roster', 'Team Leads & Agent Roster', agentsOnMultipleRosters().length ? `${agentsOnMultipleRosters().length} agent${agentsOnMultipleRosters().length===1?'':'s'} need resolution` : `${activeAgentProfiles().length} active agents`, renderTeamLeadsRosterSectionBody, 'users', '#a06bd6')}
+    ${renderDashSection('team-view', 'Team View', teamViewDashSummary(), renderTeamViewSectionBody, 'grid', '#3b82c4')}
     ${renderDashSection('team-progress', 'Team Progress', 'View and review attempts', renderTeamProgressSectionBody, 'chart', '#3ecf8e')}
     ${renderDashSection('feedback', 'Feedback & Suggestions', `${unresolvedCount} unresolved suggestion${unresolvedCount===1?'':'s'}`, renderFeedbackManagementSectionBody, 'chat', '#e2a33d')}
     ${renderDashSection('scenario-library', 'Scenario Library', `Browse ${SCENARIOS.length} scenarios`, renderScenarioLibrarySectionBody, 'grid', '#5bc0be')}
@@ -11458,6 +11915,90 @@ async function runDiagnostic6(){
   paint(`Done: ${scored.filter(r=>r.pass).length} of ${scored.length} pass. Live evaluator results can vary run to run - read the citation before treating a single FAIL as a bug.`);
 }
 
+
+// ---------- DIAGNOSTIC 8: RG REGRESSION GUARD (v39) ----------
+// Deterministic only, no API calls. Locks in the v38 RG corrections restored in v39 so a later branch cannot
+// silently drop them again. Checks the effective scenario data, the Danielle persona as it reaches the player prompt,
+// the grounding as it reaches both evaluator prompts, and the pattern-summary historical-finding rules.
+function rgRegressionStaticChecks(){
+  const rows = [];
+  const add = (id, label, pass, detail) => rows.push({id, label, pass:!!pass, detail:detail||''});
+  const S = id => scenarioById(id) || {processGrounding:{}, caseData:[]};
+  const PG = id => S(id).processGrounding || {};
+  const txt = id => JSON.stringify(PG(id));
+  const req = id => (PG(id).requiredActions||[]);
+  const opt = id => (PG(id).optionalActions||[]);
+
+  // rg-3 / Danielle
+  add('R1', 'rg-3: essentials statement is an Indirect Statement under the current guide', S('rg-3').rgStatementType==='Indirect' && /essentials-framed statement \(bills, rent, food, kids’ needs\) is an Indirect Statement/.test(PG('rg-3').kbText||''));
+  add('R2', 'rg-3: empathy + genuine open-ended RG check-in is required', req('rg-3').some(a=>/genuine soft RG check-in with open-ended questions/.test(a)));
+  const susp = req('rg-3').filter(a=>/suspend/i.test(a));
+  add('R3', 'rg-3: no required action makes suspension unconditional (suspension appears only in the refuse/drop branch)', susp.length>0 && susp.every(a=>/refuses to answer or drops|No suspension or escalation is automatically required|no suspension or escalation is automatically required/.test(a)), susp.join(' | '));
+  add('R4', 'rg-3: refuse/drop branch = precautionary suspension + marketing off + follow-up email + Player Care with context and chat ID', req('rg-3').some(a=>/refuses to answer or drops/.test(a) && /suspend as a precaution/.test(a) && /Disable marketing preferences/.test(a) && /follow-up email/.test(a) && /Player Care with context and chat ID/.test(a)));
+  add('R5', 'rg-3: confirmed loss of control/risk behaviour -> Direct Statement handling', req('rg-3').some(a=>/confirms loss of control or risk behaviour: follow Direct Statement handling/.test(a)));
+  add('R6', 'rg-3: cooperative, no confirmed harm -> suspension/escalation NOT automatically required, and never coached as a gap', req('rg-3').some(a=>/does not confirm loss of control or risk behaviour: no suspension or escalation is automatically required/.test(a)) && /NOT suspending or NOT escalating after she cooperates and confirms no harm is NOT an error/.test(PG('rg-3').criticalErrors||''));
+  add('R7', 'rg-3: self-exclusion without a confirmed Direct Statement remains unsupported', /Self-excluding without a confirmed Direct Statement is not supported/.test(PG('rg-3').criticalErrors||''));
+  add('R8', 'rg-3: August Compliance example kept as historical context only, not overriding the current guide; old "requires the suspension path" rule gone', /HISTORICAL CONTEXT ONLY - does not override the current RG guide/.test(PG('rg-3').kbText||'') && !/So this scenario requires the suspension path/.test(txt('rg-3')) && !/This IS the correct case to escalate/.test(txt('rg-3')));
+  add('R9', 'rg-3: no invented extra mandatory step - escalation criteria limited to refuse/drop or confirmed harm', /Not required in the intended cooperative, no-harm branch/.test(PG('rg-3').escalationCriteria||''));
+  const dani = S('rg-3').personaPrompt||'';
+  add('R10', 'Danielle persona cooperates and denies essentials money for gambling, chasing losses and being unable to afford gambling', /cooperate/.test(dani) && /NOT used money meant for essentials/.test(dani) && /NOT chasing losses/.test(dani) && /CAN afford what you play with/.test(dani) && !/answer honestly but without drama - you’re stretched thin this month, not in crisis\. If the agent tells/.test(dani));
+  let pp = ''; try{ pp = buildPlayerSystemPrompt(S('rg-3'), 'patient'); }catch(err){ pp = 'ERR '+err.message; }
+  add('R11', 'Danielle’s denials reach the real player prompt', /NOT chasing losses/.test(pp) && /CAN afford what you play with/.test(pp));
+
+  // rg-4 / Owen
+  const st = (S('rg-4').caseData||[]).find(c=>c.tab==='Statistics');
+  add('R12', 'rg-4: Statistics Case Data holds the fictional training value "$320 total deposited this week" (gated)', !!st && /\$320 total deposited this week/.test(st.value) && st.gated===true);
+  add('R13', 'rg-4: Owen asks how much he has deposited this week; agent must check Statistics before answering', /how much you have deposited this week/.test(S('rg-4').personaPrompt||'') && /Check Statistics \(Case Data\) before answering/.test(req('rg-4')[0]||''));
+  add('R14', 'rg-4: clarification (RG vs RNG) comes BEFORE any restriction', req('rg-4').some(a=>/BEFORE any restriction/.test(a) && /RG or an RNG complaint/.test(a)) && /Do NOT restrict deposits or gameplay automatically/.test(PG('rg-4').kbText||''));
+  const r4restrict = req('rg-4').filter(a=>/restrict deposits/i.test(a));
+  add('R15', 'rg-4: no required action restricts deposits/gameplay unconditionally', r4restrict.length>0 && r4restrict.every(a=>/If he confirms|still will not specify/.test(a)), r4restrict.join(' | '));
+  add('R16', 'rg-4: confirmed chasing OR will-not-specify -> Direct Statement handling', req('rg-4').some(a=>/confirms chasing losses/.test(a) && /still will not specify/.test(a) && /Direct Statement handling/.test(a)));
+  add('R17', 'rg-4: withdrawals stay open without a separate PM reason; active-balance handling kept', req('rg-4').some(a=>/leave withdrawal access open/.test(a)) && opt('rg-4').some(a=>/\$140 balance/.test(a) && /withdraw it first/.test(a)));
+  add('R18', 'rg-4 tags: primary Account: Statistics, secondary RG: Intervention: Concerning Statement, RG flag never offered as primary', S('rg-4').correctTag==='Account: Statistics' && S('rg-4').correctSecondaryTag==='RG: Intervention: Concerning Statement' && !(S('rg-4').tagOptions||[]).includes('RG: Intervention: Concerning Statement'));
+
+  // Direct Statement bundle
+  const bundleOk = id => {
+    const r = req(id).join(' || ');
+    return /restrict deposits and gameplay/i.test(r) && /self-exclusion/.test(r) && /choose the duration/.test(r) && /6-month default/.test(r) && /follow-up email confirming the SE/.test(r) && /Player Care as an FYI/.test(r)
+      && !opt(id).some(a=>/follow-up email/i.test(a));
+  };
+  add('R19', 'rg-1: full Direct Statement bundle required (restrict, SE intent, choose duration, 6-month default, follow-up email, Player Care FYI); email not optional', bundleOk('rg-1'));
+  add('R20', 'esc-13: same full Direct Statement bundle (noc-3 was removed in v35 as a duplicate of esc-13)', bundleOk('esc-13') && !SCENARIOS.some(s=>s.id==='noc-3'));
+  add('R21', 'Direct scenarios: a loss limit / check-in / empathy does not replace the bundle; a single missed follow-up step is graded on the impact-based rubric, not an automatic D', ['rg-1','esc-13','rg-4'].every(id=>/does not replace the Direct Statement bundle/.test(PG(id).criticalErrors||'') && /not an automatic D/.test(PG(id).criticalErrors||'')));
+
+  // rg-2 / Marcus
+  const r2 = req('rg-2').join(' || ');
+  add('R22', 'rg-2: joke cannot be ignored; genuine specific check-in required', /Treat the "just an addict" comment as real/.test(r2) && /genuine open-ended RG questions that reference what the player said/.test(r2));
+  add('R23', 'rg-2: confirmed harm -> full Direct handling; explained away -> no invented harm', /If the checks confirm harm/.test(r2) && /full Direct Statement handling/.test(r2) && /do not treat it as confirmed harm/.test(r2) && !/If the checks raise concern/.test(r2));
+  add('R24', 'rg-2: cleared-joke Player Care FYI labelled as TL direction, not as a current RG-guide requirement', /TL direction, not a current RG-guide requirement/.test(r2) && /LABEL: the Player Care FYI after a player CLEARS the checks/.test(PG('rg-2').kbText||'') && !/escalate to Player Care as FYI\. Promo/.test(PG('rg-2').kbText||''));
+
+  // Grounding reaches both evaluator prompts (evaluator prompt code itself unchanged)
+  let ev3 = ['','']; try{ ev3 = [buildEvalPromptLegacy(S('rg-3'), [], [], '', null, null, null, false, null, false), buildEvalPromptV2(S('rg-3'), [], [], '', null, null, null, false, null, false)]; }catch(err){}
+  add('R25', 'Both evaluator prompts receive the corrected rg-3 grounding (cooperative branch, no mandatory suspension)', ev3.every(p=>/no suspension or escalation is automatically required/.test(p) && !/So this scenario requires the suspension path/.test(p)));
+
+  // Pattern summaries: clause-by-clause historical findings + TL-reviewed results (Talara case)
+  const mk = (sid, ts, letters, extra) => Object.assign({agentName:'Regression Test Agent', scenarioId:sid, scenarioTitle:sid, timestamp:ts,
+    evaluation:{ overallSummary:'x', questions:[{id:'q1',letter:letters[0]},{id:'q2',letter:letters[1]},{id:'q3',letter:letters[2]}],
+      findings:[{type:'process', severity:'major', kbSays:'Suspend the account and escalate to Player Care', agentDid:'Self-excluded the player and never asked a check-in question; did not suspend', impact:'x', nextTime:'x'}] } }, extra||{});
+  const talara = mk('rg-3', 3, ['D','A','B'], {tlReviewedAt:4, tlOverrides:{q1:{letter:'C', reason:'Old suspension requirement is obsolete'}, q2:{letter:'A'}, q3:{letter:'B'}}});
+  const other = mk('noc-1', 1, ['B','A','A']);
+  let pr = ''; try{ pr = buildPatternSummaryPrompt('Regression Test Agent', [other, mk('rg-4',2,['C','A','A']), talara]); }catch(err){ pr = 'ERR '+err.message; }
+  add('R26', 'Pattern prompt: rg-3/rg-4 attempts carry a HISTORICAL STANDARD CHECK naming only the obsolete clause and the still-valid ones', /HISTORICAL STANDARD CHECK[^\n]*after the player cooperated/.test(pr) && /HISTORICAL STANDARD CHECK[^\n]*before the RG-vs-RNG clarification/.test(pr) && /Still valid \(keep\): a missed or generic check-in, incorrect self-exclusion, withdrawal investigation errors/.test(pr));
+  add('R27', 'Pattern prompt: findings judged clause by clause; mixed findings can be PARTLY OBSOLETE; no whole-finding invalidation on words like "suspend"', /CLAUSE BY CLAUSE/.test(pr) && /PARTLY OBSOLETE/.test(pr) && /Never discard a whole finding just because it mentions words like "suspend", "Compliance" or "Player Care"/.test(pr));
+  const otherBlock = (pr.split('ATTEMPT 1 -')[1]||'').split('ATTEMPT 2 -')[0];
+  add('R28', 'Pattern prompt: attempts on unaffected scenarios get no historical check (no broad invalidation)', otherBlock.length>0 && !/HISTORICAL STANDARD CHECK/.test(otherBlock));
+  const tsc = computeQAScore([{id:'q1',letter:'C'},{id:'q2',letter:'A'},{id:'q3',letter:'B'}]);
+  add('R29', 'Talara’s Danielle review (Q1 C / Q2 A / Q3 B) scores 80%, and new pattern summaries use the TL letters', tsc.pct===80 && !tsc.af && /letters: Resolution & Obligations: C[^\n]*Player Experience: A[^\n]*Documentation: B/.test(pr) && /TL REVIEW \(authoritative[^\n]*Q1 AI D -> TL C/.test(pr), `${tsc.pct}%`);
+  add('R30', 'Pattern prompt tells the model not to recreate a gap the TL review overturned', /a point the TL overturned is not a gap/.test(pr) && /do not report a gap that a TL review overturned/.test(pr));
+  return rows;
+}
+function runDiagnostic8(){
+  const el = document.getElementById('diag8Result'); if(!el) return;
+  const rows = rgRegressionStaticChecks();
+  const passN = rows.filter(r=>r.pass).length;
+  el.innerHTML = `<div class="diag-result"><div style="margin-bottom:6px;">${passN} of ${rows.length} pass.</div>${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;"><span class="${r.pass?'pass':'fail'}" style="font-weight:700;color:${r.pass?'var(--ok)':'var(--bad)'};">${r.pass?'PASS':'FAIL'}</span> <strong>${escapeHtml(r.id)}</strong> ${escapeHtml(r.label)}${r.detail && !r.pass ? `<div style="font-size:11.5px;color:var(--text3);">${escapeHtml(r.detail)}</div>` : ''}</div>`).join('')}</div>`;
+}
+
 // ---------- DIAGNOSTIC 7: CHAT GUIDELINES DISTINCTIONS (v25) ----------
 // Deterministic part: the KB encoding (kbConductExpectation, kbBanCheck, kbLongChatCloseCheck, kbRatingAskCheck)
 // returns the right answer for each case, AND both evaluator prompts carry the matching instruction.
@@ -11520,7 +12061,7 @@ function d7StaticChecks(){
   add('v27-14', 'Unverified tag is treated as unresolved in the evaluator (Q3 judged on the note only); verified tags unchanged', /primary tag for this scenario is UNRESOLVED/.test(e10leg) && /best matches this case is "Deposit: Interac: Started"/.test(buildEvalPromptLegacy(S('noc-8'), [], [], '', null, null, null, false, null, false)));
   add('v27-15', 'Both evaluator prompts carry the NOT SCORED rule', both('NOT SCORED ITEMS'));
 
-  add('v28-3', 'rg-3: check-in + suspend (not SE) + marketing off + follow-up email + Player Care, per KB flow and the Compliance ruling', /soft RG check-in/.test(pgs('rg-3')) && /Disable marketing preferences/.test(pgs('rg-3')) && /should have been suspended not self-excluded/.test(pgs('rg-3')));
+  add('v28-3', 'v28-3 legacy historical check: old Danielle suspension-path evidence remains preserved as historical context only; current rg-3 behaviour is governed by the v39 RG regression guard', /soft RG check-in/.test(pgs('rg-3')) && /Disable marketing preferences/.test(pgs('rg-3')) && /should have been suspended not self-excluded/.test(pgs('rg-3')));
   add('v28-4', 'esc-5: no timeframe (Complaints KB), no refund discussion (Refund KB), no complaint ID on a regulator/final-stance request', /Do not give resolution timeframes/.test(pgs('esc-5')) && /Do not discuss or explain refunds/.test(pgs('esc-5')) && /do not share a complaint ID/.test(pgs('esc-5')) && S('esc-5').kbStatus==='validated');
   add('v28-5', 'esc-20: refund with threats goes to Complaints, not refused by the agent; persona updated to match', /do not refund, refuse, or discuss refund eligibility/.test(pgs('esc-20')) && !/Decline the refund clearly/.test(pgs('esc-20')) && /passed to the team/.test(S('esc-20').personaPrompt) && !/no authority to refund them as a loyalty gesture/.test(pgs('esc-20')));
   add('v28-6', 'noc-9: regulator threat escalated to Complaints; PayTech escalation still premature', /escalate to the Complaints team \(regulator threats/.test(pgs('noc-9')) && /Escalating the withdrawal to PayTech now is premature/.test(pgs('noc-9')));
