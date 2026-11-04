@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Team Z Coaching Pilot - Simulation Engine (Phase 1 Prototype) - v39</title>
+<title>Team Z Coaching Pilot - Simulation Engine (Phase 1 Prototype) - v40</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4159,6 +4159,7 @@ const ICONS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
   sun: '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>',
   moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+  grad: '<path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/>',
 };
 function icon(name, size=18){
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}">${ICONS[name]||''}</svg>`;
@@ -4189,6 +4190,7 @@ function render(){
   const composerSnap = captureComposerDraft();   // read straight from the DOM: an unsent agent draft must survive EVERY rebuild
   app.innerHTML = renderTopbarGlobal() + `<div class="body-grid">${renderIconRail()}${renderScenarioList()}${renderMain()}${renderSide()}</div>`;
   wireEvents();
+  wireTrainingEvents();
   if(activeId){
     const restored = document.getElementById(activeId);
     if(restored && typeof restored.focus === 'function'){
@@ -4312,6 +4314,7 @@ function renderIconRail(){
     {icon:'bolt', id:'railCoachingToolkit', title:'Coaching Toolkit', active: v==='toolkit'},
     {icon:'archive', id:'railHistory', title:'Attempt History', badge: histCount>0?histCount:null, active: v==='history'},
     {icon:'users', id:'railTLArea', title:'TL / Management Area', active: v==='diagnostics'},
+    {icon:'grad', id:'railLDTraining', title:'Training (L&D)', active: v==='training'},
     {icon:'chart', id:'railReports', title:'Reports & Analytics', active: v==='reports'},
     {icon:'grid', id:'railTraining', title:'Training Modes', active: v==='challenge-picker' || v==='challenge'},
     {icon:'check', id:'railFeedback', title:'Feedback / Suggestions', active: v==='feedback'},
@@ -4439,6 +4442,8 @@ function renderCategoryScenarioList(){
 function renderMain(){
   if(state.view==='diagnostics' && !state.tlUnlocked) state.view='sim'; // defensive - should be unreachable via the UI anyway
   if(state.view==='diagnostics') return renderDiagnostics();
+  if(state.view==='training' && !state.trainingUnlocked) state.view='sim';
+  if(state.view==='training') return renderTrainingArea();
   if(state.view==='categories') return state.categoryFilter ? renderCategoryScenarioList() : renderCategoriesView();
   if(state.view==='toolkit') return renderCoachingToolkit();
   if(state.view==='history') return renderHistoryPage();
@@ -4483,7 +4488,7 @@ function renderMain(){
 
 function renderSide(){
   if(state.view==='challenge') return renderChallengeSide();
-  if(state.view==='diagnostics' || !state.activeScenario){
+  if(state.view==='diagnostics' || state.view==='training' || !state.activeScenario){
     return `<div class="side">
       <div class="side-icons">${icon('users',17)}${icon('flag',17)}${icon('check',17)}</div>
       <div class="empty" style="padding:40px 16px;">No active scenario.</div>
@@ -5631,7 +5636,8 @@ async function loadTeamProgressLog(){
   // Fallback - local-only, only used if the backend is unreachable
   try{
     const raw = localStorage.getItem(TEAM_PROGRESS_KEY);
-    if(raw){ const data = JSON.parse(raw); if(Array.isArray(data)) state.teamProgressLog = applyTlReviews(data); }
+    if(raw){ const data = JSON.parse(raw); if(Array.isArray(data)) state.teamProgressLog = applyTlReviews([...data, ...loadTrainingLocal()]); }
+    else { const tr = loadTrainingLocal(); if(tr.length) state.teamProgressLog = applyTlReviews(tr); }
   }catch(err){
     console.error('Loading local team progress log failed:', err);
   }
@@ -5651,8 +5657,10 @@ function loadLocalTlReviews(){
 function applyTlReviews(list){
   const attempts = [], reviews = {};
   const summaries = {};
+  const trainingRecs = []; // v40: Training (L&D) records ride along too; never attempts, never in the TL log
   loadLocalPatternSummaries().forEach(s=>{ if(s && s.id) summaries[s.id] = s; });
   (list||[]).forEach(r=>{
+    if(isTrainingRecord(r)){ trainingRecs.push(r); return; }
     if(r && r.type==='pattern-summary'){ if(r.id) summaries[r.id] = r; return; } // TL pattern summaries ride along in the same shared list; never treated as attempts
     if(r && r.type==='tl-review' && r.reviewKey){
       const prev = reviews[r.reviewKey];
@@ -5663,7 +5671,8 @@ function applyTlReviews(list){
   Object.keys(local).forEach(k=>{ const prev = reviews[k]; if(!prev || (local[k].tlReviewedAt||0) > (prev.tlReviewedAt||0)) reviews[k] = local[k]; });
   attempts.forEach(e=>{ const r = reviews[reviewKeyFor(e)]; if(r && r.tlOverrides){ e.tlOverrides = r.tlOverrides; e.tlReviewedAt = r.tlReviewedAt; if(r.coachingRun!==undefined) e.coachingRun = !!r.coachingRun; e.reviewedBy = r.reviewedBy||null; e.reviewHistory = Array.isArray(r.reviewHistory) ? r.reviewHistory : []; } });
   state.patternSummaries = Object.values(summaries).sort((a,b)=>(b.generatedAt||0)-(a.generatedAt||0));
-  return attempts;
+  state.trainingRecords = trainingRecs;
+  return splitTrainingAttempts(attempts); // v40: Training attempts go to state.trainingAttempts, never state.teamProgressLog
 }
 
 // ---------- TL PATTERN SUMMARIES ----------
@@ -6128,6 +6137,7 @@ async function saveTlReview(){
 }
 
 async function pushTeamProgressEntry(entry){
+  if(entry && entry.space==='training') return pushTrainingAttempt(entry); // v40: never enters state.teamProgressLog
   state.teamProgressLog.push(entry);
   // Always keep a local copy too, so History/Reports still work instantly and offline even if the
   // network call below fails - the backend call is what makes it visible to OTHER people, though.
@@ -6192,7 +6202,8 @@ function archiveAttempt(attemptContext){
   attemptContext.archived = true;
   saveAttemptHistoryNow();
   const completionTimestamp = Date.now();
-  markAssignmentsCompleted(attemptContext.agentName, sid, attemptContext.assignmentId, completionTimestamp);
+  const trTag = trainingTagFor(attemptContext.agentName); // v40: decided per attempt, stored on it for good
+  if(!trTag) markAssignmentsCompleted(attemptContext.agentName, sid, attemptContext.assignmentId, completionTimestamp);
 
   const score = computeQAScore(attemptContext.evaluation.questions);
   pushTeamProgressEntry({
@@ -6226,6 +6237,7 @@ function archiveAttempt(attemptContext){
     docTag: attemptContext.docTag,
     docSecondaryTag: attemptContext.docSecondaryTag,
     ahtLateStart: attemptContext.ahtLateStart,
+    ...(trTag ? Object.assign({}, trTag, {trainingAssignmentId: isTrainingAssignmentId(attemptContext.assignmentId) ? attemptContext.assignmentId : null}) : {}),
   });
 }
 
@@ -6282,6 +6294,7 @@ function renderPreChatCardHtml(s){
 }
 
 function startScenario(id, assignmentId){
+  maybeRefreshTrainingIdentity(); // v40
   if(assignmentId) markAssignmentsSeen([assignmentId]);
   if(state.ahtTimerInterval){ clearInterval(state.ahtTimerInterval); state.ahtTimerInterval=null; }
   if(state.silenceCheckInterval){ clearInterval(state.silenceCheckInterval); state.silenceCheckInterval=null; }
@@ -7534,6 +7547,14 @@ function wireTeamProgressModal(overlay, filterRoster){
   });
   const backBtn=document.getElementById('btnBackToAllTeamProgress');
   if(backBtn) backBtn.addEventListener('click', ()=>{ state.teamProgressOpen=false; overlay.remove(); openTeamProgress(); });
+  document.querySelectorAll('[data-view-training-attempt]').forEach(el=>{ // v40: read-only, Back returns here
+    el.addEventListener('click', ()=>{
+      const tpModal = overlay.querySelector('.modal');
+      state.teamProgressReturn = { filterRoster, scrollTop: tpModal ? tpModal.scrollTop : 0 };
+      state.teamProgressOpen=false; overlay.remove();
+      openTrainingAttemptReadOnly(parseInt(el.getAttribute('data-view-training-attempt'),10), 'tl');
+    });
+  });
   document.querySelectorAll('[data-pattern-toggle]').forEach(el=>{
     const t = ()=>{ const c = el.getAttribute('data-pattern-toggle'); state.patternOpen[c] = !state.patternOpen[c]; redrawTeamProgress(overlay, filterRoster); };
     el.addEventListener('click', t);
@@ -7611,7 +7632,8 @@ function renderTeamProgressModal(filterRoster){
       </div>`
     : '';
   const ambiguousPanel = renderAmbiguousNamesPanel(fullLog, filterRoster) + (!filterRoster ? renderUnmatchedNamesPanel(fullLog) : '');
-  if(fullLog.length===0){
+  const gradNames = graduatedAgentNamesInScope(filterRoster); // v40
+  if(fullLog.length===0 && !gradNames.length){
     return `<div class="modal"><h2>Team Progress</h2>${filterBanner}<div class="empty">${filterRoster ? 'No attempts recorded yet for this team.' : 'No attempts recorded yet by anyone using this link.'}</div><button id="closeEvalModal" style="margin-top:16px;">Close</button></div>`;
   }
   // Group by CANONICAL identity, not the raw typed string, so every alias's attempts land together -
@@ -7622,6 +7644,7 @@ function renderTeamProgressModal(filterRoster){
     : fullLog;
   const byAgent = {};
   log.forEach(e=>{ const key = canonicalNameFor(e.agentName); (byAgent[key]=byAgent[key]||[]).push(e); });
+  gradNames.forEach(n=>{ if(!Object.keys(byAgent).some(k=>namesMatch(k, n))) byAgent[n] = []; }); // v40: a graduate with no agent attempts yet still shows, for their Training history
   const agentNames = Object.keys(byAgent).sort((a,b)=>{
     const lastA = Math.max(...byAgent[a].map(e=>e.timestamp));
     const lastB = Math.max(...byAgent[b].map(e=>e.timestamp));
@@ -7652,6 +7675,7 @@ function renderTeamProgressModal(filterRoster){
         <span style="color:var(--text3);font-size:12px;">${counted.length} attempt${counted.length===1?'':'s'} \u00b7 ${passCount}/${counted.length} passed${coachingRuns?` \u00b7 ${coachingRuns} coaching run${coachingRuns===1?'':'s'} excluded`:''}</span>
       </div>
       ${rows}
+      ${trainingHistoryBlockHtml(name)}
       ${registeredProfileFor(name) ? renderPatternSummaryBlock(registeredProfileFor(name).canonicalName) : ''}
     </div>`;
   }).join('');
@@ -7828,6 +7852,7 @@ function renderEvalModal(){
 
   const backToListBtn=document.getElementById('btnBackToHistoryList');
   if(backToListBtn) backToListBtn.addEventListener('click', e=>{
+    if(e.target.getAttribute('data-from-training')==='true'){ state.historicalView=null; overlay.remove(); render(); return; } // v40: back to the Training area
     if(e.target.getAttribute('data-from-team-progress')==='true'){
       // Return to the SAME Team Progress view the TL clicked in from: same filter, same scroll position.
       const ret = state.teamProgressReturn;
@@ -8888,12 +8913,12 @@ function markAssignmentsCompleted(agentName, scenarioId, assignmentId, completio
 }
 function pendingAssignmentsFor(agentName){
   if(!agentName) return [];
-  return state.assignments.filter(a => !a.completed && namesMatch(a.agentName, agentName));
+  return state.assignments.filter(a => !a.completed && namesMatch(a.agentName, agentName)).concat(trainingAssignmentRowsFor(agentName).filter(a=>!a.completed));
 }
 // Every assignment for this agent (any status), newest first - the full "My Assignments" list.
 function assignmentsForAgent(agentName){
   if(!agentName) return [];
-  return state.assignments.filter(a => namesMatch(a.agentName, agentName)).sort((a,b)=>b.assignedAt-a.assignedAt);
+  return state.assignments.filter(a => namesMatch(a.agentName, agentName)).concat(trainingAssignmentRowsFor(agentName)).sort((a,b)=>b.assignedAt-a.assignedAt);
 }
 function assignmentStatus(a){
   if(a.completed) return 'Completed';
@@ -9630,7 +9655,8 @@ function archiveChallengeSlotAttempt(slot){
   if(slot.attemptArchived) return;
   const sid = slot.scenario.id;
   const completionTimestamp = Date.now();
-  markAssignmentsCompleted(state.agentName, sid, null, completionTimestamp);
+  const trTag = trainingTagFor(state.agentName); // v40
+  if(!trTag) markAssignmentsCompleted(state.agentName, sid, null, completionTimestamp);
   state.attemptHistory[sid] = state.attemptHistory[sid] || [];
   const attemptNum = state.attemptHistory[sid].length + 1;
   const record = {
@@ -9673,6 +9699,7 @@ function archiveChallengeSlotAttempt(slot){
     playerRating: slot.playerRating || null, playerRatingReason: slot.playerRatingReason || null,
     ...coachingFieldsOf(record),
     challengeTier: state.challenge.tier,
+    ...(trTag ? Object.assign({}, trTag, {trainingAssignmentId:null}) : {}),
     attemptNum, transcript: slot.transcript, actionLog: slot.actionLog,
     reviewOutcome: (slot.scenario && slot.scenario.reviewOutcome)||null, evaluation: slot.evaluation,
     tlOverrides: slot.tlOverrides, docNote: slot.docNote, docTag: slot.docTag, docSecondaryTag: slot.docSecondaryTag,
@@ -10070,6 +10097,7 @@ function evalModalContent(){
       <h2>Attempt ${att.attemptNum} - ${tlMode ? 'TL Review' : 'Read-Only'}</h2>
       <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">${escapeHtml((s.internalTitle||s.title))} - ${new Date(att.timestamp).toLocaleString()}${att.agentName ? ' - '+escapeHtml(att.agentName) : ''}</div>
       ${coachingBannerHtml(att)}
+      ${trainingAttemptBannerHtml(att)}
       ${state.historicalView.fromTeamProgress ? reviewRecommendedBannerHtml(att) + tlReviewRecordHtml(att) : ''}
       ${kbBannerFor(s)}
       ${scoreHeaderHtml(ev, reviewDraft, att.ahtElapsedMinutes, att.ahtTargetMinutes, att.ahtLateStart, tlMode)}
@@ -10099,7 +10127,7 @@ function evalModalContent(){
       </div>
       <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
         ${standalone
-          ? `<button type="button" id="btnBackToHistoryList" data-hist-scenario="${s.id}" data-from-team-progress="${!!state.historicalView.fromTeamProgress}">\u2190 Back</button><button type="button" id="closeEvalModal">Close</button>`
+          ? `<button type="button" id="btnBackToHistoryList" data-hist-scenario="${s.id}" data-from-team-progress="${!!state.historicalView.fromTeamProgress || state.historicalView.fromTraining==='tl'}" data-from-training="${state.historicalView.fromTraining==='ld'}">\u2190 Back</button><button type="button" id="closeEvalModal">Close</button>`
           : `<button type="button" id="btnBackToCurrent">\u2190 Back to current attempt</button>`}
         ${tlMode ? `<button type="button" id="btnTlCopyTranscript">Copy transcript</button><button type="button" id="btnTlCopyReview" class="primary">Copy full review</button>` : ''}
       </div>
@@ -11427,6 +11455,13 @@ function renderSystemTestsSectionBody(){
     </div>
 
     <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">9. Training separation (v40)</h2>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks (instant, no API calls) on a synthetic log: Training records and Training attempts never reach the TL log, an attempt stays Training through its link record even if its field were stripped, and graduation stops new attempts being Training without reclassifying old ones.</div>
+      <button id="runDiag9" style="margin-top:10px;">Run test</button>
+      <div id="diag9Result"></div>
+    </div>
+
+    <div class="diag-section">
       <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">4. Evaluator prompt A/B: legacy vs consolidated (v2)</h2>
       <div style="color:var(--text2);font-size:13px;line-height:1.6;">Scores the same inputs with both prompts and shows the letters side by side: Tests 1 and 3 above, plus the 5 most recent Team Progress attempts that have a full saved record. With the noise check on, the legacy prompt runs twice, so you can tell a real prompt difference (legacy agrees with itself, v2 differs) from the evaluator's normal run-to-run variation. Live scoring currently uses: <strong>${EVAL_PROMPT_VERSION==='v2' ? 'v2 (consolidated)' : 'legacy'}</strong>. Up to 30 scoring calls; takes several minutes.</div>
       <label style="font-size:12.5px;color:var(--text2);display:flex;align-items:center;gap:6px;margin-top:8px;"><input type="checkbox" id="abNoiseCheck" ${(state.abTest && state.abTest.noFlag) ? '' : 'checked'}> Noise check (run legacy twice)</label>
@@ -12341,7 +12376,12 @@ function renderNameModal(){
     // owner names too, otherwise a TL trying a scenario gets told to "ask your TL to register you".
     const typedKey = input.value.trim().toLowerCase();
     const tlRoster = typedKey ? (state.tlRosters||[]).find(r=>(r.tlName||'').trim().toLowerCase()===typedKey) : null;
-    if(!profile && tlRoster){
+    const trainee = activeTraineeFor(input.value); // v40
+    if(trainee){
+      const c = trainingCohortById(trainee.cohortId); const count = pendingAssignmentsFor(trainee.fullName).length;
+      recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--ok)';
+      recognizedEl.textContent = `Recognized: ${trainee.fullName} \u00b7 Trainee${c ? ' ('+c.name+')' : ''}${count ? ' \u00b7 '+count+' outstanding assignment'+(count===1?'':'s') : ''}`;
+    } else if(!profile && tlRoster){
       recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--ok)';
       recognizedEl.textContent = `Recognized: ${tlRoster.tlName} · Team Lead`;
     } else if(profile){
@@ -12411,6 +12451,548 @@ function renderTLPasswordModal(){
   document.getElementById('btnSubmitTLPassword').addEventListener('click', submit);
   document.getElementById('btnCancelTLPassword').addEventListener('click', ()=> overlay.remove());
   input.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
+}
+
+// ============================================================
+// TRAINING (L&D) SPACE - v40
+// A separate space for new-hire training, alongside the TL spaces. L&D registers trainees into cohorts, assigns
+// scenarios and reviews results; trainees practise exactly like agents (same scenarios, scoring, pass/fail).
+//
+// STORAGE: no new backend routes. Everything rides the existing team-progress append route, which already stores
+// arbitrary typed records (tl-review, pattern-summary):
+//   training-cohort, training-trainee, training-assignment, training-assignment-cancel, training-graduation,
+//   training-attempt-link.
+// Latest record per id wins (so a record can be superseded later without editing the old one).
+//
+// DURABLE TRAINING IDENTITY: every Training attempt carries space:'training' + traineeId + cohortId on the attempt
+// itself, AND a separate training-attempt-link record keyed to the attempt (device|timestamp|scenario). Either one is
+// enough to classify the attempt as Training after reload, so it stays Training even if a field were ever stripped
+// and even after the person graduates and becomes an agent. Nothing is ever reclassified.
+//
+// SEPARATION: Training records and Training attempts are split off in applyTlReviews() at load time and kept in
+// state.trainingRecords / state.trainingAttempts. state.teamProgressLog (which every TL view, stat, Team View,
+// pattern summary, roster table, clean-up audit and the A/B test reads) never contains them. The only TL-facing
+// place Training attempts appear is the labelled "Training history" block on a GRADUATED agent's Team Progress card,
+// which is never counted in any number.
+//
+// ACCESS: separate password, page-source friction only (same model as the TL password). Not real authentication.
+// ============================================================
+const TRAINING_AREA_PASSWORD = 'bettytraining';
+const TRAINING_LOCAL_KEY = 'zteamz_trainingLocal_v1';
+state.trainingRecords = [];
+state.trainingAttempts = [];
+state.trainingUnlocked = false;
+state.trDraft = {};
+state.trMsg = null;
+state.trGraduating = null;
+state.trCancelPending = null;
+state.trResultsCohort = '';
+state.trLastIdentityRefresh = 0;
+
+function isTrainingRecord(r){ return !!r && typeof r.type==='string' && r.type.indexOf('training-')===0; }
+function trId(prefix){ return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function isTrainingAssignmentId(id){ return typeof id==='string' && id.indexOf('ta_')===0; }
+function latestTrainingById(type){
+  const m = {};
+  (state.trainingRecords||[]).forEach(r=>{ if(r && r.type===type && r.id){ const p = m[r.id]; if(!p || (r.updatedAt||r.createdAt||r.at||0) >= (p.updatedAt||p.createdAt||p.at||0)) m[r.id] = r; } });
+  return Object.values(m);
+}
+function trainingCohorts(){ return latestTrainingById('training-cohort').sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||'') || (b.createdAt||0)-(a.createdAt||0)); }
+function trainingCohortById(id){ return trainingCohorts().find(c=>c.id===id) || null; }
+function trainingTrainees(){ return latestTrainingById('training-trainee').sort((a,b)=>(a.fullName||'').localeCompare(b.fullName||'')); }
+function trainingTraineeById(id){ return trainingTrainees().find(t=>t.id===id) || null; }
+function trainingGraduationFor(traineeId){
+  let g = null;
+  (state.trainingRecords||[]).forEach(r=>{ if(r && r.type==='training-graduation' && r.traineeId===traineeId && (!g || (r.at||0) >= (g.at||0))) g = r; });
+  return g;
+}
+function traineeNames(t){ return [t.fullName, t.chatName, t.altName].map(x=>(x||'').trim()).filter(Boolean); }
+// A typed name belongs to an ACTIVE (not yet graduated) trainee only on an exact match of one of their names, and only
+// when exactly one active trainee matches. Graduated trainees are agents now and are never matched here.
+function activeTraineeFor(name){
+  const k = (name||'').trim().toLowerCase(); if(!k) return null;
+  const hits = trainingTrainees().filter(t=>!trainingGraduationFor(t.id) && traineeNames(t).some(n=>n.toLowerCase()===k));
+  return hits.length===1 ? hits[0] : null;
+}
+function trainingTagFor(name){
+  const t = activeTraineeFor(name); if(!t) return null;
+  const c = trainingCohortById(t.cohortId);
+  return {space:'training', traineeId:t.id, cohortId:t.cohortId||null, cohortName: c ? c.name : null};
+}
+
+// ---------- load-time split (called from applyTlReviews) ----------
+function trainingLinkKeys(){
+  const m = {};
+  (state.trainingRecords||[]).forEach(r=>{ if(r && r.type==='training-attempt-link' && r.reviewKey) m[r.reviewKey] = r; });
+  return m;
+}
+function splitTrainingAttempts(attempts){
+  const links = trainingLinkKeys();
+  const tl = [], tr = [];
+  (attempts||[]).forEach(e=>{
+    const link = e ? links[reviewKeyFor(e)] : null;
+    if(e && (e.space==='training' || link)){
+      if(link){ e.space = 'training'; if(!e.traineeId) e.traineeId = link.traineeId; if(!e.cohortId) e.cohortId = link.cohortId||null; }
+      tr.push(e);
+    } else { tl.push(e); }
+  });
+  state.trainingAttempts = tr;
+  return tl;
+}
+function loadTrainingLocal(){ try{ const v = JSON.parse(localStorage.getItem(TRAINING_LOCAL_KEY)||'[]'); return Array.isArray(v) ? v : []; }catch(err){ return []; } }
+function saveTrainingLocal(){
+  try{ localStorage.setItem(TRAINING_LOCAL_KEY, JSON.stringify([...(state.trainingRecords||[]), ...(state.trainingAttempts||[])])); }
+  catch(err){ console.error('Saving Training data locally failed:', err); }
+}
+async function postTeamProgressRecord(rec){
+  try{
+    const resp = await fetch(BACKEND_URL + '/api/store/team-progress', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec)});
+    return resp.ok;
+  }catch(err){ console.error('Saving Training record to the shared backend failed (saved on this device only):', err); return false; }
+}
+async function pushTrainingRecord(rec){
+  state.trainingRecords.push(rec);
+  saveTrainingLocal();
+  return postTeamProgressRecord(rec);
+}
+async function pushTrainingAttempt(entry){
+  state.trainingAttempts.push(entry);
+  saveTrainingLocal();
+  await postTeamProgressRecord(entry);
+  await pushTrainingRecord({type:'training-attempt-link', id:trId('tk_'), reviewKey: reviewKeyFor(entry), traineeId: entry.traineeId, cohortId: entry.cohortId||null, scenarioId: entry.scenarioId, timestamp: entry.timestamp, at: Date.now()});
+}
+// If someone is practising under a name that isn't a registered agent, a trainee, or a TL, L&D may have registered
+// them after this page loaded. Refresh in the background (at most once a minute) so their attempt is tagged correctly.
+function maybeRefreshTrainingIdentity(){
+  const n = (state.agentName||'').trim(); if(!n) return;
+  if(registeredProfileFor(n) || activeTraineeFor(n)) return;
+  if((state.tlRosters||[]).some(r=>(r.tlName||'').trim().toLowerCase()===n.toLowerCase())) return;
+  if(Date.now() - state.trLastIdentityRefresh < 60000) return;
+  state.trLastIdentityRefresh = Date.now();
+  loadTeamProgressLog().catch(()=>{});
+}
+
+// ---------- assignments ----------
+function trainingAssignmentsAll(){
+  const cancelled = new Set((state.trainingRecords||[]).filter(r=>r.type==='training-assignment-cancel').map(r=>r.assignmentId));
+  return latestTrainingById('training-assignment').filter(a=>!cancelled.has(a.id)).sort((a,b)=>(b.assignedAt||0)-(a.assignedAt||0));
+}
+function trainingAssignmentCompletion(a){
+  const hits = (state.trainingAttempts||[]).filter(e=>e.traineeId===a.traineeId && e.scenarioId===a.scenarioId &&
+    (e.trainingAssignmentId===a.id || (!e.trainingAssignmentId && (e.timestamp||0) >= (a.assignedAt||0))));
+  if(!hits.length) return null;
+  return hits.reduce((m,e)=> (e.timestamp||0) < (m.timestamp||0) ? e : m, hits[0]);
+}
+function trainingAssignmentAsRow(a){
+  const t = trainingTraineeById(a.traineeId); const done = trainingAssignmentCompletion(a);
+  return {id:a.id, agentName: t ? t.fullName : '', scenarioId:a.scenarioId, assignedAt:a.assignedAt, assignedByTL: a.assignedBy || 'L&D',
+    dueDate: a.dueDate || undefined, completed: !!done, completedAt: done ? done.timestamp : null, startedAt:null, isTraining:true};
+}
+function trainingAssignmentRowsFor(name){
+  const t = activeTraineeFor(name); if(!t) return [];
+  return trainingAssignmentsAll().filter(a=>a.traineeId===t.id).map(trainingAssignmentAsRow);
+}
+function trainingAttemptsForTrainee(id){ return (state.trainingAttempts||[]).filter(e=>e.traineeId===id).sort((a,b)=>(b.timestamp||0)-(a.timestamp||0)); }
+
+// ---------- validation and actions ----------
+function trainingNameClash(names, ignoreTraineeId){
+  for(const n of names){
+    if(resolveAgentName(n).status!=='unmatched') return `"${n}" already matches a registered agent. Use a different name, or check the agent directory in the TL area.`;
+    if((state.tlRosters||[]).some(r=>(r.tlName||'').trim().toLowerCase()===n.toLowerCase())) return `"${n}" is a Team Lead's name.`;
+    const other = trainingTrainees().find(t=>t.id!==ignoreTraineeId && !trainingGraduationFor(t.id) && traineeNames(t).some(x=>x.toLowerCase()===n.toLowerCase()));
+    if(other) return `"${n}" is already used by trainee ${other.fullName}.`;
+  }
+  return '';
+}
+async function createTrainingCohort(name, startDate, trainer){
+  name = (name||'').trim(); trainer = (trainer||'').trim();
+  if(!name) return {ok:false, error:'Cohort name is required.'};
+  if(!isValidDueDate(startDate)) return {ok:false, error:'Pick a start date.'};
+  if(!trainer) return {ok:false, error:'Trainer name is required.'};
+  if(trainingCohorts().some(c=>(c.name||'').trim().toLowerCase()===name.toLowerCase())) return {ok:false, error:`A cohort called "${name}" already exists.`};
+  const shared = await pushTrainingRecord({type:'training-cohort', id:trId('tc_'), name, startDate, trainer, createdAt:Date.now()});
+  return {ok:true, shared};
+}
+async function registerTrainee(fullName, chatName, altName, cohortId){
+  fullName = (fullName||'').trim(); chatName = (chatName||'').trim(); altName = (altName||'').trim();
+  if(!fullName) return {ok:false, error:'Full name is required.'};
+  if(!trainingCohortById(cohortId)) return {ok:false, error:'Pick a cohort.'};
+  const clash = trainingNameClash([fullName, chatName, altName].filter(Boolean));
+  if(clash) return {ok:false, error:clash};
+  const shared = await pushTrainingRecord({type:'training-trainee', id:trId('tt_'), fullName, chatName: chatName||null, altName: altName||null, cohortId, createdAt:Date.now()});
+  return {ok:true, shared};
+}
+async function assignTrainingScenario(target, scenarioId, assignedBy, dueDate){
+  if(!scenarioById(scenarioId)) return {ok:false, error:'Pick a scenario.'};
+  let trainees = [];
+  if(target.indexOf('cohort:')===0){ const cid = target.slice(7); trainees = trainingTrainees().filter(t=>t.cohortId===cid && !trainingGraduationFor(t.id)); }
+  else if(target.indexOf('trainee:')===0){ const t = trainingTraineeById(target.slice(8)); if(t && !trainingGraduationFor(t.id)) trainees = [t]; }
+  if(!trainees.length) return {ok:false, error:'Pick a trainee or a cohort with trainees still in training.'};
+  let made = 0, skipped = 0, shared = true;
+  for(const t of trainees){
+    const dup = trainingAssignmentsAll().some(a=>a.traineeId===t.id && a.scenarioId===scenarioId && !trainingAssignmentCompletion(a));
+    if(dup){ skipped++; continue; }
+    const ok = await pushTrainingRecord({type:'training-assignment', id:trId('ta_'), traineeId:t.id, cohortId:t.cohortId, scenarioId, assignedBy:(assignedBy||'').trim()||null, dueDate: isValidDueDate(dueDate) ? dueDate : null, assignedAt:Date.now()});
+    if(!ok) shared = false;
+    made++;
+  }
+  return {ok:true, made, skipped, shared};
+}
+// Graduation LINKS the trainee identity to a new agent identity on the chosen TL's roster (through the normal agent
+// registration path). Training attempts are not touched or reclassified: they keep space:'training' for good.
+async function graduateTrainee(traineeId, tlName, by){
+  const t = trainingTraineeById(traineeId); if(!t) return {ok:false, error:'Trainee not found.'};
+  if(trainingGraduationFor(t.id)) return {ok:false, error:`${t.fullName} has already graduated.`};
+  const tl = (tlName||'').trim(); if(!tl) return {ok:false, error:'Pick a Team Lead.'};
+  const clash = traineeNames(t).find(n=>resolveAgentName(n).status!=='unmatched');
+  if(clash) return {ok:false, error:`"${clash}" now matches a registered agent, so graduating would merge two people. Rename the trainee or sort out the agent directory first.`};
+  await registerAgent({fullName:t.fullName, chatName:t.chatName||'', additionalName:t.altName||'', tlName:tl});
+  const shared = await pushTrainingRecord({type:'training-graduation', id:trId('tg_'), traineeId:t.id, cohortId:t.cohortId||null, tlName:tl, canonicalName:t.fullName.trim(), by:(by||'').trim()||null, at:Date.now()});
+  return {ok:true, shared};
+}
+
+// ---------- TL side: graduated agents' Training history (labelled, never counted) ----------
+function graduatedTraineesForAgent(name){
+  return trainingTrainees().filter(t=>{ const g = trainingGraduationFor(t.id); return g && namesMatch(g.canonicalName, name); });
+}
+function graduatedAgentNamesInScope(filterRoster){
+  const names = [];
+  trainingTrainees().forEach(t=>{
+    const g = trainingGraduationFor(t.id); if(!g) return;
+    const n = canonicalNameFor(g.canonicalName);
+    if(filterRoster && !(filterRoster.agents||[]).some(a=>namesMatch(a, n))) return;
+    if(!names.some(x=>namesMatch(x, n))) names.push(n);
+  });
+  return names;
+}
+function trainingHistoryBlockHtml(name){
+  const grads = graduatedTraineesForAgent(name); if(!grads.length) return '';
+  return grads.map(t=>{
+    const g = trainingGraduationFor(t.id); const c = trainingCohortById(t.cohortId);
+    const atts = trainingAttemptsForTrainee(t.id);
+    const rows = atts.map(e=>{
+      const es = teamEntryScore(e); const idx = state.trainingAttempts.indexOf(e);
+      return `<div class="info-row" style="cursor:pointer;" data-view-training-attempt="${idx}">
+        <span class="ilabel"><span class="tag-chip" style="border-color:var(--warn-border);color:var(--warn);font-weight:700;">Training</span> ${escapeHtml(e.scenarioTitle||e.scenarioId)}<br><span style="font-size:10.5px;">${new Date(e.timestamp).toLocaleString()} · <span style="color:var(--accent);">view attempt</span></span></span>
+        <span class="ival" style="color:var(--text3);font-weight:700;">${es.af?`AF (${escapeHtml(es.afDuty)})`:es.pct+'%'} · ${es.af||!es.pass?'FAIL':'PASS'}</span>
+      </div>`;
+    }).join('');
+    return `<details class="training-history" style="margin-top:10px;border:1px dashed var(--warn-border);border-radius:8px;padding:8px 10px;">
+      <summary style="cursor:pointer;font-size:12.5px;color:var(--text2);"><strong style="color:var(--warn);">Training history</strong> · ${atts.length} attempt${atts.length===1?'':'s'} in ${escapeHtml(c ? c.name : 'Training')} before graduating ${g ? 'on '+escapeHtml(new Date(g.at).toLocaleDateString()) : ''} · not counted in team stats</summary>
+      <div style="margin-top:6px;">${rows || '<div class="empty" style="padding:6px 0;">No Training attempts recorded.</div>'}</div>
+    </details>`;
+  }).join('');
+}
+function trainingAttemptBannerHtml(att){
+  if(!att || att.space!=='training') return '';
+  const c = trainingCohortById(att.cohortId);
+  return `<div class="box" style="border-color:var(--warn);background:var(--warn-bg);color:var(--warn);font-size:12.5px;"><strong>Training attempt</strong>${c ? ' · '+escapeHtml(c.name) : ''} - practised during new-hire training. Not counted in team performance stats.</div>`;
+}
+function openTrainingAttemptReadOnly(idx, from){
+  const e = state.trainingAttempts[idx]; if(!e) return;
+  state.historicalView = { scenarioId: e.scenarioId, attempt: e, standalone: true, fromTraining: from };
+  state.historicalTranscriptExpanded = false;
+  renderEvalModal();
+}
+
+// ---------- L&D area UI ----------
+const TR_INPUT = 'background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;';
+function trD(k){ return escapeHtml(state.trDraft[k]||''); }
+function trSparkline(atts){
+  const pts = atts.slice().reverse().map(e=>teamEntryScore(e).pct);
+  if(pts.length<2) return '';
+  const w = 140, h = 32, step = w/(pts.length-1);
+  const y = p => (h-2) - (Math.max(0,Math.min(100,p))/100)*(h-4);
+  const line = pts.map((p,i)=>`${(i*step).toFixed(1)},${y(p).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Score trend" style="vertical-align:middle;">
+    <line x1="0" x2="${w}" y1="${y(85).toFixed(1)}" y2="${y(85).toFixed(1)}" stroke="var(--text3)" stroke-dasharray="3 3" stroke-width="1"/>
+    <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${pts.map((p,i)=>`<circle cx="${(i*step).toFixed(1)}" cy="${y(p).toFixed(1)}" r="2.5" fill="${p>=85?'var(--ok)':'var(--bad)'}"/>`).join('')}
+  </svg>`;
+}
+function trTrendText(atts){
+  const pts = atts.slice().reverse().filter(e=>!e.coachingRun).map(e=>teamEntryScore(e).pct);
+  if(pts.length<4) return `<span style="color:var(--text3);">Trend after 4+ attempts</span>`;
+  const avg = a => Math.round(a.reduce((s,x)=>s+x,0)/a.length);
+  const first = avg(pts.slice(0,3)), last = avg(pts.slice(-3)), d = last-first;
+  return `First 3 avg ${first}% → last 3 avg ${last}% <strong style="color:${d>0?'var(--ok)':d<0?'var(--bad)':'var(--text2)'};">(${d>0?'+':''}${d})</strong>`;
+}
+function renderTrCohortsBody(){
+  const cohorts = trainingCohorts();
+  const list = cohorts.length ? cohorts.map(c=>{
+    const ts = trainingTrainees().filter(t=>t.cohortId===c.id);
+    const grad = ts.filter(t=>trainingGraduationFor(t.id)).length;
+    return `<div class="box" style="margin-bottom:8px;max-width:700px;"><strong>${escapeHtml(c.name)}</strong>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px;">Starts ${escapeHtml(formatDueDate(c.startDate)||c.startDate)} · Trainer: ${escapeHtml(c.trainer)} · ${ts.length-grad} in training · ${grad} graduated</div></div>`;
+  }).join('') : `<div class="empty" style="padding:10px 0;">No cohorts yet - create the first one above.</div>`;
+  return `<div style="color:var(--text2);font-size:13px;margin-bottom:12px;">A cohort is one training group: a name, a start date and the trainer running it.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:760px;">
+      <input id="trCohortName" data-tr-draft="cohortName" value="${trD('cohortName')}" placeholder="Cohort name (e.g. November 2026)" style="flex:1;min-width:180px;${TR_INPUT}">
+      <input id="trCohortStart" data-tr-draft="cohortStart" type="date" value="${trD('cohortStart')}" aria-label="Start date" style="${TR_INPUT}color-scheme:${state.theme==='light'?'light':'dark'};">
+      <input id="trCohortTrainer" data-tr-draft="cohortTrainer" value="${trD('cohortTrainer')}" placeholder="Trainer name" style="flex:1;min-width:150px;${TR_INPUT}">
+      <button id="btnTrCreateCohort" class="primary">Create cohort</button>
+    </div>
+    <div style="margin-top:14px;">${list}</div>`;
+}
+function renderTrTraineesBody(){
+  const cohorts = trainingCohorts();
+  const tlNames = [...new Set((state.tlRosters||[]).map(r=>r.tlName))].sort();
+  const form = cohorts.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:860px;">
+      <input id="trTraineeFull" data-tr-draft="traineeFull" value="${trD('traineeFull')}" placeholder="Full name" style="flex:1;min-width:150px;${TR_INPUT}">
+      <input id="trTraineeChat" data-tr-draft="traineeChat" value="${trD('traineeChat')}" placeholder="Chat name" style="flex:1;min-width:120px;${TR_INPUT}">
+      <input id="trTraineeAlt" data-tr-draft="traineeAlt" value="${trD('traineeAlt')}" placeholder="Other name (optional)" style="flex:1;min-width:140px;${TR_INPUT}">
+      <select id="trTraineeCohort" data-tr-draft="traineeCohort" aria-label="Cohort" style="${TR_INPUT}">
+        <option value="">Select a cohort…</option>
+        ${cohorts.map(c=>`<option value="${escapeHtml(c.id)}" ${state.trDraft.traineeCohort===c.id?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}
+      </select>
+      <button id="btnTrRegister" class="primary">Register trainee</button>
+    </div>` : `<div class="empty" style="padding:8px 0;text-align:left;">Create a cohort first.</div>`;
+  const groups = cohorts.map(c=>{
+    const ts = trainingTrainees().filter(t=>t.cohortId===c.id);
+    if(!ts.length) return '';
+    return `<h3 style="font-size:13px;color:var(--text2);margin:16px 0 6px;">${escapeHtml(c.name)}</h3>` + ts.map(t=>{
+      const g = trainingGraduationFor(t.id);
+      const aka = [t.chatName, t.altName].filter(Boolean);
+      const clashWarn = !g && traineeNames(t).some(n=>resolveAgentName(n).status!=='unmatched');
+      const n = trainingAttemptsForTrainee(t.id).length;
+      const panel = state.trGraduating===t.id ? `<div class="box" style="margin-top:8px;border-color:var(--accent);">
+          <div style="font-size:12.5px;margin-bottom:8px;">Graduate <strong>${escapeHtml(t.fullName)}</strong> and add them to a Team Lead's roster. Their ${n} Training attempt${n===1?'':'s'} stay labelled Training: the TL sees them in this agent's history, and they are not counted in team stats.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="trGradTL" aria-label="Team Lead" style="${TR_INPUT}"><option value="">Select a Team Lead…</option>${tlNames.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('')}</select>
+            <button class="small primary" data-tr-grad-confirm="${escapeHtml(t.id)}">Graduate</button>
+            <button class="small" data-tr-grad-cancel>Cancel</button>
+          </div></div>` : '';
+      return `<div class="box" style="margin-bottom:6px;max-width:760px;" data-trainee-row="${escapeHtml(t.id)}">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;">
+          <div><strong>${escapeHtml(t.fullName)}</strong>${aka.length ? `<span style="color:var(--text3);font-size:12px;"> - also known as ${escapeHtml(aka.join(', '))}</span>` : ''}
+            <div style="font-size:11.5px;margin-top:3px;color:${g?'var(--ok)':'var(--text3)'};">${g ? `Graduated to ${escapeHtml(g.tlName)} on ${escapeHtml(new Date(g.at).toLocaleDateString())}` : 'In training'} · ${n} attempt${n===1?'':'s'}</div>
+            ${clashWarn ? `<div style="font-size:11.5px;margin-top:3px;color:var(--warn);">A registered agent now uses one of these names - sort it out before graduating.</div>` : ''}
+          </div>
+          ${g ? '' : `<button class="small" data-tr-grad-open="${escapeHtml(t.id)}">Graduate</button>`}
+        </div>${panel}</div>`;
+    }).join('');
+  }).join('');
+  return `<div style="color:var(--text2);font-size:13px;margin-bottom:12px;">Register each trainee once, with the chat name they'll use. When they type any of these names on the app, their practice is saved as Training and kept out of every TL view.</div>
+    ${form}${groups || (cohorts.length ? `<div class="empty" style="padding:10px 0;">No trainees yet.</div>` : '')}`;
+}
+function trainingScenarioPool(){
+  const pool = [...PILOT_SCENARIOS, ...(state.customScenarios||[]).filter(cs=>cs.visibility==='library' && cs.reviewStatus==='approved' && cs.readiness!=='ENGINE_TEST_ONLY')];
+  return Array.from(new Map(pool.map(s=>[s.id,s])).values());
+}
+function renderTrAssignBody(){
+  const cohorts = trainingCohorts();
+  const active = trainingTrainees().filter(t=>!trainingGraduationFor(t.id));
+  const pool = trainingScenarioPool();
+  const topics = [...new Set(pool.map(s=>s.topic||'Other'))].sort();
+  const target = state.trDraft.assignTarget||'';
+  const form = active.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:900px;">
+      <select id="trAssignTarget" data-tr-draft="assignTarget" aria-label="Assign to" style="${TR_INPUT}min-width:200px;">
+        <option value="">Assign to…</option>
+        <optgroup label="Whole cohort">${cohorts.filter(c=>active.some(t=>t.cohortId===c.id)).map(c=>`<option value="cohort:${escapeHtml(c.id)}" ${target==='cohort:'+c.id?'selected':''}>${escapeHtml(c.name)} (${active.filter(t=>t.cohortId===c.id).length} trainees)</option>`).join('')}</optgroup>
+        <optgroup label="Trainee">${active.map(t=>`<option value="trainee:${escapeHtml(t.id)}" ${target==='trainee:'+t.id?'selected':''}>${escapeHtml(t.fullName)}</option>`).join('')}</optgroup>
+      </select>
+      <select id="trAssignScenario" data-tr-draft="assignScenario" aria-label="Scenario" style="${TR_INPUT}flex:1;min-width:240px;">
+        <option value="">Select a scenario…</option>
+        ${topics.map(tp=>`<optgroup label="${escapeHtml(tp)}">${pool.filter(s=>(s.topic||'Other')===tp).map(s=>`<option value="${escapeHtml(s.id)}" ${state.trDraft.assignScenario===s.id?'selected':''}>${escapeHtml(s.title)} · ${escapeHtml(s.difficulty||'')}</option>`).join('')}</optgroup>`).join('')}
+      </select>
+      <input id="trAssignBy" data-tr-draft="assignBy" value="${trD('assignBy')}" placeholder="Your name (L&D)" style="${TR_INPUT}min-width:150px;">
+      <input id="trAssignDue" data-tr-draft="assignDue" type="date" min="${localDateStr()}" value="${trD('assignDue')}" aria-label="Due date (optional)" style="${TR_INPUT}color-scheme:${state.theme==='light'?'light':'dark'};">
+      <button id="btnTrAssign" class="primary">Assign</button>
+    </div>` : `<div class="empty" style="padding:8px 0;text-align:left;">Register a trainee first.</div>`;
+  const list = trainingAssignmentsAll().map(a=>{
+    const t = trainingTraineeById(a.traineeId); const sc = scenarioById(a.scenarioId); const done = trainingAssignmentCompletion(a);
+    const overdue = !done && isValidDueDate(a.dueDate) && localDateStr() > a.dueDate;
+    return `<div class="info-row" style="align-items:center;flex-wrap:wrap;gap:8px;">
+      <span class="ilabel"><strong>${escapeHtml(t ? t.fullName : '(unknown trainee)')}</strong> · ${escapeHtml(sc ? sc.title : a.scenarioId)}
+        <div style="font-size:10.5px;color:var(--text3);margin-top:2px;">Assigned ${new Date(a.assignedAt).toLocaleDateString()}${a.assignedBy?' by '+escapeHtml(a.assignedBy):''}${isValidDueDate(a.dueDate) ? ` · <span style="${overdue?'color:var(--bad);font-weight:700;':''}">${overdue?'Overdue · was due':'Due'} ${escapeHtml(formatDueDate(a.dueDate))}</span>` : ''}</div></span>
+      <span style="display:flex;gap:8px;align-items:center;">
+        <span class="ival" style="font-weight:700;color:${done?'var(--ok)':'var(--warn)'};">${done ? '✓ Completed' : 'Pending'}</span>
+        ${done ? '' : (state.trCancelPending===a.id ? `<button class="small" data-tr-cancel-confirm="${escapeHtml(a.id)}" style="color:var(--bad);">Confirm cancel</button>` : `<button class="small" data-tr-cancel-assign="${escapeHtml(a.id)}">Cancel</button>`)}
+      </span>
+    </div>`;
+  }).join('');
+  return `<div style="color:var(--text2);font-size:13px;margin-bottom:12px;">Assignments show up in the trainee's My Assignments. Assigning to a whole cohort skips anyone who already has the same scenario open.</div>
+    ${form}<div style="margin-top:14px;max-width:900px;">${list || `<div class="empty" style="padding:8px 0;">No Training assignments yet.</div>`}</div>`;
+}
+function renderTrResultsBody(){
+  const cohorts = trainingCohorts();
+  const f = state.trResultsCohort;
+  const trainees = trainingTrainees().filter(t=>!f || t.cohortId===f);
+  const sel = `<select id="trResultsCohort" aria-label="Cohort" style="${TR_INPUT}"><option value="">All cohorts</option>${cohorts.map(c=>`<option value="${escapeHtml(c.id)}" ${f===c.id?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}</select>`;
+  const all = trainees.flatMap(t=>trainingAttemptsForTrainee(t.id)).filter(e=>!e.coachingRun);
+  const avgAll = all.length ? Math.round(all.reduce((s,e)=>s+teamEntryScore(e).pct,0)/all.length) : null;
+  const passAll = all.filter(e=>{ const s=teamEntryScore(e); return s.pass && !s.af; }).length;
+  const cards = trainees.map(t=>{
+    const g = trainingGraduationFor(t.id); const c = trainingCohortById(t.cohortId);
+    const atts = trainingAttemptsForTrainee(t.id); const counted = atts.filter(e=>!e.coachingRun);
+    const avg = counted.length ? Math.round(counted.reduce((s,e)=>s+teamEntryScore(e).pct,0)/counted.length) : null;
+    const passed = counted.filter(e=>{ const s=teamEntryScore(e); return s.pass && !s.af; }).length;
+    const rows = atts.map(e=>{
+      const es = teamEntryScore(e); const idx = state.trainingAttempts.indexOf(e);
+      return `<div class="info-row" style="cursor:pointer;${e.coachingRun?'opacity:.6;':''}" data-tr-view-attempt="${idx}">
+        <span class="ilabel">${escapeHtml(e.scenarioTitle||e.scenarioId)}<br><span style="font-size:10.5px;">${new Date(e.timestamp).toLocaleString()} · <span style="color:var(--accent);">view attempt</span>${e.coachingRun?' · coaching run - not counted':''}</span></span>
+        <span class="ival" style="font-weight:700;color:${e.coachingRun?'var(--text3)':es.af||!es.pass?'var(--bad)':'var(--ok)'};">${es.af?`AF (${escapeHtml(es.afDuty)})`:es.pct+'%'} · ${es.af||!es.pass?'FAIL':'PASS'}</span>
+      </div>`;
+    }).join('');
+    return `<div class="box" style="margin-bottom:10px;max-width:820px;" data-tr-result-card="${escapeHtml(t.id)}">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">
+        <div><strong style="font-size:14.5px;">${escapeHtml(t.fullName)}</strong> <span style="font-size:12px;color:var(--text3);">${escapeHtml(c ? c.name : '')}${g ? ' · graduated to '+escapeHtml(g.tlName) : ''}</span></div>
+        <div style="font-size:12.5px;color:var(--text2);">${counted.length} attempt${counted.length===1?'':'s'} · ${passed}/${counted.length} passed · avg ${avg===null?'-':avg+'%'}</div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:8px 0 4px;font-size:12px;color:var(--text2);">${trSparkline(counted)}<span>${trTrendText(atts)}</span></div>
+      ${rows || '<div class="empty" style="padding:6px 0;">No attempts yet.</div>'}
+    </div>`;
+  }).join('');
+  return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">${sel}
+      <span style="font-size:12.5px;color:var(--text2);">${trainees.length} trainee${trainees.length===1?'':'s'} · ${all.length} attempt${all.length===1?'':'s'} · avg ${avgAll===null?'-':avgAll+'%'} · pass rate ${all.length?Math.round(passAll/all.length*100)+'%':'-'}</span></div>
+    <div style="font-size:11.5px;color:var(--text3);margin-bottom:10px;">Only Training attempts are shown here. The trend line runs oldest to newest; the dashed line is the 85% pass mark.</div>
+    ${cards || '<div class="empty" style="padding:10px 0;">No trainees in this view.</div>'}`;
+}
+function renderTrainingArea(){
+  const trainees = trainingTrainees(); const graduated = trainees.filter(t=>trainingGraduationFor(t.id)).length;
+  const open = trainingAssignmentsAll().filter(a=>!trainingAssignmentCompletion(a)).length;
+  return `<div class="main" id="trainingArea" style="padding:26px;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+      <div>
+        <h1 style="margin-top:0;">Training (L&amp;D)</h1>
+        <div style="color:var(--text2);font-size:13px;max-width:640px;line-height:1.6;">New-hire training space. Trainees practise the same scenarios with the same scoring as agents. Their results stay here and never appear in Team Lead views or stats until they graduate - and even then, Training attempts stay labelled Training and are not counted.</div>
+      </div>
+      <div style="display:flex;gap:8px;"><button id="btnTrRefresh">Refresh data</button><button id="btnLockTraining">← Lock &amp; back to simulator</button></div>
+    </div>
+    ${state.trMsg ? `<div class="box" role="status" style="margin-top:12px;border-color:${state.trMsg.color};color:${state.trMsg.color};font-size:13px;">${escapeHtml(state.trMsg.text)}</div>` : ''}
+    <div style="margin-top:16px;">
+    ${renderDashSection('tr-cohorts', 'Cohorts', `${trainingCohorts().length} cohort${trainingCohorts().length===1?'':'s'}`, renderTrCohortsBody, 'flag', '#e2a33d')}
+    ${renderDashSection('tr-trainees', 'Trainees', `${trainees.length-graduated} in training · ${graduated} graduated`, renderTrTraineesBody, 'users', '#a06bd6')}
+    ${renderDashSection('tr-assign', 'Assign Scenarios', `${open} open assignment${open===1?'':'s'}`, renderTrAssignBody, 'bolt', '#5b7cff')}
+    ${renderDashSection('tr-results', 'Results', `${(state.trainingAttempts||[]).length} Training attempt${(state.trainingAttempts||[]).length===1?'':'s'}`, renderTrResultsBody, 'chart', '#3ecf8e')}
+    </div>
+  </div>`;
+}
+function renderTrainingPasswordModal(){
+  let existing=document.getElementById('trPasswordOverlay'); if(existing) existing.remove();
+  const overlay=document.createElement('div');
+  overlay.id='trPasswordOverlay'; overlay.className='modal-overlay';
+  overlay.innerHTML = `<div class="modal" style="max-width:380px;">
+    <h2>Training (L&amp;D)</h2>
+    <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Cohorts, trainees, Training assignments and results. For L&amp;D only.</div>
+    <input id="trPasswordInput" type="password" placeholder="Password" style="width:100%;${TR_INPUT}">
+    <div id="trPasswordError" style="color:var(--bad);font-size:12.5px;margin-top:8px;display:none;">That’s not it - try again.</div>
+    <div style="margin-top:16px;display:flex;gap:10px;"><button id="btnCancelTrPassword">Cancel</button><button id="btnSubmitTrPassword" class="primary">Unlock</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  wireBackdropClose(overlay, 'btnCancelTrPassword');
+  const input = document.getElementById('trPasswordInput'); input.focus();
+  const submit = ()=>{
+    if(input.value.trim().toLowerCase() === TRAINING_AREA_PASSWORD){
+      state.trainingUnlocked = true; overlay.remove();
+      ['tr-cohorts','tr-trainees','tr-assign','tr-results'].forEach(id=>{ if(state.diagSectionsOpen[id]===undefined) state.diagSectionsOpen[id] = true; });
+      state.view = 'training'; render();
+    }else{ document.getElementById('trPasswordError').style.display='block'; input.value=''; input.focus(); }
+  };
+  document.getElementById('btnSubmitTrPassword').addEventListener('click', submit);
+  document.getElementById('btnCancelTrPassword').addEventListener('click', ()=> overlay.remove());
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
+}
+function trSetMsg(r, okText){
+  state.trMsg = r.ok ? {text: okText + (r.shared===false ? ' Saved on this device only - the shared server did not accept it.' : ''), color: r.shared===false ? 'var(--warn)' : 'var(--ok)'} : {text:r.error, color:'var(--bad)'};
+}
+function wireTrainingEvents(){
+  const rail = document.getElementById('railLDTraining');
+  if(rail) rail.addEventListener('click', ()=>{
+    if(state.trainingUnlocked){ state.view = state.view==='training' ? 'sim' : 'training'; render(); }
+    else renderTrainingPasswordModal();
+  });
+  const d9 = document.getElementById('runDiag9');
+  if(d9) d9.addEventListener('click', runDiagnostic9);
+  if(state.view!=='training') return;
+  const lock = document.getElementById('btnLockTraining');
+  if(lock) lock.addEventListener('click', ()=>{ state.trainingUnlocked=false; state.view='sim'; state.trMsg=null; render(); });
+  const refresh = document.getElementById('btnTrRefresh');
+  if(refresh) refresh.addEventListener('click', async ()=>{ refresh.disabled=true; await loadTeamProgressLog(); await loadTLRosters(); await loadAgentDirectory(); state.trMsg={text:'Data refreshed.', color:'var(--ok)'}; render(); });
+  document.querySelectorAll('[data-tr-draft]').forEach(el=>{
+    const k = el.getAttribute('data-tr-draft');
+    el.addEventListener('input', e=>{ state.trDraft[k] = e.target.value; });
+    el.addEventListener('change', e=>{ state.trDraft[k] = e.target.value; });
+  });
+  const cBtn = document.getElementById('btnTrCreateCohort');
+  if(cBtn) cBtn.addEventListener('click', async ()=>{
+    const d = state.trDraft; const r = await createTrainingCohort(d.cohortName, d.cohortStart, d.cohortTrainer);
+    trSetMsg(r, `Cohort "${(d.cohortName||'').trim()}" created.`);
+    if(r.ok){ d.cohortName=''; d.cohortStart=''; d.cohortTrainer=''; }
+    render();
+  });
+  const rBtn = document.getElementById('btnTrRegister');
+  if(rBtn) rBtn.addEventListener('click', async ()=>{
+    const d = state.trDraft; const r = await registerTrainee(d.traineeFull, d.traineeChat, d.traineeAlt, d.traineeCohort);
+    trSetMsg(r, `Registered ${(d.traineeFull||'').trim()} as a trainee.`);
+    if(r.ok){ d.traineeFull=''; d.traineeChat=''; d.traineeAlt=''; }
+    render();
+  });
+  const aBtn = document.getElementById('btnTrAssign');
+  if(aBtn) aBtn.addEventListener('click', async ()=>{
+    const d = state.trDraft; const r = await assignTrainingScenario(d.assignTarget||'', d.assignScenario||'', d.assignBy, d.assignDue);
+    if(r.ok) r.made===0 ? (state.trMsg={text:`Nothing new assigned - everyone picked already has this scenario open.`, color:'var(--warn)'}) : trSetMsg(r, `Assigned to ${r.made} trainee${r.made===1?'':'s'}${r.skipped?` (${r.skipped} skipped - already open)`:''}.`);
+    else trSetMsg(r, '');
+    if(r.ok) d.assignDue='';
+    render();
+  });
+  document.querySelectorAll('[data-tr-cancel-assign]').forEach(el=>el.addEventListener('click', ()=>{ state.trCancelPending = el.getAttribute('data-tr-cancel-assign'); render(); }));
+  document.querySelectorAll('[data-tr-cancel-confirm]').forEach(el=>el.addEventListener('click', async ()=>{
+    const id = el.getAttribute('data-tr-cancel-confirm');
+    const shared = await pushTrainingRecord({type:'training-assignment-cancel', id:trId('tx_'), assignmentId:id, at:Date.now()});
+    state.trCancelPending = null; trSetMsg({ok:true, shared}, 'Assignment cancelled.'); render();
+  }));
+  document.querySelectorAll('[data-tr-grad-open]').forEach(el=>el.addEventListener('click', ()=>{ state.trGraduating = el.getAttribute('data-tr-grad-open'); render(); }));
+  document.querySelectorAll('[data-tr-grad-cancel]').forEach(el=>el.addEventListener('click', ()=>{ state.trGraduating = null; render(); }));
+  document.querySelectorAll('[data-tr-grad-confirm]').forEach(el=>el.addEventListener('click', async ()=>{
+    const sel = document.getElementById('trGradTL'); const tl = sel ? sel.value : '';
+    if(!tl){ if(sel) sel.focus(); return; }
+    el.disabled = true;
+    const id = el.getAttribute('data-tr-grad-confirm'); const t = trainingTraineeById(id);
+    const r = await graduateTrainee(id, tl, state.trDraft.assignBy);
+    trSetMsg(r, `${t ? t.fullName : 'Trainee'} graduated to ${tl}'s team. Their Training history is visible to ${tl}, labelled Training.`);
+    if(r.ok) state.trGraduating = null;
+    render();
+  }));
+  const rc = document.getElementById('trResultsCohort');
+  if(rc) rc.addEventListener('change', e=>{ state.trResultsCohort = e.target.value; render(); });
+  document.querySelectorAll('[data-tr-view-attempt]').forEach(el=>el.addEventListener('click', ()=> openTrainingAttemptReadOnly(parseInt(el.getAttribute('data-tr-view-attempt'),10), 'ld')));
+}
+
+// ---------- DIAGNOSTIC 9: TRAINING SEPARATION (v40) ----------
+// Deterministic, no API calls. Runs applyTlReviews on a synthetic log and checks the split, then restores state.
+function runDiagnostic9(){
+  const el = document.getElementById('diag9Result'); if(!el) return;
+  const snap = { rec: state.trainingRecords, att: state.trainingAttempts, ps: state.patternSummaries };
+  const rows = [];
+  const add = (label, pass, detail)=> rows.push({label, pass:!!pass, detail:detail||''});
+  try{
+    const ev = {questions:[{id:'q1',letter:'A'},{id:'q2',letter:'A'},{id:'q3',letter:'A'}]};
+    const agentA = {agentName:'Diag Agent', deviceId:'d1', timestamp:1000, scenarioId:'noc-1', evaluation:ev, pct:100, pass:true};
+    const agentB = {agentName:'Diag Agent', deviceId:'d1', timestamp:2000, scenarioId:'noc-2', evaluation:ev, pct:90, pass:true};
+    const trTagged = {agentName:'Diag Trainee', deviceId:'d2', timestamp:3000, scenarioId:'noc-1', evaluation:ev, pct:70, pass:false, space:'training', traineeId:'tt_diag', cohortId:'tc_diag'};
+    const trStripped = {agentName:'Diag Trainee', deviceId:'d2', timestamp:4000, scenarioId:'noc-2', evaluation:ev, pct:80, pass:false};
+    const recs = [
+      {type:'training-cohort', id:'tc_diag', name:'Diag Cohort', startDate:'2026-11-05', trainer:'Diag Trainer', createdAt:1},
+      {type:'training-trainee', id:'tt_diag', fullName:'Diag Trainee', chatName:'Diago', cohortId:'tc_diag', createdAt:2},
+      {type:'training-attempt-link', id:'tk_diag', reviewKey:'d2|4000|noc-2', traineeId:'tt_diag', cohortId:'tc_diag'},
+      {type:'tl-review', reviewKey:'d1|1000|noc-1', tlOverrides:{q1:{letter:'B'}}, tlReviewedAt:5},
+    ];
+    const tl = applyTlReviews([agentA, recs[0], trTagged, recs[1], agentB, trStripped, recs[2], recs[3]]);
+    add('Normal attempts stay in the TL log, in order, and TL reviews still apply', tl.length===2 && tl[0]===agentA && tl[1]===agentB && agentA.tlReviewedAt===5);
+    add('No training-* record ever lands in the TL log', !tl.some(isTrainingRecord));
+    add('An attempt tagged space:"training" is kept out of the TL log', !tl.includes(trTagged) && state.trainingAttempts.includes(trTagged));
+    add('An attempt with no Training field but a training-attempt-link record is still recognised as Training (durable even if a field is stripped)', !tl.includes(trStripped) && trStripped.space==='training' && trStripped.traineeId==='tt_diag');
+    add('Before graduation the trainee’s names resolve to the trainee', !!activeTraineeFor('Diag Trainee') && !!activeTraineeFor('diago') && trainingTagFor('Diago').cohortId==='tc_diag');
+    state.trainingRecords.push({type:'training-graduation', id:'tg_diag', traineeId:'tt_diag', tlName:'Diag TL', canonicalName:'Diag Trainee', at:9});
+    add('After graduation new attempts are no longer tagged Training', !activeTraineeFor('Diag Trainee') && trainingTagFor('Diag Trainee')===null);
+    const tl2 = applyTlReviews([agentA, recs[0], trTagged, recs[1], agentB, trStripped, recs[2], recs[3], {type:'training-graduation', id:'tg_diag', traineeId:'tt_diag', tlName:'Diag TL', canonicalName:'Diag Trainee', at:9}]);
+    add('After graduation the old Training attempts are still Training (never reclassified into the TL log)', tl2.length===2 && state.trainingAttempts.length===2);
+    add('isCountedTeamAttempt never sees a Training attempt (Team View / averages / miss rates read the TL log only)', !tl2.some(e=>e.space==='training'));
+  }catch(err){ add('Error: '+err.message, false); }
+  state.trainingRecords = snap.rec; state.trainingAttempts = snap.att; state.patternSummaries = snap.ps;
+  const n = rows.filter(r=>r.pass).length;
+  el.innerHTML = `<div class="diag-result"><div style="margin-bottom:6px;">${n} of ${rows.length} pass.</div>${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;"><span class="${r.pass?'diag-pass':'diag-fail'}">${r.pass?'PASS':'FAIL'}</span> ${escapeHtml(r.label)}${r.detail?`<div style="font-size:11.5px;color:var(--text3);">${escapeHtml(r.detail)}</div>`:''}</div>`).join('')}</div>`;
 }
 
 document.addEventListener('click', e=>{
