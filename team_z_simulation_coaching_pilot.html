@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Team Z Coaching Pilot - Simulation Engine (Phase 1 Prototype) - v40</title>
+<title>Team Z Coaching Pilot - Simulation Engine (Phase 1 Prototype) - v40.3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3098,6 +3098,23 @@ const SCENARIO_AUDIT_V38_RESTORE = {
       ambiguityNotesAppend:' v39 restore: Direct handling needs confirmed harm. A grey answer that neither confirms harm nor clearly explains the joke away keeps this scenario’s existing grey-zone treatment.' } }
 };
 applyScenarioAudit(SCENARIO_AUDIT_V38_RESTORE, 'auditedV38Restore');
+
+// ---------- v40.2: adv-1 Direct-vs-grey scoring fix (Sydney Berger's attempt, Oct 27; reviewed by Zainab Nov 4) ----------
+// The scenario is written for a grey-zone answer, but when the agent keeps asking, the AI player can go on to admit
+// chasing losses. That is a Direct Statement under the current RG guide, so Direct handling is then correct. Same fix
+// as rg-4 (v37). The grey-zone path is unchanged for players who stay grey.
+const ADV1_DIRECT_GUARD = 'IF THE PLAYER GOES BEYOND THE GREY-ZONE ANSWER: the scripted first answer ("I can afford it, I just don’t love how much I’ve been losing") is grey-zone. But if, when the agent asks further, the player says he tries to win back what he lost, plays again to make it back, or confirms this is a pattern (KB Direct Statement examples: "I keep trying to win my money back", "I’m chasing my losses"), the RG Triggers rule applies: the player has confirmed risk behaviour, so follow Direct Statement handling. Judge the branch on EVERYTHING the player said by the end of the check-in, not only on his first answer. In that case Direct Statement handling is CORRECT and must never be scored as over-restriction or as the wrong branch, and the grey-zone steps (offer tools, Player Care escalation in place of RG tools) are not required on top of it. Choosing the duration for the player while he is still in the chat is a minor process point, not the critical error. ' + RG_DIRECT_BUNDLE;
+const SCENARIO_AUDIT_V40_2 = {
+  'adv-1': {
+    pg:{
+      kbTextAppend:' ' + ADV1_DIRECT_GUARD,
+      requiredActionsReplace:{2:'Check promo eligibility and manually award via Award Promotion - unless the chat ends in self-exclusion, in which case note the unawarded promo on the account instead (TL direction)', 4:'If the player stays grey-zone (concerning, but no confirmed loss of control or chasing): document it, offer suitable RG tools, and escalate to Player Care with context and chat ID'},
+      requiredActionsAdd:['If, when asked further, the player confirms chasing losses or loss of control: apply the full Direct Statement bundle instead of the grey-zone steps, and leave a clear note:'].concat(RG_DIRECT_BUNDLE_ACTIONS),
+      criticalErrorsAppend:' Applying self-exclusion after the player has confirmed chasing losses or loss of control during the check-in is NOT an error - it is the required Direct Statement handling, even though his first answer was grey-zone.' + RG_DIRECT_BUNDLE_NOT_REPLACED,
+      ambiguityNotesAppend:' PROMO ONCE SELF-EXCLUSION APPLIES (TL direction, Zainab, Nov 4): once self-exclusion is applied in the same chat, the unused promo is no longer an actionable player benefit in that chat. Not awarding it is NOT a missed award and must not lower Q1; noting it on the account (so it can be looked at if the player returns after SE) is the expected handling. If the player stays grey-zone and is NOT self-excluded, the KB rule stands: manually award it with Award Promotion.'
+    } }
+};
+applyScenarioAudit(SCENARIO_AUDIT_V40_2, 'auditedV40_2');
 
 // ---------- v34: promotion to Pilot Ready (Zainab, Oct 23) ----------
 // Every scored rule in these scenarios now traces to real Betty KB or documented TL direction (audit v27-v33).
@@ -7263,7 +7280,7 @@ These, plus the qualitative behaviours below, are COACHING SIGNALS ONLY. They mu
 - keepsPlayerEngaged: did the agent keep the player informed and feeling attended to, or did the player seem left hanging at any point?
 - gathersInfoBeforeTroubleshooting: did the agent ask relevant questions / check Case Data before jumping to a fix, or guess first and backfill?
 - avoidsRepetition: did the agent ask something the player already answered, or restate something already said, more than once?
-- avoidsFiller: judge this using the filler-phrase count reported above, plus your own read of the transcript - is there real, repeated empty filler, or was the count coincidental/justified?
+- avoidsFiller: judge this using the filler-phrase count reported above, plus your own read of the transcript - is there real, repeated empty filler, or was the count coincidental/justified? Thanking or acknowledging the player before moving on ("thanks for that", "I appreciate your response", "thank you for confirming") is encouraged Betty practice and is NEVER filler - do not list it as filler, cite it in the avoidsFiller note, or lower this rating for it. Filler means empty stalling that delays the answer ("one moment", "bear with me", "let me take a look" with nothing following).
 - stopsInvestigatingOnceClear: once the answer was clearly established, did the agent keep digging/stalling instead of responding, or move to resolution promptly?
 - closesConfidently: once the issue was resolved, did the agent close promptly and confidently, or drag the ending out, or (the other failure mode) end the chat before the issue was actually resolved?
 Rate each "good" | "mixed" | "needs-work" | "not-applicable" (use not-applicable only when the transcript genuinely gives no basis to judge, e.g. chat ended before any close was possible), with a one-sentence, transcript-grounded note for each - no generic praise/criticism. Warm, casual phrasing ("you got it", "I got you", emojis, light humour) is never by itself a reason for "mixed" or "needs-work" on any signal; it needs a real negative effect in this transcript.
@@ -7365,7 +7382,7 @@ Judge each behaviour independently from the full transcript:
 - keepsPlayerEngaged: did the agent keep the player informed and attended to, or was the player left hanging?
 - gathersInfoBeforeTroubleshooting: did the agent ask relevant questions / check Case Data before a fix, or guess first and backfill?
 - avoidsRepetition: did the agent re-ask something already answered, or restate something already said, more than once?
-- avoidsFiller: using the filler count above plus your own read - is there real, repeated empty filler, or was the count coincidental?
+- avoidsFiller: using the filler count above plus your own read - is there real, repeated empty filler, or was the count coincidental? Thanking or acknowledging the player before moving on ("thanks for that", "I appreciate your response", "thank you for confirming") is encouraged Betty practice and is NEVER filler - do not list it as filler, cite it in the avoidsFiller note, or lower this rating for it. Filler means empty stalling that delays the answer ("one moment", "bear with me", "let me take a look" with nothing following).
 - stopsInvestigatingOnceClear: once the answer was clear, did the agent keep digging or stalling, or move to resolution?
 - closesConfidently: once resolved, did the agent close promptly - or drag the ending out, or close before the issue was actually resolved?
 Rate each "good" | "mixed" | "needs-work" | "not-applicable" (not-applicable only when the transcript gives no basis, e.g. the chat ended before any close was possible), with a one-sentence, transcript-grounded note - no generic praise or criticism. Warm, casual phrasing ("you got it", "I got you", emojis, light humour) is never by itself a reason for "mixed" or "needs-work" on any signal; it needs a real negative effect in this transcript.
@@ -12027,9 +12044,17 @@ function rgRegressionStaticChecks(){
   add('R30', 'Pattern prompt tells the model not to recreate a gap the TL review overturned', /a point the TL overturned is not a gap/.test(pr) && /do not report a gap that a TL review overturned/.test(pr));
   return rows;
 }
+function adv1DirectGuardChecks(){
+  const s = SCENARIOS.find(x=>x.id==='adv-1'); const pg = (s && s.processGrounding) || {};
+  const all = [pg.kbText, pg.criticalErrors, pg.ambiguityNotes].concat(pg.requiredActions||[]).join(' ');
+  return [{ id:'v40.2-1', label:'adv-1: confirmed chasing after the check-in gets Direct handling; grey-zone path kept for players who stay grey; unawarded promo is not a miss once SE is applied',
+    pass: !!(s && s.auditedV40_2) && /IF THE PLAYER GOES BEYOND THE GREY-ZONE ANSWER/.test(pg.kbText||'') && /NOT an error - it is the required Direct Statement handling/.test(pg.criticalErrors||'')
+      && (pg.requiredActions||[]).some(a=>/stays grey-zone/.test(a) && /Player Care with context and chat ID/.test(a)) && (pg.requiredActions||[]).some(a=>/bundle \(1\)/.test(a))
+      && /negative response/.test(all) && /Self-excluding/.test(pg.criticalErrors||'') && /no longer an actionable player benefit/.test(pg.ambiguityNotes||'') && (pg.requiredActions||[]).some(a=>/Award Promotion - unless the chat ends in self-exclusion/.test(a)) }];
+}
 function runDiagnostic8(){
   const el = document.getElementById('diag8Result'); if(!el) return;
-  const rows = rgRegressionStaticChecks();
+  const rows = rgRegressionStaticChecks().concat(adv1DirectGuardChecks());
   const passN = rows.filter(r=>r.pass).length;
   el.innerHTML = `<div class="diag-result"><div style="margin-bottom:6px;">${passN} of ${rows.length} pass.</div>${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;"><span class="${r.pass?'pass':'fail'}" style="font-weight:700;color:${r.pass?'var(--ok)':'var(--bad)'};">${r.pass?'PASS':'FAIL'}</span> <strong>${escapeHtml(r.id)}</strong> ${escapeHtml(r.label)}${r.detail && !r.pass ? `<div style="font-size:11.5px;color:var(--text3);">${escapeHtml(r.detail)}</div>` : ''}</div>`).join('')}</div>`;
 }
