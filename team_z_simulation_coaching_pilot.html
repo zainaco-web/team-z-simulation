@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Betty Coaching Simulator - Simulation Engine - v41.3</title>
+<title>Betty Coaching Simulator - Simulation Engine - v41.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3134,6 +3134,12 @@ for(let i=SCENARIOS.length-1;i>=0;i--){ if(REMOVED_V35.includes(SCENARIOS[i].id)
 // the agent library; L&D (and TLs) can assign them.
 const TRAINING_BEGINNER_SCENARIOS = [{"playerIntensity": 1, "difficulty": "Foundation", "kbStatus": "validated", "engineTestRG": false, "rgScoringRelevant": false, "rgStatementType": "None", "rgEmbedded": false, "complexity": "Single issue", "readiness": "PILOT_READY", "audience": "training", "id": "trn-1", "skill": "Negative Outcome Communication", "skillCode": "NOC", "internalTitle": "Beginner - Interac Withdrawal In Progress (Auto-Deposit On)", "title": "First Withdrawal Question", "playerName": "Leah", "agentBriefing": "A new player asks about her first Interac withdrawal.", "preChatContext": "hi! i made my first withdrawal about an hour ago with interac, how long does it usually take?", "endConditionsGuide": "End once you’ve given a clear, KB-supported answer and next step.", "kbCategories": ["Payments"], "kbArticles": ["Withdrawals via E-Transfer (Interac)"], "metadata": {"kbSources": ["Withdrawals via E-Transfer (Interac)"], "lastValidatedDate": null, "validatedBy": null, "reviewTriggerCategory": "Payments", "policyVersionRef": null}, "kbSource": "Real KB: \"Withdrawals via E-Transfer (Interac)\" - same grounding as Delayed Withdrawal (Interac), beginner version.", "playerKnowledge": {"situation": "You made your first ever Interac withdrawal, $60, about an hour ago. It has not reached your bank yet. You are not worried, just curious how long it takes."}, "personaPrompt": "You are Leah, a friendly new player. You made your first Interac withdrawal ($60) about an hour ago and just want to know how long it takes. You do not know internal statuses or what Auto-Deposit is - if the agent mentions it, ask what it means. Accept a clear, specific answer happily. This is a BEGINNER training chat for new hires: you are calm, friendly and patient, you answer the agent’s questions plainly, and you never get rude or escalate. If the agent asks for your player ID, give it.", "caseData": [{"id": "pid", "tab": "Player Profile", "label": "Player ID (training account)", "value": "900101 - fictional training account, not a real player. Use it the way you would look a player up in Midnight.", "gated": false}, {"id": "tx1", "tab": "Transaction History", "label": "Withdrawal #WD-9101", "value": "$60.00 - Interac - Submitted: about 1 hour ago - Status: In Progress - Flags: none", "gated": true, "gateLabel": "View Transaction History"}, {"id": "gd1", "tab": "Transaction History", "label": "Auto-Deposit status (Gigadat)", "value": "registeredForAutodeposit: true - enabled under the player’s own name", "gated": true, "gateLabel": "View Transaction History"}], "correctTag": "Withdrawal: Interac: In Progress", "tagOptions": ["Withdrawal: Interac: In Progress", "Withdrawal: Interac: Missing", "Withdrawal: Interac: Pending", "Withdrawal: Interac: Failed"], "ahtTargetMinutes": 11, "topic": "Payments", "processGrounding": {"kbTopic": "Interac Withdrawal Status & Auto-Deposit Timelines", "kbText": "\"In Progress\" means the withdrawal was approved internally and sent to Wyzia/Gigadat, but the transfer to the player’s bank isn’t finished yet - normally this only lasts 20–30 minutes before moving to Approved. If it’s stuck longer, check Auto-Deposit status in Gigadat. If Auto-Deposit is ON: funds should post automatically, no action needed from the player - usually within minutes up to ~30 minutes, sometimes up to a few hours, rarely up to 24 hours. Escalate to PayTech only if funds are still missing after 24 hours (or per player request to cancel, with a 2-business-day return caveat).", "requiredActions": ["Check the actual current status via Transaction History rather than assuming", "Check Auto-Deposit status in Gigadat before responding", "If Auto-Deposit is ON and within 24 hours, explain that no action is needed and give the real supported timeframe, not an invented one"], "optionalActions": ["Offer to escalate to PayTech if it’s still missing after 24 hours"], "escalationCriteria": "Escalate to PayTech only if funds remain missing after 24 hours with Auto-Deposit ON, or if the player requests cancellation instead of waiting.", "criticalErrors": "Confirming \"no issue\" without having checked BOTH Transaction History and Auto-Deposit status is a critical error. Stating a specific arrival time, or inventing a cause/window (e.g. \"3 business days\") not supported by the KB, is also critical. Escalating to PayTech before 24 hours have passed with Auto-Deposit ON and no other red flag is an unnecessary escalation.", "ambiguityNotes": "None - real KB directly covers this case."}}, {"playerIntensity": 1, "difficulty": "Foundation", "kbStatus": "validated", "engineTestRG": false, "rgScoringRelevant": false, "rgStatementType": "None", "rgEmbedded": false, "complexity": "Single issue", "readiness": "PILOT_READY", "audience": "training", "id": "trn-2", "skill": "Escalation / Resolution Judgement", "skillCode": "ESC", "internalTitle": "Beginner - Opted-In Deposit Bonus Not Awarded (Manual Award)", "title": "Missing Deposit Bonus", "playerName": "Omar", "agentBriefing": "A player says a deposit bonus he signed up for never showed up.", "preChatContext": "hey, i opted into the deposit bonus yesterday and deposited but i never got it", "endConditionsGuide": "End once the bonus question is resolved and confirmed with the player.", "kbCategories": ["Promotions & Bonuses"], "kbArticles": ["Promotions: Key Information, Player Eligibility, Troubleshooting"], "metadata": {"kbSources": ["Promotions: Key Information, Player Eligibility, Troubleshooting"], "lastValidatedDate": null, "validatedBy": null, "reviewTriggerCategory": "Promotions", "policyVersionRef": null}, "kbSource": "Real KB: \"Promotions: Key Information\" - Opted In and all requirements met but not Awarded: manually award (same rule as Multi-Issue Contact).", "playerKnowledge": {"situation": "You opted into a deposit bonus yesterday and then made a qualifying deposit. The bonus never appeared in your account. You don’t know why."}, "personaPrompt": "You are Omar, a relaxed regular player. You opted into a deposit bonus yesterday, deposited, and the bonus never showed up. You don’t know the exact promo name - \"the deposit bonus\" - and you don’t know internal statuses. When the agent fixes it, thank them. This is a BEGINNER training chat for new hires: you are calm, friendly and patient, you answer the agent’s questions plainly, and you never get rude or escalate. If the agent asks for your player ID, give it.", "caseData": [{"id": "pid", "tab": "Player Profile", "label": "Player ID (training account)", "value": "900102 - fictional training account, not a real player. Use it the way you would look a player up in Midnight.", "gated": false}, {"id": "promo1", "tab": "Promotion History", "label": "Promo eligibility check", "value": "Player opted in and met all requirements - Reward Status: not Awarded (system miss). Tier 1 can manually award directly with Award Promotion.", "gated": true, "gateLabel": "View Promotion History"}], "correctTag": "Promo: Deposit Offer", "tagOptions": ["Promo: Deposit Offer", "Promo: Welcome Bonus", "Promo: Not Available", "Bonus: Goodwill Gesture Request: Granted"], "ahtTargetMinutes": 8, "topic": "Promotions", "processGrounding": {"kbTopic": "Opted In, Requirements Met, Not Awarded - Manual Award (real KB)", "kbText": "REAL KB (Promotions: Key Information): \"Opted In and All Other Requirements Met\" with a Reward Status other than Awarded should be manually awarded by CS using the Award Promotion action. Tier 1 can award it directly - no escalation is needed.", "requiredActions": ["Check Promotion History before answering", "Confirm the player opted in and met all requirements but the reward was not awarded", "Manually award the promotion with the Award Promotion action", "Confirm to the player that the bonus has been added"], "optionalActions": [], "escalationCriteria": "Not applicable - Tier 1 awards it directly.", "criticalErrors": "Telling the player they don’t qualify, or escalating, when Promotion History shows they opted in and met every requirement is a process error. Promising the bonus without actually awarding it leaves the case unresolved.", "ambiguityNotes": "None - real KB directly covers this case."}}, {"playerIntensity": 1, "difficulty": "Foundation", "kbStatus": "validated", "engineTestRG": false, "rgScoringRelevant": false, "rgStatementType": "None", "rgEmbedded": false, "complexity": "Single issue", "readiness": "PILOT_READY", "audience": "training", "id": "trn-3", "skill": "Escalation / Resolution Judgement", "skillCode": "ESC", "internalTitle": "Beginner - Forgotten Password, No Account Lock", "title": "Forgot My Password", "playerName": "Grace", "agentBriefing": "A player can’t remember her password.", "preChatContext": "hi, i cant log in, i think i forgot my password", "endConditionsGuide": "End once the player confirms she can log back in.", "kbCategories": ["Account Management"], "kbArticles": ["Login Access Issues"], "metadata": {"kbSources": ["Login Access Issues"], "lastValidatedDate": null, "validatedBy": null, "reviewTriggerCategory": "Account", "policyVersionRef": null}, "kbSource": "Real KB: \"Login Access Issues\" - standard password reset path first (same grounding as Can’t Log In, beginner version).", "playerKnowledge": {"situation": "You can’t remember your password and can’t log in. You have access to the email on your account."}, "personaPrompt": "You are Grace, a polite player who simply forgot her password. Follow the agent’s reset steps. The first time you check, the reset email is not in your inbox; if the agent suggests checking spam or promotions, you find it there and log in successfully, then say so. This is a BEGINNER training chat for new hires: you are calm, friendly and patient, you answer the agent’s questions plainly, and you never get rude or escalate. If the agent asks for your player ID, give it.", "caseData": [{"id": "pid", "tab": "Player Profile", "label": "Player ID (training account)", "value": "900103 - fictional training account, not a real player. Use it the way you would look a player up in Midnight.", "gated": false}, {"id": "acct1", "tab": "Account Notes", "label": "Account status", "value": "Active, good standing account. No lock or restriction flags. Consistent with a standard forgotten/mistyped password, not an account-level lock.", "gated": false}], "correctTag": "Account: Login: Password: How to reset", "tagOptions": ["Account: Login: Password: How to reset", "Account: Login: Lock Out", "Account: Login: Email recovery", "Account: Login: Password: Technical difficulties"], "ahtTargetMinutes": 8, "topic": "Account & Location", "processGrounding": {"kbTopic": "Login Access Issues - Standard Password Reset Path First (real KB)", "kbText": "REAL KB: for a player reporting they can’t log in with no account-level lock or restriction on file, the standard first step is a password reset via the email on file. Genuine account locks (e.g., from repeated failed attempts or a flagged restriction) are a separate, distinct case from an ordinary forgotten or mistyped password.", "requiredActions": ["Check Case Data to confirm there’s no actual account lock or restriction before treating this as a simple reset case", "Guide the player through a standard password reset", "If the reset email is delayed, reassure the player and check spam/promotions folders as a first troubleshooting step before escalating", "Confirm the player is able to log back in before closing"], "optionalActions": ["Suggest checking for typos or autofill issues if the same password keeps failing after reset"], "escalationCriteria": "If the reset genuinely fails to arrive or resolve access after reasonable troubleshooting, or Case Data actually shows a lock/restriction, that becomes a different case requiring further investigation - not covered by this standard scenario.", "criticalErrors": "Treating this as an account lock or escalating it when Case Data shows no lock or restriction is a process error - the correct path for this specific case is the standard reset flow. Ending the chat before confirming the player can actually log back in is also a critical error.", "ambiguityNotes": "This scenario covers the standard forgotten-password case only, not the separate genuine-lockout/restriction case, which is a different real KB path not yet built as its own scenario."}}, {"playerIntensity": 1, "difficulty": "Foundation", "kbStatus": "validated", "engineTestRG": false, "rgScoringRelevant": false, "rgStatementType": "None", "rgEmbedded": false, "complexity": "Single issue", "readiness": "PILOT_READY", "audience": "training", "id": "trn-4", "skill": "Average Handling Time", "skillCode": "AHT", "internalTitle": "Beginner - Games Not Loading While Travelling (Outside Licensed Province)", "title": "Games Won’t Load on Vacation", "playerName": "Nate", "agentBriefing": "A player says games won’t load for him today.", "preChatContext": "hey none of the games are loading for me today, they worked fine last week", "endConditionsGuide": "End once the restriction has been explained and the player understands.", "kbCategories": ["Account Management", "Game Tech Temple"], "kbArticles": [], "metadata": {"kbSources": [], "lastValidatedDate": null, "validatedBy": null, "reviewTriggerCategory": "Account", "policyVersionRef": null}, "kbSource": "Real KB: jurisdiction restriction (same grounding as Games Not Loading, beginner version).", "playerKnowledge": {"situation": "You are on vacation in Manitoba this week. Your account is with Betty Ontario. Games worked last week at home."}, "personaPrompt": "You are Nate, an easygoing player on vacation in Manitoba for a week. You don’t mention where you are unless asked. When the agent explains you must be in a licensed province to play, you understand straight away and ask if it will work when you’re home in Ontario. This is a BEGINNER training chat for new hires: you are calm, friendly and patient, you answer the agent’s questions plainly, and you never get rude or escalate. If the agent asks for your player ID, give it.", "caseData": [{"id": "pid", "tab": "Player Profile", "label": "Player ID (training account)", "value": "900104 - fictional training account, not a real player. Use it the way you would look a player up in Midnight.", "gated": false}, {"id": "loc1", "tab": "Account & Location", "label": "Current geolocation check", "value": "Confirmed physical location: Manitoba - outside both Ontario and Alberta licensed zones. Account registered under Betty Ontario.", "gated": true, "gateLabel": "View Account & Location"}, {"id": "loc2", "tab": "Account & Location", "label": "Account history", "value": "Account in good standing, regularly active from Ontario. No prior location flags.", "gated": false}], "correctTag": "Location: Outside Jurisdiction", "tagOptions": ["Location: Outside Jurisdiction", "Location: Geolocs", "Slots: Game Doesn't Load", "General: Unclear Query"], "ahtTargetMinutes": 9, "topic": "Account & Location", "processGrounding": {"kbTopic": "Jurisdiction Restriction - Real KB, Genuinely Fast When Handled Directly", "kbText": "Real KB and real chat data agree this is a simple case: players must be physically located within a licensed province (Ontario or Alberta, depending on account) to play. There is no exception, no appeal, no workaround - the restriction is a real-time geolocation check, not an account-level decision. The correct handling is short: confirm current location, explain the restriction clearly once, close the case. Real chat data for this exact scenario shows a median handling time of 9.0 minutes against a platform-wide average of ~12 minutes - this case type should run FASTER than average when done well, not merely at the average.", "requiredActions": ["Ask the player’s current physical location before concluding anything - do not guess or assume", "Check the geolocation Case Data to confirm the restriction applies", "Explain the jurisdiction restriction clearly, once, in plain terms (must be physically in a licensed province to play)", "Close the case once the explanation lands - do not keep re-explaining or re-litigating the same rule after the player has understood it"], "optionalActions": ["Note that this is unrelated to account standing - reassure the player nothing is wrong with their account itself"], "escalationCriteria": "Not applicable - this is a hard platform rule with no exception path, fully resolvable at Tier 1 with no escalation.", "criticalErrors": "SPEED IS NEVER CREDITED ON ITS OWN. Confirming the restriction without actually checking the geolocation Case Data first is a critical error - a fast wrong guess is worse than a correct answer that took longer, and must be scored on Resolution & Obligations exactly as it would be in any other scenario, independent of how quickly it happened. Telling the player there’s a workaround, an appeal process, or an account-level fix that doesn’t exist is a critical error regardless of speed. On the other side: unnecessarily re-explaining the same restriction three or more times after the player has already understood it, or drifting into an unresolvable debate about fairness of the rule, is the specific inefficiency this scenario is built to catch - note it as a real process/experience cost, not just a style comment.", "ambiguityNotes": "None - real KB and real handling-time data both directly support this case."}}, {"playerIntensity": 1, "difficulty": "Foundation", "kbStatus": "validated", "engineTestRG": false, "rgScoringRelevant": false, "rgStatementType": "None", "rgEmbedded": false, "complexity": "Single issue", "readiness": "PILOT_READY", "audience": "training", "id": "trn-5", "skill": "Negative Outcome Communication", "skillCode": "NOC", "internalTitle": "Beginner - Interac Deposit at \"Started\", Inside the KB Window", "title": "Deposit Not Showing Yet", "playerName": "Priyanka", "agentBriefing": "A player’s deposit hasn’t appeared in her balance yet.", "preChatContext": "hi i sent a $40 interac deposit a few minutes ago and it isnt in my balance yet", "endConditionsGuide": "End once the player has a clear explanation, the KB timeframe and a next step.", "kbCategories": ["Payments"], "kbArticles": ["Deposits via E-Transfer (Interac)"], "metadata": {"kbSources": ["Deposits via E-Transfer (Interac)"], "lastValidatedDate": null, "validatedBy": null, "reviewTriggerCategory": "Payments", "policyVersionRef": null}, "kbSource": "Real KB: \"Deposits via E-Transfer (Interac)\" (same grounding as Interac Deposit Stuck at \"Started\", beginner version).", "playerKnowledge": {"situation": "You sent a $40 Interac e-Transfer deposit about 20 minutes ago. The money left your bank. You included the message/ID you were shown and you got a confirmation email. It isn’t in your Betty balance yet."}, "personaPrompt": "You are Priyanka, a calm player. You sent a $40 Interac e-Transfer deposit about 20 minutes ago; the money left your bank, you included the message you were shown, and you received a confirmation email. Answer the agent’s questions plainly. You’re happy to wait once you know the timeframe and what to do if it doesn’t arrive. This is a BEGINNER training chat for new hires: you are calm, friendly and patient, you answer the agent’s questions plainly, and you never get rude or escalate. If the agent asks for your player ID, give it.", "caseData": [{"id": "pid", "tab": "Player Profile", "label": "Player ID (training account)", "value": "900105 - fictional training account, not a real player. Use it the way you would look a player up in Midnight.", "gated": false}, {"id": "dep1", "tab": "Transaction History", "label": "Deposit #DP-9105", "value": "$40.00 - Interac - Status: Started", "gated": true, "gateLabel": "View Transaction History"}, {"id": "gd1", "tab": "Transaction History", "label": "Gigadat transaction", "value": "Interac e-Transfer (ETI). $40.00 initiated, $40.00 sent - no amount mismatch. Message ID included. Sent about 20 minutes ago, not yet matched to the Betty account.", "gated": true, "gateLabel": "Search the transaction in Gigadat"}], "correctTag": "Deposit: Interac: Started", "tagOptions": ["Deposit: Interac: Started", "Deposit: Interac: Failed", "Deposit: Unable to", "Deposit: Other"], "ahtTargetMinutes": 11, "topic": "Payments", "processGrounding": {"kbTopic": "Interac Deposit \"Started\" Inside the 35-Minute Window (real KB)", "kbText": "REAL KB (Deposits via E-Transfer (Interac)). Deposits are usually instant, but delays are possible: up to 5-35 minutes for both Interac e-Transfer (ETI) and Request for Money (RFM). \"Started\" = the deposit is processing or the player has not completed the transfer yet; it can also mean the details used do not let Wyzia match the transfer to the account. Handling a Started/Pending deposit: check the payment type in Gigadat (ETI or RFM). ETI: (1) ask whether the player was charged - if not, point them to the email prompting them to finish; (2) check the mandatory Message ID was included - without it the deposit eventually fails and the funds return to their bank in 1-2 business days; (3) check Gigadat for an amount mismatch; (4) ask whether they got the Wyzia/Gigadat confirmation email; (5) if everything was done correctly and 30-35 minutes have passed: escalate to PayTech with the template (Player ID, date/time, amount, transaction ID, Interac Reference Number) plus the confirmation-email screenshot, or, if they have no confirmation email, ask them to get the Interac Reference Number (IRN) from their bank and escalate with that. RFM: confirm they completed the request (many players confuse the \"pending request\" email with a completed deposit); if completed and 30-35 minutes have passed, escalate to PayTech with the Tracking Message or the IRN. Communication: reassure the player their funds are safe, never blame or imply fault on the player’s side, no ambiguous answers, always give an actionable next step.", "requiredActions": ["Check the deposit in Transaction History and the transaction in Gigadat (payment type, amount, Message ID) before answering", "Explain Started in plain words (the deposit is still processing / not matched yet) without blaming the player", "Check the KB points with the player: were they charged, did they include the Message ID, did they get a confirmation email", "Reassure the player their funds are safe and give the KB timeframe: usually instant, can take up to 35 minutes - it has been about 20", "Give the next step: if it is still not credited after 30-35 minutes, come back with the confirmation email (or the Interac Reference Number from their bank) and it will be escalated to PayTech"], "optionalActions": ["Mention the Wyzia email that prompts players to review unfinished transactions after 5 minutes, if relevant"], "escalationCriteria": "Not yet - about 20 minutes in, inside the KB’s 30-35 minute window. Escalate to PayTech only once 30-35 minutes have passed with everything done correctly, with the confirmation-email screenshot or the IRN.", "criticalErrors": "Saying \"everything is fine\" without checking is a critical error. Escalating to PayTech before 30-35 minutes is premature. Blaming the player or their bank, or inventing a cause, is unsupported. Giving a timeframe the KB does not support (for example \"rarely a few hours\" or \"up to 24 hours\") is an unsupported claim. A vague answer with no next step goes against the KB’s communication rules.", "ambiguityNotes": "None on the scored process."}}];
 TRAINING_BEGINNER_SCENARIOS.forEach(s=>{ if(!SCENARIOS.some(x=>x.id===s.id)) SCENARIOS.push(s); });
+// v41.4: beginner Gameplay scenarios for new hires (Training only). Grounded in the Betty Notion KB (Game Tech Temple,
+// Promotions & Bonuses). kbStatus is 'mixed' on purpose: the Notion pages are marked unverified (and Tech Escalations'
+// verification expired 2026-10-24), so each one lists in kbPendingConfirmation what QA/L&D must confirm before trainees are
+// graded on it. Game, round, version and promo details are fictional; player IDs 900106-900110 are fictional training accounts.
+const TRAINING_GAMEPLAY_SCENARIOS = [{"playerIntensity": 1, "difficulty": "Foundation", "kbStatus": "mixed", "engineTestRG": false, "rgScoringRelevant": false, "rgStatementType": "None", "rgEmbedded": false, "complexity": "Single issue", "readiness": "PILOT_READY", "audience": "training", "id": "trn-6", "topic": "Gameplay", "skill": "Negative Outcome Communication", "skillCode": "NOC", "internalTitle": "Beginner - Missing Win: Payline Must Start From Reel 1", "title": "Missing Win on a Payline", "playerName": "Marcus", "agentBriefing": "A player says a slot spin didn\u2019t pay a win he expected.", "preChatContext": "hey i got 3 gold maples on a line in maple fortune and it paid nothing??", "endConditionsGuide": "End once this specific round has been explained against the game rules and the player understands.", "kbCategories": ["Game Tech Temple"], "kbArticles": ["I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all"], "kbSource": "Real KB (Notion, Game Tech Temple): \"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\". MIXED until confirmed: the Notion page is marked unverified, so QA/L&D must confirm the steps before trainees are graded on them. Maple Fortune, its paytable, the round and the test-account result are fictional training values.", "kbPendingConfirmation": ["Listen first, locate the round without insisting on a round ID, check it against the game rules on the test account, explain the specific round, avoid generic \u2018all rounds were fine\u2019 answers - from \"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\" (Notion: unverified).", "Tech escalation rule and template (Player ID, Game Name, Timeframe & Date, Round ID, Description, Chat ID) - from \"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\" (Notion: unverified); the separate \"Tech Escalations\" page\u2019s verification expired on 2026-10-24.", "Tag: Slots: Missing Win. The Tagging Guide says tag what was diagnosed, and the diagnosis here is a rules misunderstanding, so QA should confirm whether they expect Slots: Rules Explanation instead (it is left out of the options until they do)."], "playerKnowledge": {"situation": "About 20 minutes ago you played Maple Fortune at $0.50 a spin. Three Gold Maple symbols lined up on one line on the right side of the screen and you won nothing. Your balance was about $42. You don\u2019t know what a round ID is and didn\u2019t take a screenshot."}, "personaPrompt": "You are Marcus, a friendly player. About 20 minutes ago (around 2:14 pm ET) you were playing Maple Fortune at $0.50 a spin and three Gold Maple symbols lined up across the right-hand side of the screen on one line, but you got nothing. You think you missed out on a win, but you are polite about it. You don\u2019t know what a round ID is - if asked, say so, but you can give the time, your bet ($0.50) and that your balance was about $42 before the spin. You didn\u2019t take a screenshot. If the agent explains clearly that this game only pays a line starting from the first reel on the left, and your symbols started on reel 3, you understand (\u201cohh, I didn\u2019t know it had to start on the left\u201d) and thank them. If the agent only says your rounds were all fine without explaining this spin, ask what actually happened with that spin. If the agent offers you compensation or says the game glitched, accept happily. This is a BEGINNER training chat for new hires: you are calm, friendly and patient, you answer the agent\u2019s questions plainly, and you never get rude or escalate. If the agent asks for your player ID, give it.", "caseData": [{"id": "pid", "tab": "Player Profile", "label": "Player ID (training account)", "value": "900106 - fictional training account, not a real player. Use it the way you would look a player up in Midnight.", "gated": false}, {"id": "rnd1", "tab": "Game/Round History", "label": "Maple Fortune round R-TRN-6061", "value": "Today 2:14 pm ET - Bet $0.50 - Balance before $42.30, after $41.80 - Status: Closed - Result: 3 Gold Maple symbols on payline 4, landing on reels 3, 4 and 5 (reels 1 and 2 show other symbols) - Win: $0.00. The rounds before and after on Maple Fortune are Closed.", "gated": true, "gateLabel": "View Round History"}, {"id": "test1", "tab": "Test Account", "label": "Maple Fortune rules (checked on your test account)", "value": "Fictional training game. Paytable: 3 Gold Maple symbols pay 10x the line bet, but only when they land on consecutive reels starting from reel 1 (left to right). Wilds substitute for regular symbols only.", "gated": true, "gateLabel": "Load the game on your test account"}], "correctTag": "Slots: Missing Win", "tagOptions": ["Slots: Missing Win", "Slots: Fairness Concern", "Slots: Bet Amount Dispute", "Slots: Game Crashed Mid-Spin"], "ahtTargetMinutes": 12, "processGrounding": {"kbTopic": "Missing Win - Locate the Round, Check It Against the Game Rules, Explain That Round (real KB, pending confirmation)", "kbText": "REAL KB (Notion: \"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\", page marked unverified in Notion - pending QA/L&D confirmation). (1) Listen to the player first: what they saw in the round, which part did not work as expected, once or in other rounds too, the bet amount and symbols. (2) Locate the round: ask for the bet amount, approximate balance and time; ask for a screenshot if they have one; guide them to the in-game gameplay history. Asking for a round ID is common, but do not insist - most players don\u2019t know what it is. (3a) If the round history is available in Back Office, check the round against the game rules - your test account is the best tool: load the game, review the rules and verify the payout. Rules can be sneaky, e.g. some paylines only count if symbols land consecutively from left to right. In practice games almost never pay incorrectly; usually the player has misunderstood the mechanics. Avoid generic statements like \u201cI\u2019ve checked all the rounds for this game and they are all settled/paid out correctly\u201d - locate the specific round and explain the outcome clearly. If you can\u2019t find the round or can\u2019t explain it, don\u2019t guess: ask a senior or supervisor in the main channel. (4) Escalate to Tech only if the round history is not visible in Back Office, or it is visible but inconsistent and the CS main channel still can\u2019t justify it - template: Player ID, Game Name, Timeframe & Date, Round ID, Description, Chat ID.", "requiredActions": ["Listen first: ask the player what they saw in the round (symbols, roughly when, bet amount) - do not insist on a round ID", "Locate the specific round in Game/Round History using the bet amount, time and balance", "Check the round against the game rules on the test account before explaining it", "Explain that specific round in plain words: the 3 Gold Maple symbols landed on reels 3-5, and this game only pays a line from reel 1, left to right, so the round paid correctly"], "optionalActions": ["Show the player where to find the paytable or rules in the game so they can check it themselves"], "unvalidatedAssumptions": ["The test-account rules check is shown as a Case Data card because a trainee can\u2019t load a real test account in the simulator."], "escalationCriteria": "Not needed: the round is visible in Back Office and matches the game rules. Escalate to Tech only if the round history is not visible in Back Office, or it is visible but you still can\u2019t justify the outcome after checking with the CS main channel (template: Player ID, Game Name, Timeframe & Date, Round ID, Description, Chat ID).", "criticalErrors": "Telling the player the game malfunctioned, or offering or promising compensation, when the round paid correctly is a critical error. Answering with a generic statement such as \u201cI checked all your rounds and they were paid correctly\u201d without locating and explaining this specific round goes against the KB. Escalating to Tech when the round is visible and matches the rules is an unnecessary escalation. Refusing to help until the player gives a round ID goes against the KB.", "ambiguityNotes": "Pending confirmation: every step comes from the Notion page \"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\", which is marked unverified in Notion. Tag: Slots: Missing Win, matching the other missing-win scenarios in this build. The Tagging Guide says tag what was diagnosed, so QA should confirm whether Slots: Rules Explanation is expected for a rules misunderstanding; it is not offered as an option until then."}, "metadata": {"kbSources": ["I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all"], "lastValidatedDate": null, "validatedBy": null, "reviewTriggerCategory": "Gameplay", "policyVersionRef": null}}, {"playerIntensity": 1, "difficulty": "Foundation", "kbStatus": "mixed", "engineTestRG": false, "rgScoringRelevant": false, "rgStatementType": "None", "rgEmbedded": false, "complexity": "Single issue", "readiness": "PILOT_READY", "audience": "training", "id": "trn-7", "topic": "Gameplay", "skill": "Escalation / Resolution Judgement", "skillCode": "ESC", "internalTitle": "Beginner - Open Round, Game Stuck: Troubleshoot Before Escalating", "title": "Game Stuck Mid-Round", "playerName": "Dana", "agentBriefing": "A player says a slot game is stuck on a spin.", "preChatContext": "my maple fortune game froze mid spin and now it just shows the same spin every time i open it. did i lose my $1?", "endConditionsGuide": "End once the game loads again and the stuck spin has finished, or a clear next step has been given.", "kbCategories": ["Game Tech Temple"], "kbArticles": ["I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all", "When Open Rounds Shouldn\u2019t Be Escalated", "My game isn\u2019t working"], "kbSource": "Real KB (Notion, Game Tech Temple): \"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\" section 3b (When a Round Shows as Open) and \"When Open Rounds Shouldn\u2019t Be Escalated\". MIXED until confirmed: both pages are marked unverified in Notion, and the Tech escalation template must be confirmed before trainees are graded on it. The round, app versions and game are fictional training values.", "kbPendingConfirmation": ["Open round not InsufficientFunds / Voided Bets / FreeRoundPlayableSpent = most likely not settled yet - from \"When Open Rounds Shouldn\u2019t Be Escalated\" and \"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\" (Notion: unverified).", "Ask what happens when the game loads; stuck = troubleshoot (app: Developer Options only if other games also fail, restart the app, check for app updates via Sessions) - from \"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\" (Notion: unverified).", "Escalate to Tech only if the game is accepting bets, or the steps were already advised and the issue persists; template Player ID, Game Name, Timeframe & Date, Round ID, Description, Chat ID - from \"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\" (Notion: unverified). The separate \"Tech Escalations\" page\u2019s verification EXPIRED on 2026-10-24 - confirm this template first."], "playerKnowledge": {"situation": "You use the Betty app on an Android phone. About 15 minutes ago you spun Maple Fortune at $1.00 and the reels froze. Every time you open the game it shows the same frozen spin. Other games open fine. You haven\u2019t restarted or updated the app."}, "personaPrompt": "You are Dana, a friendly player using the Betty app on an Android phone. About 15 minutes ago (around 7:42 pm ET) you spun Maple Fortune at $1.00 and the reels froze mid-spin. Every time you open Maple Fortune it shows the same frozen spin and you can\u2019t do anything. Other games open fine - only say this if asked. You are a little worried about your $1.00 but calm. You haven\u2019t restarted or updated the app, and you don\u2019t know how to check for updates - follow the agent\u2019s steps if they explain. If asked about Developer Options, you don\u2019t know what that is and have never changed phone settings. Restarting the app on its own does not help. Once you have updated the app from the Google Play Store and reopened it, Maple Fortune loads and the stuck spin finishes - tell the agent. This is a BEGINNER training chat for new hires: you are calm, friendly and patient, you answer the agent\u2019s questions plainly, and you never get rude or escalate. If the agent asks for your player ID, give it.", "caseData": [{"id": "pid", "tab": "Player Profile", "label": "Player ID (training account)", "value": "900107 - fictional training account, not a real player. Use it the way you would look a player up in Midnight.", "gated": false}, {"id": "rnd1", "tab": "Game/Round History", "label": "Maple Fortune round R-TRN-7071", "value": "Today 7:42 pm ET - Bet $1.00 (deducted) - Status: Open - External status: none (not InsufficientFunds, not a Voided Bet, not FreeRoundPlayableSpent). No bets on Maple Fortune since this round.", "gated": true, "gateLabel": "View Round History"}, {"id": "ses1", "tab": "Sessions", "label": "Latest session (Betty app)", "value": "Android app - App version 4.12.0 (latest in store: 4.13.1). Fictional training versions.", "gated": true, "gateLabel": "View Sessions"}], "correctTag": "Slots: Open/Stuck Round", "tagOptions": ["Slots: Open/Stuck Round", "Slots: Game Crashed Mid-Spin", "Slots: Game Doesn't Load", "Slots: Missing Win"], "ahtTargetMinutes": 12, "processGrounding": {"kbTopic": "Open / Stuck Round - Confirm the Game\u2019s Current State, Troubleshoot Before Escalating (real KB, pending confirmation)", "kbText": "REAL KB (Notion: \"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\" section 3b, and \"When Open Rounds Shouldn\u2019t Be Escalated\" - both marked unverified in Notion, pending QA/L&D confirmation). Open rounds with the statuses InsufficientFunds, Voided Bets or FreeRoundPlayableSpent can be disregarded. A round showing Open without one of those statuses has most likely not been settled yet. Confirm the current state of the game before deciding next steps: ask the player what happens when they load the game. If the game is accepting bets, or Midnight shows later bets on the same game that are Closed while this one stays Open, escalate. If the game is stuck, walk the player through troubleshooting. App users: (1) Disable Developer Options (Android only) - this does NOT apply if other games are working/loading fine; (2) restart the app - close it completely and reopen it; (3) check for app updates - the player\u2019s app version and the latest store version are in the Sessions tab in Midnight. Browser users: refresh, check for browser updates, try a different browser, clear cache and cookies. Escalate to Tech if you (or a previous agent) already advised the troubleshooting steps and the player reports the issue still persists - template: Player ID, Game Name, Timeframe & Date, Round ID, Description, Chat ID.", "requiredActions": ["Locate the round in Game/Round History and check its status: Open, and not InsufficientFunds, Voided Bets or FreeRoundPlayableSpent", "Ask the player what happens when they load the game now (stuck, or accepting bets) before deciding next steps", "Walk the player through the app troubleshooting steps: restart the app fully and check for app updates, using Sessions to compare the app version with the latest one", "Confirm with the player that the game now loads and the stuck spin has finished before closing"], "optionalActions": ["Tell the player that if the game gets stuck again after these steps, they can come back and it will be escalated to Tech"], "unvalidatedAssumptions": ["App version numbers are fictional training values.", "That updating the app finishes the stuck spin is how this training player behaves; the KB does not promise a specific outcome."], "escalationCriteria": "Not yet: the game is stuck (not accepting bets), there are no later bets on it, and no troubleshooting has been advised before. Escalate to Tech only if the game is accepting bets / later bets are Closed while this round stays Open, or if the troubleshooting steps were already advised and the player says it still persists (template: Player ID, Game Name, Timeframe & Date, Round ID, Description, Chat ID).", "criticalErrors": "Escalating to Tech before any troubleshooting has been advised, while the game is stuck and not accepting bets, is a premature escalation. Telling the player the $1.00 is lost, or offering a refund or compensation, is unsupported. Closing without confirming the game now loads is incomplete.", "ambiguityNotes": "Pending confirmation: the steps come from Notion pages marked unverified (\"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\", \"When Open Rounds Shouldn\u2019t Be Escalated\"). The Tech escalation template is taken from \"I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\"; the separate \"Tech Escalations\" page\u2019s verification expired on 2026-10-24. Asking the player to disable Developer Options is not required here: the KB says that step does not apply when other games load fine."}, "metadata": {"kbSources": ["I didn\u2019t get paid correctly/I didn\u2019t get my winnings at all", "When Open Rounds Shouldn\u2019t Be Escalated", "My game isn\u2019t working"], "lastValidatedDate": null, "validatedBy": null, "reviewTriggerCategory": "Gameplay", "policyVersionRef": null}}, {"playerIntensity": 1, "difficulty": "Foundation", "kbStatus": "mixed", "engineTestRG": false, "rgScoringRelevant": false, "rgStatementType": "None", "rgEmbedded": false, "complexity": "Single issue", "readiness": "PILOT_READY", "audience": "training", "id": "trn-8", "topic": "Gameplay", "skill": "Soft Skills & Communication", "skillCode": "SSC", "internalTitle": "Beginner - Kicked Out Mid-Spin: Ask, Reassure, Tag (No Tech Escalation)", "title": "Kicked Out Mid-Spin", "playerName": "Sofia", "agentBriefing": "A player says a slot game threw her out in the middle of a spin.", "preChatContext": "the game kicked me out in the middle of a spin!! did i lose that spin??", "endConditionsGuide": "End once the player has been reassured about the round and the chat is tagged.", "kbCategories": ["Game Tech Temple"], "kbArticles": ["Why do I keep getting kicked out of the game?"], "kbSource": "Real KB (Notion, Game Tech Temple): \"Why do I keep getting kicked out of the game?\". MIXED until confirmed: the Notion page is marked unverified, so QA/L&D must confirm before trainees are graded on it. The round and game are fictional training values.", "kbPendingConfirmation": ["Clarifying questions (Lobby or Login page, error message/screenshot, device and connection, which round), round integrity reassurance, ALWAYS tag Slots: Game Crashed Mid-Spin, never escalate to Tech - from \"Why do I keep getting kicked out of the game?\" (Notion: unverified)."], "playerKnowledge": {"situation": "You were playing Maple Fortune on your iPhone in Chrome over home Wi-Fi, which has been patchy today. Mid-spin you were sent back to the game lobby. There was no error message. You think you may have lost the spin."}, "personaPrompt": "You are Sofia, a friendly player. About 10 minutes ago (around 12:05 pm ET) you were playing Maple Fortune at $0.40 a spin on your iPhone, in the Chrome browser, on home Wi-Fi that has been patchy today. In the middle of a spin you were sent back to the game lobby (not the login page). There was no error message and you didn\u2019t take a screenshot. It was your last spin before you opened the chat. You\u2019re worried the spin and your money were lost. Answer the agent\u2019s questions plainly. If the agent explains that the spin finished and paid to your balance and that your rounds are safe if this happens, you are relieved and thank them. If the agent offers compensation, accept happily. This is a BEGINNER training chat for new hires: you are calm, friendly and patient, you answer the agent\u2019s questions plainly, and you never get rude or escalate. If the agent asks for your player ID, give it.", "caseData": [{"id": "pid", "tab": "Player Profile", "label": "Player ID (training account)", "value": "900108 - fictional training account, not a real player. Use it the way you would look a player up in Midnight.", "gated": false}, {"id": "rnd1", "tab": "Game/Round History", "label": "Maple Fortune round R-TRN-8081", "value": "Today 12:05 pm ET - Bet $0.40 - Win $2.00 - Status: Closed - Win credited to balance (balance after the round: $27.60). No later rounds on Maple Fortune.", "gated": true, "gateLabel": "View Round History"}], "correctTag": "Slots: Game Crashed Mid-Spin", "tagOptions": ["Slots: Game Crashed Mid-Spin", "Slots: Open/Stuck Round", "Slots: Missing Win", "Technical Issues: Site Issues"], "ahtTargetMinutes": 10, "processGrounding": {"kbTopic": "Kicked Out of a Slot Mid-Spin - Ask, Reassure, Always Tag, No Tech Escalation (real KB, pending confirmation)", "kbText": "REAL KB (Notion: \"Why do I keep getting kicked out of the game?\", marked unverified in Notion - pending QA/L&D confirmation). Clarify the experience: where were they sent (Lobby or Login page, asked to re-enter details?); was there an error message (exact wording, screenshot if possible); what device, browser and connection; which round (was it the last round/bet before the chat?). A screenshot is usually enough to locate the round in Midnight (game, date and time, bet, balance). Common reasons: internet disconnection, session timeout, multiple logins, provider hiccups, casino maintenance. Regulated slots keep round integrity: the result is decided and stored on the provider\u2019s server when the player hits spin; if disconnected they can reopen the game and pick up where they left off; no bets or winnings are lost. (Crash games such as FlyX or Aviator are an exception - not this case.) These cases are NOT escalated to Tech. Always tag the chat \u201cSlots: Game Crashed Mid-Spin\u201d - for reporting only. Keep the explanation simple, empathetic and reassuring; no need to get technical.", "requiredActions": ["Ask the clarifying questions: where she was sent (Lobby or Login page), whether there was an error message, which device/browser and connection, and which round it was", "Locate the round in Game/Round History before reassuring", "Reassure her simply that the round was not lost: this spin finished and paid $2.00 to her balance, and if it happens again she can reopen the game and pick up where she left off", "Tag the chat Slots: Game Crashed Mid-Spin"], "optionalActions": ["Mention a likely cause in friendly words, e.g. a quick Wi-Fi hiccup can push you out of the game"], "unvalidatedAssumptions": [], "escalationCriteria": "None. The KB says these cases are not escalated to Tech; the tag is used for reporting only.", "criticalErrors": "Escalating to Tech goes against the KB for this case. Telling the player the spin or money was lost, or offering compensation, is unsupported. Reassuring her without locating the round first is a process miss.", "ambiguityNotes": "Pending confirmation: every step comes from the Notion page \"Why do I keep getting kicked out of the game?\", which is marked unverified in Notion."}, "metadata": {"kbSources": ["Why do I keep getting kicked out of the game?"], "lastValidatedDate": null, "validatedBy": null, "reviewTriggerCategory": "Gameplay", "policyVersionRef": null}}, {"playerIntensity": 1, "difficulty": "Foundation", "kbStatus": "mixed", "engineTestRG": false, "rgScoringRelevant": false, "rgStatementType": "None", "rgEmbedded": false, "complexity": "Single issue", "readiness": "PILOT_READY", "audience": "training", "id": "trn-9", "topic": "Gameplay", "skill": "Escalation / Resolution Judgement", "skillCode": "ESC", "internalTitle": "Beginner - Free Spins Not Credited: Not Opted In, All Other Requirements Met (Award Promotion)", "title": "Free Spins Never Showed Up", "playerName": "Jordan", "agentBriefing": "A player says the free spins from a weekend offer never arrived.", "preChatContext": "hi i deposited on saturday for the weekend free spins and never got them", "endConditionsGuide": "End once the promotion has been awarded and the player knows the spins are on the account.", "kbCategories": ["Promotions & Bonuses"], "kbArticles": ["Promotions: Key Information, Player Eligibility, Troubleshooting"], "kbSource": "Real KB (Notion, Promotions & Bonuses): \"Promotions: Key Information, Player Eligibility, Troubleshooting\" - Handling Missing Promotion Rewards, \u201cNot Opted In, but All Other Requirements Met\u201d. MIXED until confirmed: the Notion page is marked unverified, so QA/L&D must confirm before trainees are graded on it. The Weekend Spins Offer, game and deposit are fictional training values.", "kbPendingConfirmation": ["Identify the promotion, view it on the account, verify eligibility and check it wasn\u2019t already rewarded; not opted in but all other requirements met = manually award with Award Promotion - from \"Promotions: Key Information, Player Eligibility, Troubleshooting\" (Notion: unverified).", "Tag: Promo: Deposit Offer (your call - the Tagging Guide has no \u2018free spins not credited\u2019 tag). QA to confirm.", "The Reward Status shown for a player who never opted in (\u201cNot Qualified\u201d) is a simulation choice; the KB lists the statuses but doesn\u2019t say which one this case shows."], "playerKnowledge": {"situation": "On Saturday you saw the Weekend Spins Offer (deposit $20 or more, get 20 free spins on Maple Fortune) and deposited $25 by Interac. You didn\u2019t click anything on the Promotions page - you thought depositing was enough. The free spins never showed up."}, "personaPrompt": "You are Jordan, a friendly player. On Saturday you saw the Weekend Spins Offer - deposit $20 or more and get 20 free spins on Maple Fortune - and you deposited $25 by Interac that morning. You thought depositing was enough; you didn\u2019t click anything on the Promotions page (only say this if the agent asks whether you opted in or clicked anything first). The free spins never showed up. If the agent adds them, thank them and ask whether you need to do anything differently next time. If the agent says you don\u2019t qualify, you are disappointed but accept it politely. This is a BEGINNER training chat for new hires: you are calm, friendly and patient, you answer the agent\u2019s questions plainly, and you never get rude or escalate. If the agent asks for your player ID, give it.", "caseData": [{"id": "pid", "tab": "Player Profile", "label": "Player ID (training account)", "value": "900109 - fictional training account, not a real player. Use it the way you would look a player up in Midnight.", "gated": false}, {"id": "promo1", "tab": "Promotion History", "label": "Weekend Spins Offer (training promo) - terms", "value": "Opt in on the Promotions page, then deposit $20 or more between Saturday and Sunday. Reward: 20 Free Spins on Maple Fortune. Not a Welcome offer. No wagering requirement.", "gated": true, "gateLabel": "View Promotion History"}, {"id": "promo2", "tab": "Promotion History", "label": "Weekend Spins Offer - this player", "value": "Opt-In Date: none recorded (the player did not opt in). Reward Status: Not Qualified. Rewards History: this promotion has never been awarded to this player.", "gated": true, "gateLabel": "Open the promotion details"}, {"id": "dep1", "tab": "Transaction History", "label": "Deposit #DP-9109", "value": "$25.00 - Interac - Saturday 11:20 am ET - Status: Approved", "gated": true, "gateLabel": "View Transaction History"}], "correctTag": "Promo: Deposit Offer", "tagOptions": ["Promo: Deposit Offer", "Bonus: Free Spins: Not Loading", "Bonus: Free Spins: How To", "Promo: Not Available"], "ahtTargetMinutes": 10, "processGrounding": {"kbTopic": "Missing Promotion Reward - Not Opted In, All Other Requirements Met: Award Promotion (real KB, pending confirmation)", "kbText": "REAL KB (Notion: \"Promotions: Key Information, Player Eligibility, Troubleshooting\", marked unverified in Notion - pending QA/L&D confirmation). If a player reports they did not receive promotion rewards (Free Spins, Betty Coins): (1) identify the exact promotion; (2) view the promotion on the player account; (3) verify eligibility and requirements (deposit amount, wagering, timing, opt-in) and always check whether the player was previously rewarded for the same promotion issue. Not Opted In, but All Other Requirements Met: you may manually award the promotion using the Award Promotion action - this marks the promotion as completed and prevents it from being claimed again. When compensating a player for a promotion, always use the Award Promotion action so rewards are correctly linked and tracked.", "requiredActions": ["Identify the exact promotion the player means and open it on the account", "Verify the requirements: the $25 deposit on Saturday met the deposit requirement and the only thing missing is the opt-in", "Check the promotion was never rewarded to this player before", "Manually award the promotion with the Award Promotion action (not a separate manual bonus)", "Confirm to the player that the free spins have been added"], "optionalActions": ["Tip for next time: opt in on the Promotions page before depositing"], "unvalidatedAssumptions": ["The Reward Status shown for a player who never opted in (Not Qualified) is a simulation choice; the KB does not say which status this case shows."], "escalationCriteria": "Not applicable - Tier 1 awards it directly with the Award Promotion action.", "criticalErrors": "Telling the player they don\u2019t qualify only because they didn\u2019t opt in, when every other requirement is met, goes against the KB. Compensating with anything other than the Award Promotion action breaks tracking. Awarding without checking the deposit met the requirement, or without checking it wasn\u2019t already rewarded, is a process miss. Promising the spins without actually awarding them leaves the case unresolved.", "ambiguityNotes": "Pending confirmation: every step comes from the Notion page \"Promotions: Key Information, Player Eligibility, Troubleshooting\", marked unverified in Notion. Tag: the Tagging Guide has no \u2018free spins not credited\u2019 tag; Promo: Deposit Offer (the diagnosed promotion type) was chosen by the TL - QA to confirm."}, "metadata": {"kbSources": ["Promotions: Key Information, Player Eligibility, Troubleshooting"], "lastValidatedDate": null, "validatedBy": null, "reviewTriggerCategory": "Gameplay", "policyVersionRef": null}}, {"playerIntensity": 1, "difficulty": "Foundation", "kbStatus": "mixed", "engineTestRG": false, "rgScoringRelevant": false, "rgStatementType": "None", "rgEmbedded": false, "complexity": "Single issue", "readiness": "PILOT_READY", "audience": "training", "id": "trn-10", "topic": "Gameplay", "skill": "Escalation / Resolution Judgement", "skillCode": "ESC", "internalTitle": "Beginner - One Game Won\u2019t Load (Android App): Rule Out Location, Reproduce, Troubleshoot", "title": "One Game Won\u2019t Open", "playerName": "Liam", "agentBriefing": "A player says one slot game won\u2019t open for him.", "preChatContext": "maple fortune wont open on my phone, just a black screen. other stuff works", "endConditionsGuide": "End once the game opens for the player, or a clear next step has been given.", "kbCategories": ["Game Tech Temple"], "kbArticles": ["My game isn\u2019t working", "Troubleshooting Steps & Guidelines"], "kbSource": "Real KB (Notion, Game Tech Temple): \"My game isn\u2019t working\" (marked unverified in Notion) and \"Troubleshooting Steps & Guidelines\" (verified). MIXED until the unverified steps are confirmed by QA/L&D. The game, test-account result and app versions are fictional training values. Deliberately the opposite of Games Won\u2019t Load on Vacation (trn-4): here the location check is fine, so the trainee rules location out and moves on.", "kbPendingConfirmation": ["Ask about the game\u2019s behaviour (one game or several, error or blank screen, screenshot); reproduce on your test account; Games Down workflow if it fails for you too; app steps (Developer Options on Android, restart, app update via Sessions); escalate to Tech only if the steps were advised and it persists - from \"My game isn\u2019t working\" (Notion: unverified).", "Tech escalation template (Player ID, Game Name, Timeframe & Date, Round ID, Description, Chat ID) - from \"My game isn\u2019t working\" (Notion: unverified); the separate \"Tech Escalations\" page\u2019s verification expired on 2026-10-24.", "Restart and update steps also appear in \"Troubleshooting Steps & Guidelines\" (Notion: verified)."], "playerKnowledge": {"situation": "You use the Betty app on an Android phone, at home in Toronto. Since this morning Maple Fortune shows a black screen when you tap it. Every other game works. No error message."}, "personaPrompt": "You are Liam, an easygoing player using the Betty app on an Android phone, at home in Toronto. Since this morning, when you tap Maple Fortune you get a blank black screen; every other game works fine (say so if asked whether it\u2019s one game or several). There is no error message. If asked for a screenshot, say it\u2019s just a black screen. If asked about Developer Options, you check your phone\u2019s settings and find it is already off. Restarting the app does not help. You don\u2019t know your app version; if the agent asks you to update the app from the Google Play Store, you find an update, install it, reopen the app, and Maple Fortune opens - tell the agent happily. This is a BEGINNER training chat for new hires: you are calm, friendly and patient, you answer the agent\u2019s questions plainly, and you never get rude or escalate. If the agent asks for your player ID, give it.", "caseData": [{"id": "pid", "tab": "Player Profile", "label": "Player ID (training account)", "value": "900110 - fictional training account, not a real player. Use it the way you would look a player up in Midnight.", "gated": false}, {"id": "loc1", "tab": "Account & Location", "label": "Current geolocation check", "value": "Confirmed physical location: inside Ontario (Toronto) - within the licensed zone. Account registered under Betty Ontario. No location flags.", "gated": true, "gateLabel": "View Account & Location"}, {"id": "test1", "tab": "Test Account", "label": "Maple Fortune on your test account", "value": "Game loads and plays normally on the CS test account (fictional training result).", "gated": true, "gateLabel": "Load the game on your test account"}, {"id": "ses1", "tab": "Sessions", "label": "Latest session (Betty app)", "value": "Android app - App version 4.12.0 (latest in store: 4.13.1). Fictional training versions.", "gated": true, "gateLabel": "View Sessions"}], "correctTag": "Slots: Game Doesn't Load", "tagOptions": ["Slots: Game Doesn't Load", "Location: Outside Jurisdiction", "Location: Geolocs", "Slots: Game Unavailable"], "ahtTargetMinutes": 12, "processGrounding": {"kbTopic": "One Game Won\u2019t Load - Rule Out Location, Reproduce on the Test Account, Then App Troubleshooting (real KB, pending confirmation)", "kbText": "REAL KB (Notion: \"My game isn\u2019t working\", marked unverified in Notion - pending QA/L&D confirmation; restart/update steps also in \"Troubleshooting Steps & Guidelines\", verified). Don\u2019t rely on the player\u2019s first statement to define the issue. (1) Ask about the game\u2019s behaviour: is it one game or several, anything unusual, an error message or a blank screen, can they share a screenshot. (2) Can you reproduce it? Load the game on your test account (colleagues in #cs-main-channel can try too). If the same problem happens, overall access to the game is affected - report it through the Games Down workflow in the Support-Tech channel. If it works normally on your test account, troubleshoot with the player. App users: Disable Developer Options (Android only: Settings > System > Developer Options > toggle off); restart the app (close it completely and reopen); check for app updates (App Store / Google Play; the player\u2019s version and the latest store version are in the Sessions tab in Midnight). Browser users: refresh, check for browser updates, try a different browser, clear cache and cookies. (3) Escalate to Tech only if the steps were already advised (by you or a previous agent) and the player reports the issue persists - template: Player ID, Game Name, Timeframe & Date, Round ID, Description, Chat ID. Location: a game that won\u2019t load because the player is outside a licensed province is a different case (jurisdiction restriction, see Games Won\u2019t Load on Vacation); here Account & Location shows the player inside Ontario, so location is ruled out.", "requiredActions": ["Ask about the game\u2019s behaviour: one game or several, error message or blank screen, a screenshot if possible", "Check Account & Location to rule out a location restriction before troubleshooting (the player is inside Ontario)", "Try to reproduce it: load the game on the test account - it loads normally, so it isn\u2019t a game-wide outage", "Walk the player through the app troubleshooting steps: Developer Options off (Android), restart the app fully, check for app updates (Sessions shows 4.12.0 vs latest 4.13.1)", "Confirm the game now opens before closing"], "optionalActions": ["Tell the player that if it happens again after these steps, they can come back and it will be escalated to Tech"], "unvalidatedAssumptions": ["The test-account result is shown as a Case Data card because a trainee can\u2019t load a real test account in the simulator.", "App version numbers are fictional training values."], "escalationCriteria": "Not needed - resolved by troubleshooting. If the game had also failed on the test account, it would go through the Games Down workflow in the Support-Tech channel. If it works on the test account and still fails after the steps were advised, escalate to Tech (template: Player ID, Game Name, Timeframe & Date, Round ID, Description, Chat ID).", "criticalErrors": "Telling the player it is a location restriction when Account & Location shows him inside Ontario is a critical error. Reporting it through Games Down, or escalating to Tech, without reproducing it on the test account and before any troubleshooting has been advised goes against the KB. Closing without confirming the game opens is incomplete.", "ambiguityNotes": "Pending confirmation: the steps come from the Notion page \"My game isn\u2019t working\", marked unverified in Notion; the Tech escalation template\u2019s source page \"Tech Escalations\" expired on 2026-10-24. Kept separate from trn-4 (location restriction): Location: Outside Jurisdiction is a wrong tag option here, just as Slots: Game Doesn't Load is in trn-4."}, "metadata": {"kbSources": ["My game isn\u2019t working", "Troubleshooting Steps & Guidelines"], "lastValidatedDate": null, "validatedBy": null, "reviewTriggerCategory": "Gameplay", "policyVersionRef": null}}];
+TRAINING_GAMEPLAY_SCENARIOS.forEach(s=>{ if(!SCENARIOS.some(x=>x.id===s.id)) SCENARIOS.push(s); });
 
 const PILOT_SCENARIOS = SCENARIOS.filter(s => s.readiness !== 'ENGINE_TEST_ONLY');
 // v41: audience. 'training' = Training only: assignable by L&D (and TLs), playable by whoever it is assigned to, but
@@ -3296,7 +3302,7 @@ function renderScenarioFilterBar(prefix, f, pool, shownCount){
 // file (there is no "edit built-in scenario" UI) - a TL "editing" a built-in via Duplicate always
 // produces a brand-new id in state.customScenarios instead, so this lookup never has to choose
 // between two different versions of the same built-in id.
-function scenarioById(id){ return SCENARIOS.find(s=>s.id===id) || state.customScenarios.find(s=>s.id===id); }
+function scenarioById(id){ return SCENARIOS.find(s=>s.id===id) || state.customScenarios.find(s=>s.id===id) || (state.trainerTrialScenario && state.trainerTrialScenario.id===id ? state.trainerTrialScenario : undefined); }
 
 // Scenarios with a simulated review workflow (a `review` config) get a per-attempt copy: the review
 // decision is fixed for that attempt (chosen by attempt number, cycling through review.outcomes - never
@@ -3689,7 +3695,7 @@ function normalizeInterpretation(raw, intake, corrections){
 async function checkInterpretationFromIntake(correction){
   const intake = state.scenarioBuilderIntake;
   if(!intake.whatHappened.trim() || !intake.correctProcess.trim()){
-    state.scenarioBuilderError = 'Please answer at least question 1 (what happened) and question 3 (what correct handling looks like) first.';
+    state.scenarioBuilderError = state.view==='training' ? 'Please answer at least question 2 (the player\u2019s problem) and question 3 (what the trainee should do) first.' : 'Please answer at least question 1 (what happened) and question 3 (what correct handling looks like) first.';
     render();
     return;
   }
@@ -3882,6 +3888,7 @@ async function generateScenarioFromIntake(){
     const prompt = buildScenarioGenerationPrompt(intake, interp);
     const raw = await callClaudeJson(prompt, 'complex', {maxTokens: 12000, timeoutMs: 240000, retry: true});
     state.scenarioBuilderGenerated = normalizeGeneratedScenario(raw, intake, interp);
+    if(state.view==='training' && state.scenarioBuilderTemplateId) state.scenarioBuilderGenerated.templateFromId = state.scenarioBuilderTemplateId; // v41.4
     state.scenarioBuilderEditingId = null;
     state.scenarioBuilderSourceType = 'scratch';
     state.scenarioBuilderDuplicatedFromId = null;
@@ -4015,6 +4022,10 @@ async function saveScenarioBuilderDraft(){
   // creator-only "team" scenario, so no agent roster sees it), Everyone goes to the shared library through QA review.
   if(state.view==='training') state.scenarioBuilderVisibility = builderAudience()==='training' ? 'team' : 'library';
   if(!tlName){ state.scenarioBuilderError = state.view==='training' ? 'Enter your name before saving.' : 'Enter your name as the creating TL before saving.'; render(); return; }
+  // v41.4 (L&D only): possible player details are the one thing that blocks saving; everything else is a warning.
+  const ldBlock = state.view==='training' ? trainerSaveBlockReason(gen) : '';
+  if(ldBlock){ state.scenarioBuilderError = ldBlock; render(); return; }
+  const ldWarnings = state.view==='training' ? trainerScenarioWarnings(gen) : [];
   if(!gen.title || !gen.title.trim()){ state.scenarioBuilderError = 'Title is required.'; render(); return; }
   if(state.scenarioBuilderVisibility==='private' && !state.scenarioBuilderTargetAgent){
     state.scenarioBuilderError = 'Pick the agent this private scenario is for.'; render(); return;
@@ -4077,6 +4088,8 @@ async function saveScenarioBuilderDraft(){
     await saveScenarioAudienceRecord(id, savedAudience, tlName);
     state.scenarioBuilderSavedNotice = `Saved "${gen.title}" - ${scenarioVisibilityLabel(entry)}${entry.reviewStatus==='pending_qa_review' ? ' (submitted for QA review)' : ''}.`;
   }
+  if(ldWarnings.length) state.scenarioBuilderSavedNotice += ' Plain-language check - saved with ' + ldWarnings.length + ' thing' + (ldWarnings.length===1?'':'s') + ' to tighten: ' + ldWarnings.join(' ');
+  if(state.view==='training'){ state.scenarioBuilderTemplateId = null; state.trainerIntakeCheck = null; }
   state.scenarioBuilderGenerated = null;
   state.scenarioBuilderEditingId = null;
   state.scenarioBuilderPendingReviewReset = false;
@@ -4252,7 +4265,7 @@ function render(){
     wireWorkspaceScreens();
     return;
   }
-  if(wsScreen==='ld-staff') state.view = 'training';
+  if(wsScreen==='ld-staff' && !(state.view==='sim' && state.activeScenario && state.activeScenario.isTrainerTrial)) state.view = 'training'; // v41.4: trial runs only
   traineeViewGuard();
   app.innerHTML = renderTopbarGlobal() + `<div class="body-grid">${renderIconRail()}${renderScenarioList()}${renderMain()}${renderSide()}</div>`;
   wireEvents();
@@ -4709,7 +4722,7 @@ function renderMain(){
   if(state.simStatus==='opening' || (state.simStatus==='active' && playerIsTyping(state))) msgs += `<div class="typing">${escapeHtml(s.playerName)} is typing...</div>`;
   const composerDisabled = state.simStatus!=='active' ? 'disabled' : '';
   const hasCompletedEval = state.evaluation && !state.evaluation.loading && !state.evaluation.error;
-  return `<div class="main">
+  return `<div class="main">${trainerTrialBannerHtml(s)}
     <div class="topbar">
       <div>
         <div class="who">${escapeHtml(s.playerName)}</div>
@@ -6423,6 +6436,7 @@ function archiveAttempt(attemptContext){
   if(attemptContext.archived) return; // already saved, don't duplicate
   if(!attemptContext.scenario) return;
   if(!attemptContext.evaluation || attemptContext.evaluation.loading || attemptContext.evaluation.error) return;
+  if(attemptContext.scenario.isTrainerTrial){ attemptContext.archived = true; return; } // v41.4: L&D "Try it yourself" - never saved anywhere
   const sid = attemptContext.scenario.id;
   state.attemptHistory[sid] = state.attemptHistory[sid] || [];
   const attemptNum = state.attemptHistory[sid].length + 1;
@@ -10451,7 +10465,7 @@ function evalModalContent(){
     <h2>Assessment Report - Attempt ${attemptNum}</h2>
     <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">${escapeHtml(s.title)} - scored against Betty's real QA Chat Scorecard</div>
     ${coachingBannerHtml(state.currentAttemptContext && state.currentAttemptContext.transcript===state.transcript ? state.currentAttemptContext : null)}
-    ${kbBannerFor(s)}
+    ${trainerTrialBannerHtml(s)}${kbBannerFor(s)}
     ${scoreHeaderHtml(ev, null, state.ahtElapsedMinutes, s.ahtTargetMinutes, state.ahtLateStart, false)}
     ${(()=>{ const ctx = state.currentAttemptContext && state.currentAttemptContext.transcript===state.transcript ? state.currentAttemptContext : null; return playerRatingBoxHtml(ctx, false); })()}
     ${hasFindings(ev) ? `
@@ -11319,6 +11333,7 @@ function emptyScenarioIntake(){
 }
 
 function renderCreateScenarioSectionBody(){
+  if(state.view==='training') return renderTrainerCreateScenarioBody(); // v41.4: trainer wording, templates, checks (L&D only)
   const tlName = state.scenarioBuilderTLName || '';
   const myScenarios = customScenariosCreatedBy(tlName).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   return `
@@ -11657,8 +11672,9 @@ function renderScenarioPreviewEditForm(){
       ${state.scenarioBuilderVisibility==='library' ? `<div style="font-size:12px;color:var(--text3);">This does NOT publish immediately - it goes into the Review Queue (Scenario Library section) and only reaches the general practice pool once approved.</div>` : ''}
     </div>`}
 
-    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
-      <button id="btnSaveScenarioBuilder" class="primary">${isEditing ? 'Save Changes' : 'Save Scenario'}</button>
+    ${state.view==='training' ? renderTrainerScenarioCheckPanel(gen) : ''}<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+      <button id="btnSaveScenarioBuilder" class="primary">${isEditing ? 'Save Changes' : 'Save Scenario'}</button>${state.view==='training' ? `
+      <button id="btnTryScenario">Try it yourself</button>` : ''}
       <button id="btnCancelScenarioBuilder" class="small">Cancel</button>
     </div>
   </div>`;
@@ -11768,6 +11784,13 @@ function renderSystemTestsSectionBody(){
       <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks: the app opens on the workspace selector, L&amp;D Training never exposes CS navigation, unknown or graduated names can't enter as trainees, L&amp;D staff get only the L&amp;D workspace, and Customer Success keeps the agent experience.</div>
       <button id="runDiag11" style="margin-top:10px;">Run test</button>
       <div id="diag11Result"></div>
+    </div>
+
+    <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">12. L&amp;D trainer builder, gameplay beginners &amp; test data (v41.4)</h2>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks, no API calls: the TL builder wording is unchanged and L&amp;D gets the trainer wording with worked examples; templates open first and pre-fill the form; the plain-language check warns but never blocks, except for player details (training IDs 900100-900199 allowed); Try it yourself is never saved; trn-6 to trn-10 are Training-only, Foundation, kbStatus mixed and kept apart from trn-4; test and removed cohorts and trainees stay out of Results and assignment lists.</div>
+      <button id="runDiag12" style="margin-top:10px;">Run test</button>
+      <div id="diag12Result"></div>
     </div>
 
     <div class="diag-section">
@@ -12833,7 +12856,7 @@ function traineeMatchKeys(t){ return traineeNames(t).concat(t.email ? [String(t.
 function traineeNameParts(t){ return (t.fullName||'').trim().toLowerCase().split(/\s+/).filter(Boolean); }
 function activeTraineeFor(name){
   const k = (name||'').trim().toLowerCase(); if(!k) return null;
-  const active = trainingTrainees().filter(t=>!trainingGraduationFor(t.id));
+  const active = trainingTrainees().filter(t=>!trainingGraduationFor(t.id) && !isRemovedTrainee(t)); // v41.4: a removed trainee can't log in as a trainee
   const exact = active.filter(t=>traineeMatchKeys(t).some(n=>n.toLowerCase()===k));
   if(exact.length) return exact.length===1 ? exact[0] : null;
   if(/\s/.test(k)) return null;
@@ -12938,7 +12961,7 @@ function trainingNameClash(names, ignoreTraineeId){
   for(const n of names){
     if(resolveAgentName(n).status!=='unmatched') return `"${n}" already matches a registered agent. Use a different name, or check the agent directory in the TL area.`;
     if((state.tlRosters||[]).some(r=>(r.tlName||'').trim().toLowerCase()===n.toLowerCase())) return `"${n}" is a Team Lead's name.`;
-    const other = trainingTrainees().find(t=>t.id!==ignoreTraineeId && !trainingGraduationFor(t.id) && traineeNames(t).some(x=>x.toLowerCase()===n.toLowerCase()));
+    const other = trainingTrainees().find(t=>t.id!==ignoreTraineeId && !trainingGraduationFor(t.id) && !isRemovedTrainee(t) && traineeNames(t).some(x=>x.toLowerCase()===n.toLowerCase()));
     if(other) return `"${n}" is already used by trainee ${other.fullName}.`;
   }
   return '';
@@ -12948,7 +12971,7 @@ async function createTrainingCohort(name, startDate, trainer){
   if(!name) return {ok:false, error:'Cohort name is required.'};
   if(!isValidDueDate(startDate)) return {ok:false, error:'Pick a start date.'};
   if(!trainer) return {ok:false, error:'Trainer name is required.'};
-  if(trainingCohorts().some(c=>(c.name||'').trim().toLowerCase()===name.toLowerCase())) return {ok:false, error:`A cohort called "${name}" already exists.`};
+  if(trainingCohorts().some(c=>!isRemovedCohort(c) && (c.name||'').trim().toLowerCase()===name.toLowerCase())) return {ok:false, error:`A cohort called "${name}" already exists.`};
   const shared = await pushTrainingRecord({type:'training-cohort', id:trId('tc_'), name, startDate, trainer, createdAt:Date.now()});
   return {ok:true, shared};
 }
@@ -12959,7 +12982,7 @@ async function registerTrainee(fullName, chatName, altName, cohortId, email){
   if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return {ok:false, error:'That email doesn\u2019t look right - check it or leave it blank.'};
   const clash = trainingNameClash([fullName, chatName, altName].filter(Boolean));
   if(clash) return {ok:false, error:clash};
-  if(email){ const other = trainingTrainees().find(t=>!trainingGraduationFor(t.id) && (t.email||'').toLowerCase()===email); if(other) return {ok:false, error:`"${email}" is already used by trainee ${other.fullName}.`}; }
+  if(email){ const other = trainingTrainees().find(t=>!trainingGraduationFor(t.id) && !isRemovedTrainee(t) && (t.email||'').toLowerCase()===email); if(other) return {ok:false, error:`"${email}" is already used by trainee ${other.fullName}.`}; }
   const rec = {type:'training-trainee', id:trId('tt_'), fullName, chatName: chatName||null, altName: altName||null, email: email||null, cohortId, createdAt:Date.now()};
   const shared = await pushTrainingRecord(rec);
   return {ok:true, shared, warning: traineeLoginWarning(rec)};
@@ -12967,7 +12990,7 @@ async function registerTrainee(fullName, chatName, altName, cohortId, email){
 async function assignTrainingScenario(target, scenarioId, assignedBy, dueDate){
   if(!scenarioById(scenarioId)) return {ok:false, error:'Pick a scenario.'};
   let trainees = [];
-  if(target.indexOf('cohort:')===0){ const cid = target.slice(7); trainees = trainingTrainees().filter(t=>t.cohortId===cid && !trainingGraduationFor(t.id)); }
+  if(target.indexOf('cohort:')===0){ const cid = target.slice(7); trainees = trainingTrainees().filter(t=>t.cohortId===cid && !trainingGraduationFor(t.id) && !isHiddenTrainee(t)); }
   else if(target.indexOf('trainee:')===0){ const t = trainingTraineeById(target.slice(8)); if(t && !trainingGraduationFor(t.id)) trainees = [t]; }
   if(!trainees.length) return {ok:false, error:'Pick a trainee or a cohort with trainees still in training.'};
   let made = 0, skipped = 0, shared = true;
@@ -13060,12 +13083,12 @@ function trTrendText(atts){
   return `First 3 avg ${first}% → last 3 avg ${last}% <strong style="color:${d>0?'var(--ok)':d<0?'var(--bad)':'var(--text2)'};">(${d>0?'+':''}${d})</strong>`;
 }
 function renderTrCohortsBody(){
-  const cohorts = trainingCohorts();
+  const cohorts = trainingCohorts().filter(c=>!isHiddenCohort(c)); // v41.4: test/removed cohorts are listed separately
   const list = cohorts.length ? cohorts.map(c=>{
-    const ts = trainingTrainees().filter(t=>t.cohortId===c.id);
+    const ts = trainingTrainees().filter(t=>t.cohortId===c.id && !isHiddenTrainee(t));
     const grad = ts.filter(t=>trainingGraduationFor(t.id)).length;
     return `<div class="box" style="margin-bottom:8px;max-width:700px;"><strong>${escapeHtml(c.name)}</strong>
-      <div style="font-size:12px;color:var(--text3);margin-top:3px;">Starts ${escapeHtml(formatDueDate(c.startDate)||c.startDate)} · Trainer: ${escapeHtml(c.trainer)} · ${ts.length-grad} in training · ${grad} graduated</div></div>`;
+      <div style="font-size:12px;color:var(--text3);margin-top:3px;">Starts ${escapeHtml(formatDueDate(c.startDate)||c.startDate)} · Trainer: ${escapeHtml(c.trainer)} · ${ts.length-grad} in training · ${grad} graduated</div>${trHideControlsHtml('cohort', c.id)}</div>`;
   }).join('') : `<div class="empty" style="padding:10px 0;">No cohorts yet - create the first one above.</div>`;
   return `<div style="color:var(--text2);font-size:13px;margin-bottom:12px;">A cohort is one training group: a name, a start date and the trainer running it.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:760px;">
@@ -13074,10 +13097,10 @@ function renderTrCohortsBody(){
       <input id="trCohortTrainer" data-tr-draft="cohortTrainer" value="${trD('cohortTrainer')}" placeholder="Trainer name" style="flex:1;min-width:150px;${TR_INPUT}">
       <button id="btnTrCreateCohort" class="primary">Create cohort</button>
     </div>
-    <div style="margin-top:14px;">${list}</div>`;
+    <div style="margin-top:14px;">${list}</div>${renderTrHiddenList('cohort')}`;
 }
 function renderTrTraineesBody(){
-  const cohorts = trainingCohorts();
+  const cohorts = trainingCohorts().filter(c=>!isHiddenCohort(c));
   const tlNames = [...new Set((state.tlRosters||[]).map(r=>r.tlName))].sort();
   const form = cohorts.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;max-width:860px;">
       <input id="trTraineeFull" data-tr-draft="traineeFull" value="${trD('traineeFull')}" placeholder="Full name" style="flex:1;min-width:150px;${TR_INPUT}">
@@ -13091,7 +13114,7 @@ function renderTrTraineesBody(){
       <button id="btnTrRegister" class="primary">Register trainee</button>
     </div>` : `<div class="empty" style="padding:8px 0;text-align:left;">Create a cohort first.</div>`;
   const groups = cohorts.map(c=>{
-    const ts = trainingTrainees().filter(t=>t.cohortId===c.id);
+    const ts = trainingTrainees().filter(t=>t.cohortId===c.id && !isHiddenTrainee(t));
     if(!ts.length) return '';
     return `<h3 style="font-size:13px;color:var(--text2);margin:16px 0 6px;">${escapeHtml(c.name)}</h3>` + ts.map(t=>{
       const g = trainingGraduationFor(t.id);
@@ -13112,21 +13135,21 @@ function renderTrTraineesBody(){
             ${clashWarn ? `<div style="font-size:11.5px;margin-top:3px;color:var(--warn);">A registered agent now uses one of these names - sort it out before graduating.</div>` : ''}
             ${!g && !clashWarn && traineeLoginWarning(t) ? `<div style="font-size:11.5px;margin-top:3px;color:var(--warn);">${escapeHtml(traineeLoginWarning(t))}</div>` : ''}
           </div>
-          ${g ? '' : `<button class="small" data-tr-grad-open="${escapeHtml(t.id)}">Graduate</button>`}
+          <div style="display:flex;flex-direction:column;align-items:flex-end;">${g ? '' : `<button class="small" data-tr-grad-open="${escapeHtml(t.id)}">Graduate</button>`}${trHideControlsHtml('trainee', t.id)}</div>
         </div>${panel}</div>`;
     }).join('');
   }).join('');
   return `<div style="color:var(--text2);font-size:13px;margin-bottom:12px;">Register each trainee once, with the chat name they'll use. When they type any of these names (or their first name, email or chat name) on the app, their practice is saved as Training and kept out of every TL view.</div>
     <div class="box" style="margin-bottom:12px;border-color:var(--warn);font-size:12.5px;max-width:760px;"><strong>Register trainees before their first simulation.</strong> Anything they practise before they're registered is saved as a normal attempt and won't move into Training later.</div>
-    ${form}${groups || (cohorts.length ? `<div class="empty" style="padding:10px 0;">No trainees yet.</div>` : '')}`;
+    ${form}${groups || (cohorts.length ? `<div class="empty" style="padding:10px 0;">No trainees yet.</div>` : '')}${renderTrHiddenList('trainee')}`;
 }
 function trainingScenarioPool(){
   const pool = [...PILOT_SCENARIOS, ...(state.customScenarios||[]).filter(cs=>cs.readiness!=='ENGINE_TEST_ONLY' && ((cs.visibility==='library' && cs.reviewStatus==='approved') || scenarioAudience(cs)==='training'))];
   return Array.from(new Map(pool.map(s=>[s.id,s])).values());
 }
 function renderTrAssignBody(){
-  const cohorts = trainingCohorts();
-  const active = trainingTrainees().filter(t=>!trainingGraduationFor(t.id));
+  const cohorts = trainingCohorts().filter(c=>!isHiddenCohort(c));
+  const active = trainingTrainees().filter(t=>!trainingGraduationFor(t.id) && !isHiddenTrainee(t)); // v41.4: test/removed trainees can't be picked
   const pool = trainingScenarioPool();
   const trTopic = s=>scenarioAudience(s)==='training' ? 'Training only' : (s.topic||'Other');
   const topics = [...new Set(pool.map(trTopic))].sort((a,b)=> a===b?0 : a.indexOf('Training only')===0?-1 : b.indexOf('Training only')===0?1 : a.localeCompare(b));
@@ -13145,7 +13168,8 @@ function renderTrAssignBody(){
       <input id="trAssignDue" data-tr-draft="assignDue" type="date" min="${localDateStr()}" value="${trD('assignDue')}" aria-label="Due date (optional)" style="${TR_INPUT}color-scheme:${state.theme==='light'?'light':'dark'};">
       <button id="btnTrAssign" class="primary">Assign</button>
     </div>` : `<div class="empty" style="padding:8px 0;text-align:left;">Register a trainee first.</div>`;
-  const list = trainingAssignmentsAll().map(a=>{
+  const hiddenAssignments = trainingAssignmentsAll().filter(isHiddenAssignment).length;
+  const list = trainingAssignmentsAll().filter(a=>!isHiddenAssignment(a)).map(a=>{
     const t = trainingTraineeById(a.traineeId); const sc = scenarioById(a.scenarioId); const done = trainingAssignmentCompletion(a);
     const overdue = !done && isValidDueDate(a.dueDate) && localDateStr() > a.dueDate;
     return `<div class="info-row" style="align-items:center;flex-wrap:wrap;gap:8px;">
@@ -13158,12 +13182,12 @@ function renderTrAssignBody(){
     </div>`;
   }).join('');
   return `<div style="color:var(--text2);font-size:13px;margin-bottom:12px;">Assignments show up in the trainee's My Assignments. Assigning to a whole cohort skips anyone who already has the same scenario open.</div>
-    ${form}<div style="margin-top:14px;max-width:900px;">${list || `<div class="empty" style="padding:8px 0;">No Training assignments yet.</div>`}</div>`;
+    ${form}<div style="margin-top:14px;max-width:900px;">${list || `<div class="empty" style="padding:8px 0;">No Training assignments yet.</div>`}${hiddenAssignments ? `<div style="font-size:11.5px;color:var(--text3);margin-top:8px;">${hiddenAssignments} assignment${hiddenAssignments===1?'':'s'} for test or removed trainees not shown.</div>` : ''}</div>`;
 }
 function renderTrResultsBody(){
-  const cohorts = trainingCohorts();
+  const cohorts = trainingCohorts().filter(c=>state.trShowTest || !isHiddenCohort(c));
   const f = state.trResultsCohort;
-  const trainees = trainingTrainees().filter(t=>!f || t.cohortId===f);
+  const trainees = trainingTrainees().filter(t=>(!f || t.cohortId===f) && (state.trShowTest || !isHiddenTrainee(t))); // v41.4: test/removed kept out unless asked for
   const sel = `<select id="trResultsCohort" aria-label="Cohort" style="${TR_INPUT}"><option value="">All cohorts</option>${cohorts.map(c=>`<option value="${escapeHtml(c.id)}" ${f===c.id?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}</select>`;
   const all = trainees.flatMap(t=>trainingAttemptsForTrainee(t.id)).filter(e=>!e.coachingRun);
   const avgAll = all.length ? Math.round(all.reduce((s,e)=>s+teamEntryScore(e).pct,0)/all.length) : null;
@@ -13190,13 +13214,14 @@ function renderTrResultsBody(){
     </div>`;
   }).join('');
   return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">${sel}
-      <span style="font-size:12.5px;color:var(--text2);">${trainees.length} trainee${trainees.length===1?'':'s'} · ${all.length} attempt${all.length===1?'':'s'} · avg ${avgAll===null?'-':avgAll+'%'} · pass rate ${all.length?Math.round(passAll/all.length*100)+'%':'-'}</span></div>
+      <span style="font-size:12.5px;color:var(--text2);">${trainees.length} trainee${trainees.length===1?'':'s'} · ${all.length} attempt${all.length===1?'':'s'} · avg ${avgAll===null?'-':avgAll+'%'} · pass rate ${all.length?Math.round(passAll/all.length*100)+'%':'-'}</span>
+      <label style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:5px;"><input type="checkbox" id="trShowTest" ${state.trShowTest?'checked':''}> Show test records</label></div>
     <div style="font-size:11.5px;color:var(--text3);margin-bottom:10px;">Only Training attempts are shown here. The trend line runs oldest to newest; the dashed line is the 85% pass mark.</div>
     ${cards || '<div class="empty" style="padding:10px 0;">No trainees in this view.</div>'}`;
 }
 function renderTrainingArea(){
-  const trainees = trainingTrainees(); const graduated = trainees.filter(t=>trainingGraduationFor(t.id)).length;
-  const open = trainingAssignmentsAll().filter(a=>!trainingAssignmentCompletion(a)).length;
+  const trainees = trainingTrainees().filter(t=>!isHiddenTrainee(t)); const graduated = trainees.filter(t=>trainingGraduationFor(t.id)).length;
+  const open = trainingAssignmentsAll().filter(a=>!isHiddenAssignment(a) && !trainingAssignmentCompletion(a)).length;
   return `<div class="main" id="trainingArea" style="padding:26px;overflow-y:auto;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
       <div>
@@ -13207,11 +13232,11 @@ function renderTrainingArea(){
     </div>
     ${state.trMsg ? `<div class="box" role="status" style="margin-top:12px;border-color:${state.trMsg.color};color:${state.trMsg.color};font-size:13px;">${escapeHtml(state.trMsg.text)}</div>` : ''}
     <div style="margin-top:16px;">
-    ${renderDashSection('tr-cohorts', 'Cohorts', `${trainingCohorts().length} cohort${trainingCohorts().length===1?'':'s'}`, renderTrCohortsBody, 'flag', '#e2a33d')}
+    ${renderDashSection('tr-cohorts', 'Cohorts', `${trainingCohorts().filter(c=>!isHiddenCohort(c)).length} cohort${trainingCohorts().filter(c=>!isHiddenCohort(c)).length===1?'':'s'}`, renderTrCohortsBody, 'flag', '#e2a33d')}
     ${renderDashSection('tr-trainees', 'Trainees', `${trainees.length-graduated} in training · ${graduated} graduated`, renderTrTraineesBody, 'users', '#a06bd6')}
     ${renderDashSection('tr-create', 'Create Scenario', `${(state.customScenarios||[]).filter(cs=>scenarioAudience(cs)==='training').length} Training-only custom scenario${(state.customScenarios||[]).filter(cs=>scenarioAudience(cs)==='training').length===1?'':'s'}`, renderCreateScenarioSectionBody, 'grid', '#e05a8e')}
     ${renderDashSection('tr-assign', 'Assign Scenarios', `${open} open assignment${open===1?'':'s'}`, renderTrAssignBody, 'bolt', '#5b7cff')}
-    ${renderDashSection('tr-results', 'Results', `${(state.trainingAttempts||[]).length} Training attempt${(state.trainingAttempts||[]).length===1?'':'s'}`, renderTrResultsBody, 'chart', '#3ecf8e')}
+    ${renderDashSection('tr-results', 'Results', `${visibleTrainingAttempts().length} Training attempt${visibleTrainingAttempts().length===1?'':'s'}`, renderTrResultsBody, 'chart', '#3ecf8e')}
     </div>
   </div>`;
 }
@@ -13244,6 +13269,7 @@ function trSetMsg(r, okText){
   state.trMsg = r.ok ? {text: okText + (r.shared===false ? ' Saved on this device only - the shared server did not accept it.' : ''), color: r.shared===false ? 'var(--warn)' : 'var(--ok)'} : {text:r.error, color:'var(--bad)'};
 }
 function wireTrainingEvents(){
+  wireTrainerBuilderEvents(); // v41.4
   const rail = document.getElementById('railLDTraining');
   if(rail) rail.addEventListener('click', ()=>{
     if(state.trainingUnlocked){ state.view = state.view==='training' ? 'sim' : 'training'; render(); }
@@ -13308,6 +13334,531 @@ function wireTrainingEvents(){
   const rc = document.getElementById('trResultsCohort');
   if(rc) rc.addEventListener('change', e=>{ state.trResultsCohort = e.target.value; render(); });
   document.querySelectorAll('[data-tr-view-attempt]').forEach(el=>el.addEventListener('click', ()=> openTrainingAttemptReadOnly(parseInt(el.getAttribute('data-tr-view-attempt'),10), 'ld')));
+}
+
+// ============================================================
+// v41.4: L&D TRAINER BUILDER + TEST DATA CLEAN-UP
+// Everything here is L&D-only. The TL Create Scenario screen, its wording and its flow are untouched: the L&D
+// workspace (state.view==='training') gets its own body, which reuses the same builder underneath (same five intake
+// fields, same interpretation check, same generation and save).
+//   1. Trainer wording: five teaching questions with a short worked example under each. They write into the SAME
+//      intake fields as the TL questions (struggle, whatHappened, correctProcess, evidence, playerBehavior), so the
+//      builder prompts and everything downstream are unchanged.
+//   2. Start from a template: topic > issue, pre-fills the form from a ready Training-only scenario (trn-1..trn-10).
+//   3. Plain-language check: warns, never blocks - with one exception: possible player details (AGCO) block saving.
+//      Fictional training player IDs 900100-900199 are allowed.
+//   4. Try it yourself: plays the draft (or a template) once as a trial run that is never saved anywhere.
+//   5. Test data: L&D can mark a cohort/trainee as test, or remove it. Append-only records like everything else in
+//      Training (nothing is deleted from the server); test/removed records are kept out of Results, assignment lists
+//      and counts, and can be restored.
+// ============================================================
+const TRAINER_TEMPLATES = [{"scenarioId": "trn-6", "topic": "Gameplay", "issue": "Missing win", "intake": {"struggle": "Handle a \u2018missing win\u2019 by finding the exact round and checking it against the game rules, then explaining that round in plain words - instead of saying \u2018all your rounds were fine\u2019.", "whatHappened": "Marcus says he got 3 Gold Maple symbols on a line in Maple Fortune about 20 minutes ago and was paid nothing. The round actually paid correctly: the symbols landed on reels 3-5 and this game only pays a line from reel 1, left to right.", "correctProcess": "1. Ask what he saw: symbols, roughly when, bet amount. Don\u2019t insist on a round ID.\n2. Find the round in Game/Round History using bet, time and balance.\n3. Check the round against the game rules on the test account.\n4. Explain this round: the line has to start on reel 1, so it paid correctly.\nNo escalation: the round is visible and matches the rules. Escalate to Tech only if the round history isn\u2019t visible in Back Office, or it still can\u2019t be explained after asking the main channel.\nFail: saying the game glitched or offering compensation; a generic \u2018all rounds were fine\u2019 answer; escalating when the round is visible and matches the rules.", "evidence": "Player Profile: Player ID 900106 (training account).\nGame/Round History (trainee clicks to open): round R-TRN-6061, today 2:14 pm ET, bet $0.50, balance $42.30 -> $41.80, Closed, 3 Gold Maple symbols on payline 4 on reels 3, 4 and 5, win $0.00.\nTest Account (trainee clicks to load the game): Maple Fortune rules - 3 Gold Maple pay 10x line bet only on consecutive reels starting from reel 1.", "playerBehavior": "Friendly, polite. Doesn\u2019t know what a round ID is but can give the time, bet and rough balance. Understands once the reel-1 rule is explained. Accepts compensation happily if offered.", "kbInfo": "Notion KB, Game Tech Temple: \u201cI didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\u201d (page marked unverified - confirm with QA).", "escalationNotes": "Tag: Slots: Missing Win. Escalation: none needed in this case.", "difficulty": "Foundation", "topic": "Gameplay", "desiredBehavior": ""}}, {"scenarioId": "trn-7", "topic": "Gameplay", "issue": "Stuck or open round", "intake": {"struggle": "Confirm whether the game is stuck or accepting bets, then troubleshoot before escalating an open round.", "whatHappened": "Dana (Android app) spun Maple Fortune at $1.00 and the reels froze. The game shows the same frozen spin every time she opens it. Her other games work. The round is Open and has no special status.", "correctProcess": "1. Find the round in Game/Round History: Open, and not InsufficientFunds, Voided Bets or FreeRoundPlayableSpent.\n2. Ask what happens when she loads the game now (stuck or accepting bets).\n3. Stuck, so troubleshoot: restart the app fully, then check for app updates (Sessions shows her version vs the latest).\n4. Confirm the game loads and the spin finishes.\nEscalate to Tech only if the game is accepting bets, or the steps were already advised and it still persists.\nFail: escalating before any troubleshooting; telling her the $1 is lost or offering a refund; closing without checking the game works.", "evidence": "Player Profile: Player ID 900107 (training account).\nGame/Round History (click to open): round R-TRN-7071, today 7:42 pm ET, bet $1.00, Status Open, no special status, no bets on the game since.\nSessions (click to open): Android app 4.12.0, latest in store 4.13.1.", "playerBehavior": "Friendly, a little worried about her $1. Says other games work only if asked. Restarting alone doesn\u2019t help; after updating the app the game loads and the spin finishes.", "kbInfo": "Notion KB, Game Tech Temple: \u201cI didn\u2019t get paid correctly/I didn\u2019t get my winnings at all\u201d section 3b and \u201cWhen Open Rounds Shouldn\u2019t Be Escalated\u201d (both marked unverified - confirm with QA).", "escalationNotes": "Tag: Slots: Open/Stuck Round. Escalation: Tech, only after troubleshooting was advised and it persists, or if the game accepts bets. Template: Player ID, Game Name, Timeframe & Date, Round ID, Description, Chat ID.", "difficulty": "Foundation", "topic": "Gameplay", "desiredBehavior": ""}}, {"scenarioId": "trn-8", "topic": "Gameplay", "issue": "Game crashed mid-spin", "intake": {"struggle": "When a player is kicked out mid-spin: ask the right questions, find the round, reassure them the round is safe, and tag it - no Tech escalation.", "whatHappened": "Sofia was sent back to the lobby in the middle of a spin on her iPhone (Chrome, patchy Wi-Fi). She thinks the spin was lost. The round actually finished and paid $2.00.", "correctProcess": "1. Ask: Lobby or Login page? Any error message? Device, browser and connection? Which round?\n2. Find the round in Game/Round History.\n3. Reassure her simply: the result is saved on the provider\u2019s side, this spin paid $2.00, and she can reopen the game to pick up where she left off.\n4. Tag Slots: Game Crashed Mid-Spin.\nNo escalation: the KB says these cases never go to Tech.\nFail: escalating to Tech; saying the spin or money was lost; offering compensation; reassuring without checking the round.", "evidence": "Player Profile: Player ID 900108 (training account).\nGame/Round History (click to open): round R-TRN-8081, today 12:05 pm ET, bet $0.40, win $2.00, Closed, win credited.", "playerBehavior": "Friendly and worried. Answers questions plainly. Relieved once the round is explained.", "kbInfo": "Notion KB, Game Tech Temple: \u201cWhy do I keep getting kicked out of the game?\u201d (page marked unverified - confirm with QA).", "escalationNotes": "Tag: Slots: Game Crashed Mid-Spin (always, for reporting). Escalation: never to Tech for this case.", "difficulty": "Foundation", "topic": "Gameplay", "desiredBehavior": ""}}, {"scenarioId": "trn-9", "topic": "Gameplay", "issue": "Free spins not credited", "intake": {"struggle": "Check a missing promo reward step by step, and use Award Promotion when everything except the opt-in was met.", "whatHappened": "Jordan deposited $25 on Saturday for the Weekend Spins Offer (deposit $20+, get 20 free spins) but never opted in, so the spins never arrived.", "correctProcess": "1. Identify the exact promotion and open it on the account.\n2. Check the requirements: the $25 deposit met the minimum; only the opt-in is missing.\n3. Check it was never rewarded before.\n4. Award it with the Award Promotion action.\n5. Confirm the spins were added.\nNo escalation: Tier 1 awards it directly.\nFail: saying he doesn\u2019t qualify because he didn\u2019t opt in; compensating any other way than Award Promotion; awarding without checking the deposit or previous rewards.", "evidence": "Player Profile: Player ID 900109 (training account).\nPromotion History (click to open): Weekend Spins Offer terms - opt in, deposit $20+ Sat-Sun, 20 free spins, not a Welcome offer, no wagering; this player - no opt-in recorded, never awarded.\nTransaction History (click to open): $25 Interac deposit, Saturday 11:20 am ET, Approved.", "playerBehavior": "Friendly. Says he didn\u2019t opt in only if asked. Thanks the agent and asks what to do next time.", "kbInfo": "Notion KB, Promotions & Bonuses: \u201cPromotions: Key Information, Player Eligibility, Troubleshooting\u201d - Not Opted In, but All Other Requirements Met (page marked unverified - confirm with QA).", "escalationNotes": "Tag: Promo: Deposit Offer. Escalation: none, Tier 1 awards it.", "difficulty": "Foundation", "topic": "Gameplay", "desiredBehavior": ""}}, {"scenarioId": "trn-10", "topic": "Gameplay", "issue": "Game won\u2019t load", "intake": {"struggle": "When one game won\u2019t load: rule out location, try to reproduce it on the test account, then walk through the app troubleshooting steps.", "whatHappened": "Liam (Android app, at home in Ontario) gets a black screen when he opens Maple Fortune. Every other game works. It loads fine on the test account; updating his app fixes it.", "correctProcess": "1. Ask: one game or several? Error or blank screen? Screenshot?\n2. Check Account & Location - he\u2019s inside Ontario, so it isn\u2019t a location restriction.\n3. Load the game on the test account - it works, so it isn\u2019t a game-wide outage.\n4. App steps: Developer Options off (Android), restart the app, check for app updates (Sessions shows the version).\n5. Confirm the game opens.\nEscalate: Games Down workflow only if it also fails on the test account; Tech only if it still fails after the steps were advised.\nFail: calling it a location restriction; reporting Games Down or escalating without reproducing it first; closing without checking it works.", "evidence": "Player Profile: Player ID 900110 (training account).\nAccount & Location (click to open): inside Ontario, no location flags.\nTest Account (click to load the game): Maple Fortune loads normally.\nSessions (click to open): Android app 4.12.0, latest 4.13.1.", "playerBehavior": "Easygoing. Says it\u2019s just this one game if asked. Developer Options is already off; restart doesn\u2019t help; after updating the app the game opens.", "kbInfo": "Notion KB, Game Tech Temple: \u201cMy game isn\u2019t working\u201d (marked unverified - confirm with QA) and \u201cTroubleshooting Steps & Guidelines\u201d (verified).", "escalationNotes": "Tag: Slots: Game Doesn't Load. Escalation: Games Down if reproducible on the test account; Tech if it persists after troubleshooting.", "difficulty": "Foundation", "topic": "Gameplay", "desiredBehavior": ""}}, {"scenarioId": "trn-1", "topic": "Payments", "issue": "Withdrawal in progress", "intake": {"struggle": "Check the real withdrawal status and Auto-Deposit before answering, and give only the KB timeframe.", "whatHappened": "Leah made her first $60 Interac withdrawal an hour ago and asks how long it takes. It is In Progress with Auto-Deposit on.", "correctProcess": "1. Check the status in Transaction History.\n2. Check Auto-Deposit in Gigadat.\n3. Auto-Deposit is on and it\u2019s within 24 hours: no action needed, give the KB timeframe.\nEscalate to PayTech only if funds are still missing after 24 hours, or she asks to cancel.\nFail: saying \u2018no issue\u2019 without checking both; inventing a timeframe; escalating before 24 hours.", "evidence": "Player Profile: Player ID 900101 (training account).\nTransaction History (click to open): Withdrawal #WD-9101, $60 Interac, In Progress.\nGigadat (click to open): Auto-Deposit enabled.", "playerBehavior": "Friendly and curious, not worried. Asks what Auto-Deposit means if mentioned.", "kbInfo": "Withdrawals via E-Transfer (Interac).", "escalationNotes": "Tag: Withdrawal: Interac: In Progress. Escalation: PayTech only after 24 hours.", "difficulty": "Foundation", "topic": "Payments", "desiredBehavior": ""}}, {"scenarioId": "trn-5", "topic": "Payments", "issue": "Deposit not showing yet", "intake": {"struggle": "Explain an Interac deposit stuck at Started inside the KB window, check the key points, and give a clear next step.", "whatHappened": "Priyanka sent a $40 Interac deposit 20 minutes ago. It shows Started.", "correctProcess": "1. Check the deposit and the Gigadat transaction (type, amount, Message ID).\n2. Explain Started in plain words without blaming her.\n3. Check: was she charged, did she include the Message ID, did she get the confirmation email.\n4. Reassure: usually instant, up to 35 minutes.\n5. Next step: if still missing after 30-35 minutes, come back with the confirmation email or the Interac Reference Number for a PayTech escalation.\nFail: \u2018everything is fine\u2019 without checking; escalating before 30-35 minutes; an unsupported timeframe; no next step.", "evidence": "Player Profile: Player ID 900105 (training account).\nTransaction History (click to open): Deposit #DP-9105, $40, Started.\nGigadat (click to search): ETI, $40 sent, no mismatch, Message ID included, 20 minutes ago.", "playerBehavior": "Calm, answers plainly, happy to wait once she knows the timeframe.", "kbInfo": "Deposits via E-Transfer (Interac).", "escalationNotes": "Tag: Deposit: Interac: Started. Escalation: PayTech after 30-35 minutes with the confirmation email or IRN.", "difficulty": "Foundation", "topic": "Payments", "desiredBehavior": ""}}, {"scenarioId": "trn-2", "topic": "Promotions", "issue": "Deposit bonus missing", "intake": {"struggle": "Check Promotion History and award a bonus the player qualified for but never received.", "whatHappened": "A player opted in and met every requirement for a deposit offer, but the reward was never awarded.", "correctProcess": "1. Check Promotion History.\n2. Confirm opted in and all requirements met, not Awarded.\n3. Award it with the Award Promotion action.\n4. Confirm the bonus was added.\nNo escalation: Tier 1 awards it.\nFail: saying they don\u2019t qualify; escalating; promising the bonus without awarding it.", "evidence": "Player Profile: Player ID 900102 (training account).\nPromotion History (click to open): opted in, all requirements met, not Awarded.", "playerBehavior": "Calm and friendly, answers plainly.", "kbInfo": "Promotions: Key Information, Player Eligibility, Troubleshooting.", "escalationNotes": "Tag: Promo: Deposit Offer. Escalation: none.", "difficulty": "Foundation", "topic": "Promotions", "desiredBehavior": ""}}, {"scenarioId": "trn-3", "topic": "Account & Location", "issue": "Forgot password", "intake": {"struggle": "Confirm there\u2019s no account lock, then take the player through a standard password reset.", "whatHappened": "Grace forgot her password. The reset email lands in her spam folder.", "correctProcess": "1. Check Account Notes: no lock or restriction.\n2. Guide a standard password reset.\n3. If the email doesn\u2019t arrive, check spam/promotions first.\n4. Confirm she can log in before closing.\nFail: treating it as an account lock or escalating; closing before she\u2019s back in.", "evidence": "Player Profile: Player ID 900103 (training account).\nAccount Notes (check before resetting): active, no lock or restriction.", "playerBehavior": "Polite. Finds the email in spam if told to look there, then logs in.", "kbInfo": "Login Access Issues.", "escalationNotes": "Tag: Account: Login: Password: How to reset. Escalation: only if Case Data shows a real lock.", "difficulty": "Foundation", "topic": "Account & Location", "desiredBehavior": ""}}, {"scenarioId": "trn-4", "topic": "Account & Location", "issue": "Games blocked outside the province", "intake": {"struggle": "Check location before concluding, explain the licensed-province rule once, and close efficiently.", "whatHappened": "Nate is on vacation in Manitoba and none of the games load. His account is with Betty Ontario.", "correctProcess": "1. Ask where he is now - don\u2019t guess.\n2. Check the geolocation in Account & Location.\n3. Explain once: he must be physically in a licensed province to play.\n4. Close once he understands.\nNo escalation: hard rule, no exceptions.\nFail: confirming without checking geolocation; inventing a workaround or appeal; re-explaining the rule over and over.", "evidence": "Player Profile: Player ID 900104 (training account).\nAccount & Location (click to open): physically in Manitoba, account under Betty Ontario.", "playerBehavior": "Easygoing; only says where he is if asked; understands straight away.", "kbInfo": "Jurisdiction restriction (licensed provinces only).", "escalationNotes": "Tag: Location: Outside Jurisdiction. Escalation: none.", "difficulty": "Foundation", "topic": "Account & Location", "desiredBehavior": ""}}];
+function trainerTemplateById(sid){ return TRAINER_TEMPLATES.find(t=>t.scenarioId===sid) || null; }
+function trainerTemplateTopics(){ return [...new Set(TRAINER_TEMPLATES.map(t=>t.topic))]; }
+
+// ---------- worked example shown under each trainer question (one consistent case, so the five read together) ----------
+const TRAINER_QUESTIONS = [
+  {id:'intakeStruggle', field:'struggle', label:'What should the trainee learn?',
+   help:'One or two sentences: the skill or habit this chat practises.',
+   example:'Find the exact round and check it against the game rules before explaining it - instead of saying “all your rounds were fine”.'},
+  {id:'intakeWhatHappened', field:'whatHappened', label:'What’s the player’s problem?',
+   help:'What the player contacts about, and what is actually true on the account. Made-up details only - no real names, emails, phone numbers or player IDs.',
+   example:'Marcus says 3 Gold Maple symbols lined up and paid nothing. The round paid correctly: this game only pays a line from reel 1, and his symbols started on reel 3.'},
+  {id:'intakeCorrectProcess', field:'correctProcess', label:'What should the trainee do, step by step?',
+   help:'The correct handling in order, when to escalate (or “no escalation”), and what counts as a fail.',
+   example:'1. Ask what he saw. 2. Find the round in Round History. 3. Check the rules on the test account. 4. Explain that round. No escalation. Fail: saying the game glitched or offering compensation.'},
+  {id:'intakeEvidence', field:'evidence', label:'What can they look up, and what will they find?',
+   help:'Every record the trainee can open, with exactly what it shows. Say which ones they have to click to check.',
+   example:'Round History (click to open): round R-TRN-6061, bet $0.50, win $0.00, symbols on reels 3-5. Test account (click to load the game): the paytable rule. Player ID: use a training ID from 900100-900199.'},
+  {id:'intakePlayerBehavior', field:'playerBehavior', label:'How does the player act?',
+   help:'Tone, what the player knows or doesn’t, and how they react to good or poor handling.',
+   example:'Friendly. Doesn’t know what a round ID is. Understands once the rule is explained. Happily accepts compensation if it’s offered.'},
+];
+const TR_TA = 'width:100%;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;';
+
+// ---------- PLAYER DETAILS (AGCO): the only thing that blocks ----------
+const TRAINING_PLAYER_ID_MIN = 900100, TRAINING_PLAYER_ID_MAX = 900199;
+function isTrainingPlayerId(n){ const v = Number(n); return String(n).length===6 && v>=TRAINING_PLAYER_ID_MIN && v<=TRAINING_PLAYER_ID_MAX; }
+// Pattern-based, so it can't catch everything (a real player's first name alone looks like any other first name).
+// It catches the details that identify a player: contact details, addresses, dates of birth, card/account numbers and
+// real-looking player IDs. Anything 6+ digits long is treated as a possible ID unless it's a training ID 900100-900199.
+function playerDetailHits(text){
+  const t = String(text||''); const hits = [];
+  const add = (kind, m)=>{ const s = String(m).trim(); if(!hits.some(h=>h.kind===kind && h.text===s)) hits.push({kind, text:s}); };
+  (t.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[]).forEach(m=>add('email address', m));
+  (t.match(/(?:\+?1[\s.-]?)?\(?\b\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b/g)||[]).forEach(m=>add('phone number', m));
+  (t.match(/\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ -]?\d[ABCEGHJ-NPRSTV-Z]\d\b/g)||[]).forEach(m=>add('postal code', m));
+  (t.match(/\b(?:\d{4}[ -]){3}\d{1,7}\b/g)||[]).forEach(m=>add('card or account number', m));
+  (t.match(/\b\d{6,}\b/g)||[]).forEach(m=>{ if(isTrainingPlayerId(m)) return; add(m.length>=13 ? 'card or account number' : 'player or account ID', m); });
+  (t.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g)||[]).forEach(m=>add('IP address', m));
+  (t.match(/\b\d{1,5}\s+(?:[A-Z][a-z]+\s){1,3}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Crescent|Cres|Way|Place|Pl)\b\.?/g)||[]).forEach(m=>add('street address', m));
+  (t.match(/\b(?:date of birth|DOB|birth ?date|born on)\b[^\n.;]{0,30}/gi)||[]).forEach(m=>add('date of birth', m));
+  (t.match(/\b(?:full name|last name|surname|home address|social insurance(?: number)?|SIN number|passport(?: number)?|driver'?s licen[cs]e(?: number)?)\s*[:=]\s*[^\n;]{1,40}/gi)||[]).forEach(m=>add('personal detail', m));
+  return hits;
+}
+function intakePlayerDetailHits(intake){
+  const i = intake||{};
+  return playerDetailHits([i.struggle, i.whatHappened, i.correctProcess, i.evidence, i.playerBehavior, i.kbInfo, i.escalationNotes, i.topic, i.desiredBehavior].join('\n'));
+}
+function scenarioPlayerDetailHits(s){
+  if(!s) return [];
+  const pg = s.processGrounding||{};
+  const parts = [s.title, s.internalTitle, s.playerName, s.agentBriefing, s.preChatReason, s.preChatContext, s.personaPrompt,
+    (s.playerKnowledge||{}).situation, s.playerKnowledgeSituation,
+    ...(s.caseData||[]).flatMap(c=>[c.tab, c.label, c.value]),
+    pg.kbText, ...(pg.requiredActions||[]), ...(pg.optionalActions||[]), pg.escalationCriteria, pg.criticalErrors];
+  return playerDetailHits(parts.filter(Boolean).join('\n'));
+}
+function playerDetailMessage(hits){
+  return 'Possible player details found - remove them before saving (no real player information in training scenarios): ' +
+    hits.map(h=>h.kind + ' “' + h.text + '”').join('; ') + '. Use a made-up first name and a training player ID from 900100-900199.';
+}
+function trainerSaveBlockReason(gen){ const h = scenarioPlayerDetailHits(gen); return h.length ? playerDetailMessage(h) : ''; }
+
+// ---------- PLAIN-LANGUAGE CHECK (warnings only) ----------
+const TR_FAIL_WORDS = /\b(fail|fails|failing|never|must not|mustn.t|do not|don.t|critical|wrong|not allowed|avoid|should not|shouldn.t)\b/i;
+const TR_ESC_WORDS = /(escalat|\btech\b|paytech|player care|games down|no escalation|not escalated)/i;
+function trainerTagCheck(text){
+  const t = String(text||'');
+  const cat = approvedTagCatalogue().primary;
+  const found = cat.filter(tag=>t.indexOf(tag)>=0);
+  if(found.length) return {ok:true, tags:found, candidate:''};
+  const m = t.match(/\btag\b[^:\n]{0,12}:\s*([^\n;(]+)/i);
+  let cand = m ? m[1].trim().replace(/[.,]+$/,'') : '';
+  if(!cand){ const m2 = t.match(/\b([A-Z][A-Za-z&/ ]{1,30}:\s*[A-Z][^\n.;,(]*)/); cand = m2 ? m2[1].trim() : ''; }
+  return {ok:false, tags:[], candidate:cand};
+}
+function tagWarningFor(check){
+  return check.candidate ? 'The correct tag isn’t in the tag list: “' + check.candidate + '”. Copy it exactly from the Betty Tagging Guide.' : 'You haven’t said which tag is correct.';
+}
+// Intake (the five questions). Returns plain-language warnings; never blocks.
+function trainerIntakeWarnings(intake){
+  const i = intake||{}; const w = [];
+  const v = k => String(i[k]||'').trim();
+  if(!v('struggle')) w.push('You haven’t said what the trainee should learn.');
+  if(!TR_FAIL_WORDS.test(v('correctProcess') + '\n' + v('struggle'))) w.push('You haven’t said what counts as a fail. Add a line to question 3, e.g. “Fail: escalating before troubleshooting.”');
+  if(v('evidence').length < 10) w.push('The trainee has nothing to look up. Add at least one record in question 4 (e.g. Round History) so the chat can be graded on what they checked.');
+  else if(!/(click|open|load|view|check|look up|search|gated)/i.test(v('evidence'))) w.push('Say which records the trainee has to click to check - otherwise the grader can’t see whether they looked anything up.');
+  if(!v('kbInfo')) w.push('You haven’t said which KB article this is based on, so grading can only follow what you wrote here.');
+  const tc = trainerTagCheck(v('escalationNotes') + '\n' + v('correctProcess'));
+  if(!tc.ok) w.push(tagWarningFor(tc));
+  if(!TR_ESC_WORDS.test(v('escalationNotes') + '\n' + v('correctProcess'))) w.push('You haven’t said when to escalate - or that no escalation is needed.');
+  if(!v('playerBehavior')) w.push('You haven’t said how the player acts. The builder will invent a moderately challenging player.');
+  return w;
+}
+// The decision is the whole rule in one place: player details block; everything else only warns.
+function trainerIntakeDecision(intake){
+  const pii = intakePlayerDetailHits(intake);
+  return {block: pii.length>0, pii, warnings: trainerIntakeWarnings(intake)};
+}
+// Generated/edited scenario, checked again before saving. Warnings only (player details are handled by trainerSaveBlockReason).
+const TR_DEFAULT_CRITICAL = 'Giving the player inaccurate or unsupported information, or failing to resolve the core issue.';
+function trainerScenarioWarnings(s){
+  if(!s) return [];
+  const w = []; const pg = s.processGrounding||{};
+  const crit = String(pg.criticalErrors||'').trim();
+  if(!crit || crit===TR_DEFAULT_CRITICAL) w.push('You haven’t said what counts as a fail. Fill in “Critical errors” so the grader knows what a fail looks like.');
+  const cd = (s.caseData||[]).filter(c=>c && (c.label||c.value));
+  if(!cd.length) w.push('The trainee has nothing to look up. Add at least one Case Data record.');
+  else if(!cd.some(c=>c.gated)) w.push('None of the Case Data needs the trainee to click to check it, so the grader can’t see whether they looked anything up. Tick “Requires investigation” on the records they should check.');
+  if(!String(s.correctTag||'').trim()) w.push('You haven’t chosen the correct tag yet.');
+  else if(!isApprovedPrimaryTag(String(s.correctTag).trim())) w.push('The correct tag isn’t in the tag list: “' + String(s.correctTag).trim() + '”.');
+  if(!(pg.requiredActions||[]).some(x=>x && String(x).trim())) w.push('There are no steps for the trainee to follow, so there is nothing to grade them against. Add the required actions.');
+  const esc = String(pg.escalationCriteria||'').trim();
+  if(!esc || /^Not specified by the creating TL/.test(esc)) w.push('You haven’t said when to escalate - or that no escalation is needed.');
+  if(/^No specific KB citation/.test(String(s.kbSource||''))) w.push('No KB article is named, so this stays a draft that hasn’t been checked against the KB.');
+  if(!String(s.personaPrompt||'').trim()) w.push('You haven’t said how the player acts.');
+  return w;
+}
+
+// ---------- rendering (L&D Create Scenario) ----------
+function ldBuilderMode(){ return state.ldBuilderMode || 'template'; }
+function trainerWarnListHtml(id, title, warnings, tone){
+  if(!warnings || !warnings.length) return '';
+  const c = tone==='bad' ? 'var(--bad)' : 'var(--warn)';
+  return `<div id="${id}" class="box" role="status" style="margin-top:12px;border:2px solid ${c};font-size:12.5px;">
+    <div style="font-weight:700;color:${c};margin-bottom:4px;">${title}</div>
+    <ul style="margin:0;padding-left:18px;">${warnings.map(x=>`<li style="margin:2px 0;">${escapeHtml(x)}</li>`).join('')}</ul>
+  </div>`;
+}
+function renderTrainerIntakeCheckPanel(){
+  const c = state.trainerIntakeCheck; if(!c) return '';
+  if(c.block) return trainerWarnListHtml('trainerPiiBlock', 'Remove these player details before you continue', [playerDetailMessage(c.pii)], 'bad');
+  if(!c.warnings.length) return `<div id="trainerCheckClear" class="box" style="margin-top:12px;border-color:var(--ok);color:var(--ok);font-size:12.5px;">No gaps found.</div>`;
+  return trainerWarnListHtml('trainerIntakeWarnings', 'Things that could make grading unreliable (you can still continue)', c.warnings, 'warn');
+}
+function renderTrainerIntakeForm(){
+  const intake = state.scenarioBuilderIntake;
+  const busy = state.scenarioBuilderInterpreting;
+  const tpl = state.scenarioBuilderTemplateId ? trainerTemplateById(state.scenarioBuilderTemplateId) : null;
+  const tplSc = tpl ? scenarioById(tpl.scenarioId) : null;
+  const topics = topicOptionsForBuilder();
+  const q = (n, Q) => `<div>
+      <label for="${Q.id}" style="font-size:13px;color:var(--text);font-weight:600;">${n}. ${Q.label}</label>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px;">${Q.help}</div>
+      <div class="trainer-example" style="font-size:11.5px;color:var(--text3);margin-top:3px;font-style:italic;">Example: ${escapeHtml(Q.example)}</div>
+      <textarea id="${Q.id}" style="${TR_TA}min-height:${n===4?80:n===3?70:55}px;">${escapeHtml(intake[Q.field]||'')}</textarea>
+    </div>`;
+  return `<div class="box" id="trainerIntakeForm" style="margin-bottom:14px;">
+    ${tpl ? `<div class="box" style="margin-bottom:12px;border-color:var(--accent);font-size:12.5px;">Pre-filled from the template <strong>${escapeHtml(tpl.topic)} &gt; ${escapeHtml(tpl.issue)}</strong>${tplSc ? ` (${escapeHtml(tplSc.title)})` : ''}. Change anything you like - nothing is saved until you press Save.</div>` : ''}
+    <div style="font-size:13px;margin-bottom:12px;color:var(--text2);">Answer five questions about the chat you want trainees to practise. Before anything is built you’ll see a short “here’s what I understood” check, so you can correct it. You never write the player’s script, the records screen or the scoring rules - those are built from your answers.</div>
+    <div style="display:grid;gap:14px;">${TRAINER_QUESTIONS.map((Q,i)=>q(i+1, Q)).join('')}</div>
+    <details style="margin-top:14px;" ${(intake.kbInfo||intake.escalationNotes)?'open':''}>
+      <summary style="cursor:pointer;font-size:12.5px;color:var(--text2);">KB article, correct tag and escalation, topic, difficulty</summary>
+      <div style="display:grid;gap:12px;margin-top:10px;">
+        <div><label for="intakeKbInfo" style="font-size:12.5px;color:var(--text);font-weight:600;">Which KB article is this based on?</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;">The article name, or paste the part of it that matters.</div>
+          <textarea id="intakeKbInfo" style="${TR_TA}min-height:45px;">${escapeHtml(intake.kbInfo||'')}</textarea></div>
+        <div><label for="intakeEscalationNotes" style="font-size:12.5px;color:var(--text);font-weight:600;">Correct tag and escalation rule</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;">Copy the tag exactly from the Tagging Guide, e.g. “Tag: Slots: Missing Win. Escalation: none.”</div>
+          <textarea id="intakeEscalationNotes" style="${TR_TA}min-height:40px;">${escapeHtml(intake.escalationNotes||'')}</textarea></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <select id="intakeDifficulty" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
+            <option value="" ${!intake.difficulty?'selected':''}>Difficulty: let the builder suggest</option>
+            ${['Foundation','Applied','Advanced'].map(d=>`<option value="${d}" ${intake.difficulty===d?'selected':''}>${d}</option>`).join('')}
+          </select>
+          <input id="intakeTopic" list="scenarioBuilderTopicsList" placeholder="Topic (optional)" value="${escapeHtml(intake.topic||'')}" style="flex:1;min-width:200px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13px;">
+          <datalist id="scenarioBuilderTopicsList">${topics.map(t=>`<option value="${escapeHtml(t)}">`).join('')}</datalist>
+        </div>
+      </div>
+    </details>
+    ${renderTrainerIntakeCheckPanel()}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
+      <button id="btnTrainerCheckGaps">Check for gaps</button>
+      <button id="btnTrainerCheckUnderstanding" class="primary" ${busy?'disabled':''}>${busy?'Checking…':'Check my understanding →'}</button>
+    </div>
+  </div>`;
+}
+function renderTrainerTemplatePicker(){
+  const topics = trainerTemplateTopics();
+  const topic = topics.includes(state.trTplTopic) ? state.trTplTopic : topics[0];
+  const inTopic = TRAINER_TEMPLATES.filter(t=>t.topic===topic);
+  const tpl = inTopic.find(t=>t.scenarioId===state.trTplIssue) || inTopic[0];
+  const sc = tpl ? scenarioById(tpl.scenarioId) : null;
+  const sel = 'background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;';
+  const kbLine = !sc ? '' : sc.kbStatus==='validated' ? '<span style="color:var(--ok);">KB-validated</span>' : '<span style="color:var(--warn);">Based on KB pages still waiting for QA/L&amp;D confirmation</span>';
+  return `<div class="box" id="trainerTemplatePicker" style="margin-bottom:14px;">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">Pick a topic and an issue. The form opens filled in from a ready-made beginner scenario, and you change what you need.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <select id="trTplTopic" aria-label="Topic" style="${sel}">${topics.map(t=>`<option value="${escapeHtml(t)}" ${t===topic?'selected':''}>${escapeHtml(t)}</option>`).join('')}</select>
+      <span style="color:var(--text3);">&gt;</span>
+      <select id="trTplIssue" aria-label="Issue" style="${sel}min-width:220px;">${inTopic.map(t=>`<option value="${escapeHtml(t.scenarioId)}" ${tpl&&t.scenarioId===tpl.scenarioId?'selected':''}>${escapeHtml(t.issue)}</option>`).join('')}</select>
+    </div>
+    ${tpl && sc ? `<div class="box" style="margin-top:12px;">
+      <div style="font-weight:700;">${escapeHtml(sc.title)} <span style="font-size:11.5px;color:var(--text3);font-weight:400;">· ${escapeHtml(sc.difficulty||'')} · Training only</span></div>
+      <div style="font-size:12.5px;color:var(--text2);margin-top:4px;"><strong>Teaches:</strong> ${escapeHtml(tpl.intake.struggle)}</div>
+      <div style="font-size:12px;margin-top:4px;">${kbLine}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button class="primary" data-tr-use-template="${escapeHtml(tpl.scenarioId)}">Use this template</button>
+        <button data-tr-try-template="${escapeHtml(tpl.scenarioId)}">Try it yourself</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--text3);margin-top:8px;">This one is already a ready Training-only scenario - you can also assign it as it is under Assign Scenarios.</div>
+    </div>` : ''}
+  </div>`;
+}
+function renderTrainerCreateScenarioBody(){
+  const tlName = state.scenarioBuilderTLName || '';
+  const myScenarios = customScenariosCreatedBy(tlName).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const mode = ldBuilderMode();
+  const btn = (m, label) => `<button class="small ${mode===m?'primary':''}" data-ld-builder-mode="${m}">${label}</button>`;
+  let main;
+  if(mode==='duplicate') main = renderScenarioDuplicatePicker(tlName);
+  else if(state.scenarioBuilderGenerated) main = '';
+  else if(state.scenarioBuilderStep==='confirm' && state.scenarioBuilderInterpretation) main = renderTrainerIntakeCheckPanel() + renderInterpretationCheck();
+  else if(mode==='template') main = renderTrainerTemplatePicker();
+  else main = renderTrainerIntakeForm();
+  return `
+    <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Build a practice chat for trainees in plain language - no code. Start from a template, write one from scratch, or copy an existing scenario. Every new scenario starts as a draft that hasn’t been checked against the KB; use <strong>Try it yourself</strong> to play it once before you assign it.</div>
+    <div style="margin-bottom:14px;">
+      <input id="scenarioBuilderTLName" placeholder="Your name (trainer)" value="${escapeHtml(tlName)}" style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;" id="ldBuilderModes">
+      ${btn('template','Start from a template')}${btn('scratch','Create from scratch')}${btn('duplicate','Duplicate existing')}
+    </div>
+    ${main}
+    ${state.scenarioBuilderError ? `<div class="box" style="border-color:var(--bad);color:var(--bad);margin-top:12px;font-size:12.5px;">${escapeHtml(state.scenarioBuilderError)}${state.scenarioBuilderErrorDetail ? `<details style="margin-top:6px;color:var(--text3);"><summary style="cursor:pointer;">Technical detail</summary><div style="white-space:pre-wrap;word-break:break-word;margin-top:4px;font-size:11.5px;">${escapeHtml(state.scenarioBuilderErrorDetail)}</div></details>` : ''}</div>` : ''}
+    ${state.scenarioBuilderGenerated ? renderScenarioPreviewEditForm() : ''}
+    ${state.scenarioBuilderSavedNotice ? `<div class="box" style="border-color:var(--ok);color:var(--ok);margin-top:12px;font-size:12.5px;">${escapeHtml(state.scenarioBuilderSavedNotice)}</div>` : ''}
+    ${renderDashSubsection('my-created-scenarios', `My Created Scenarios (${myScenarios.length})`, ()=>renderMyCreatedScenariosList(myScenarios), true)}
+  `;
+}
+// Shown inside the preview/edit form, L&D only.
+function renderTrainerScenarioCheckPanel(gen){
+  const pii = scenarioPlayerDetailHits(gen);
+  const warns = trainerScenarioWarnings(gen);
+  return `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);" id="trainerScenarioCheck">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="font-size:13px;font-weight:600;">Plain-language check</div>
+      <button class="small" id="btnTrainerRecheck">Check again</button>
+    </div>
+    ${pii.length ? trainerWarnListHtml('trainerScenarioPii', 'Remove these player details - saving is blocked until you do', [playerDetailMessage(pii)], 'bad') : ''}
+    ${warns.length ? trainerWarnListHtml('trainerScenarioWarnings', 'Things that could make grading unreliable (you can still save)', warns, 'warn') : (pii.length ? '' : `<div style="font-size:12.5px;color:var(--ok);margin-top:6px;">No gaps found.</div>`)}
+  </div>`;
+}
+
+// ---------- Try it yourself (never saved) ----------
+function startTrainerTrial(src, from){
+  if(!src) return;
+  const trial = cloneScenarioContentFields(src);
+  if(!src.isCustom){ trial.kbStatus = src.kbStatus; trial.kbSource = src.kbSource||''; }
+  Object.assign(trial, {id:'trial_' + Date.now().toString(36), isTrainerTrial:true, trialOf: src.id || null, audience:'training'});
+  state.trainerTrialScenario = trial;
+  state.trainerTrialFrom = from || 'builder';
+  startScenario(trial.id); // sets state.view='sim' and renders; archiveAttempt skips trial runs, so nothing is ever saved
+}
+function trainerTrialBannerHtml(s){
+  if(!s || !s.isTrainerTrial) return '';
+  return `<div id="trainerTrialBanner" class="box" style="margin:10px 14px 0;border:2px solid var(--accent);font-size:12.5px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+    <span><strong>Try it yourself - trial run.</strong> Scored as normal, but nothing from this chat is saved: not in Training results, Team Progress, History or anyone’s assignments.</span>
+    ${state.trainingUnlocked ? `<button class="small" id="btnTrialBack">Back to L&amp;D</button>` : ''}
+  </div>`;
+}
+function leaveTrainerTrial(){
+  if(state.ahtTimerInterval){ clearInterval(state.ahtTimerInterval); state.ahtTimerInterval=null; }
+  if(state.silenceCheckInterval){ clearInterval(state.silenceCheckInterval); state.silenceCheckInterval=null; }
+  state.openingToken = (state.openingToken||0) + 1;
+  state.activeScenario = null; state.evaluation = null; state.transcript = []; state.simStatus = 'idle';
+  const ov = document.querySelector('.modal-overlay'); if(ov) ov.remove();
+  state.view = 'training';
+  render();
+  const anchor = document.getElementById(state.scenarioBuilderGenerated ? 'scenarioBuilderPreviewAnchor' : 'ldBuilderModes');
+  if(anchor) anchor.scrollIntoView({block:'start'});
+}
+
+// ---------- test / removed cohorts and trainees ----------
+function trainingVisibilityOf(type, id){
+  const r = latestTrainingById('training-visibility').find(x=>x.targetType===type && x.targetId===id);
+  return r ? (r.status||'active') : 'active';
+}
+function isHiddenCohort(c){ return !!c && trainingVisibilityOf('cohort', c.id)!=='active'; }
+function isHiddenTrainee(t){ return !!t && (trainingVisibilityOf('trainee', t.id)!=='active' || (!!t.cohortId && trainingVisibilityOf('cohort', t.cohortId)!=='active')); }
+function isRemovedTrainee(t){ return !!t && (trainingVisibilityOf('trainee', t.id)==='removed' || (!!t.cohortId && trainingVisibilityOf('cohort', t.cohortId)==='removed')); }
+function isRemovedCohort(c){ return !!c && trainingVisibilityOf('cohort', c.id)==='removed'; }
+function isHiddenTrainingAttempt(e){
+  if(!e) return false;
+  const t = trainingTraineeById(e.traineeId);
+  if(t) return isHiddenTrainee(t);
+  return !!e.cohortId && trainingVisibilityOf('cohort', e.cohortId)!=='active';
+}
+function isHiddenAssignment(a){ return isHiddenTrainee(trainingTraineeById(a.traineeId)) || (!!a.cohortId && trainingVisibilityOf('cohort', a.cohortId)!=='active'); }
+function visibleTrainingAttempts(){ return (state.trainingAttempts||[]).filter(e=>!isHiddenTrainingAttempt(e)); }
+async function setTrainingVisibility(type, id, status, by){
+  const now = Date.now();
+  return pushTrainingRecord({type:'training-visibility', id:'tv_'+type+'_'+id, targetType:type, targetId:id, status, by:(by||'').trim()||null, at:now, updatedAt:now});
+}
+const TR_HIDE_TEXT = {
+  test: 'Mark as test: hidden from Results, assignment lists and counts. A test trainee can still log in, so you can keep using them to try things out.',
+  removed: 'Remove: hidden everywhere in L&D, their names are freed up, and a removed trainee can no longer log in as a trainee.',
+};
+function trHideControlsHtml(type, id){
+  const p = state.trHidePending;
+  if(p && p.type===type && p.id===id){
+    return `<div class="box" style="margin-top:8px;border-color:var(--warn);font-size:12px;">
+      <div>${escapeHtml(TR_HIDE_TEXT[p.status])} Nothing is deleted from the server - you can restore ${type==='cohort'?'it':'them'} from “Test & removed” at any time.</div>
+      <div style="display:flex;gap:8px;margin-top:8px;"><button class="small primary" data-tr-hide-confirm="${escapeHtml(type+'|'+id+'|'+p.status)}">${p.status==='test'?'Mark as test':'Remove'}</button><button class="small" data-tr-hide-cancel>Cancel</button></div>
+    </div>`;
+  }
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+    <button class="small" data-tr-hide="${escapeHtml(type+'|'+id+'|test')}">Mark as test</button>
+    <button class="small" data-tr-hide="${escapeHtml(type+'|'+id+'|removed')}" style="color:var(--bad);">Remove</button>
+  </div>`;
+}
+function renderTrHiddenList(type){
+  const items = type==='cohort'
+    ? trainingCohorts().filter(isHiddenCohort).map(c=>({id:c.id, name:c.name, status:trainingVisibilityOf('cohort', c.id), own:true}))
+    : trainingTrainees().filter(isHiddenTrainee).map(t=>{ const own = trainingVisibilityOf('trainee', t.id); const c = trainingCohortById(t.cohortId);
+        return {id:t.id, name:t.fullName, status: own!=='active' ? own : trainingVisibilityOf('cohort', t.cohortId), own: own!=='active', via: own==='active' && c ? c.name : ''}; });
+  if(!items.length) return '';
+  return `<details class="tr-hidden-list" style="margin-top:12px;max-width:760px;">
+    <summary style="cursor:pointer;font-size:12.5px;color:var(--text2);">Test &amp; removed ${type==='cohort'?'cohorts':'trainees'} (${items.length})</summary>
+    <div style="margin-top:6px;">${items.map(x=>`<div class="info-row" style="align-items:center;flex-wrap:wrap;gap:8px;">
+      <span class="ilabel">${escapeHtml(x.name)} <span style="font-size:11px;color:var(--text3);">· ${x.status==='removed'?'Removed':'Test'}${x.via?' (cohort '+escapeHtml(x.via)+')':''}</span></span>
+      ${x.own ? `<button class="small" data-tr-restore="${escapeHtml(type+'|'+x.id)}">Restore</button>` : ''}
+    </div>`).join('')}</div>
+  </details>`;
+}
+
+// ---------- wiring (called from wireTrainingEvents on every render) ----------
+function wireTrainerBuilderEvents(){
+  const back = document.getElementById('btnTrialBack');
+  if(back) back.addEventListener('click', leaveTrainerTrial);
+  const d12 = document.getElementById('runDiag12'); if(d12) d12.addEventListener('click', runDiagnostic12);
+  if(state.view!=='training') return;
+  document.querySelectorAll('[data-ld-builder-mode]').forEach(el=>el.addEventListener('click', ()=>{
+    const m = el.getAttribute('data-ld-builder-mode'); const prev = ldBuilderMode();
+    if(m===prev) return; // already here - never wipe answers in progress
+    state.ldBuilderMode = m; state.scenarioBuilderMode = m==='duplicate' ? 'duplicate' : 'scratch';
+    if(m==='scratch' && state.scenarioBuilderTemplateId){ state.scenarioBuilderTemplateId = null; state.scenarioBuilderIntake = emptyScenarioIntake(); }
+    state.trainerIntakeCheck = null; state.scenarioBuilderError = null;
+    resetScenarioBuilderFlow(); render();
+  }));
+  const tt = document.getElementById('trTplTopic'); if(tt) tt.addEventListener('change', e=>{ state.trTplTopic = e.target.value; state.trTplIssue = null; render(); });
+  const ti = document.getElementById('trTplIssue'); if(ti) ti.addEventListener('change', e=>{ state.trTplIssue = e.target.value; render(); });
+  document.querySelectorAll('[data-tr-use-template]').forEach(el=>el.addEventListener('click', ()=> applyTrainerTemplate(el.getAttribute('data-tr-use-template'))));
+  document.querySelectorAll('[data-tr-try-template]').forEach(el=>el.addEventListener('click', ()=> startTrainerTrial(scenarioById(el.getAttribute('data-tr-try-template')), 'template')));
+  const gaps = document.getElementById('btnTrainerCheckGaps');
+  if(gaps) gaps.addEventListener('click', ()=>{ state.trainerIntakeCheck = trainerIntakeDecision(state.scenarioBuilderIntake); render(); });
+  const cu = document.getElementById('btnTrainerCheckUnderstanding');
+  if(cu) cu.addEventListener('click', ()=>{
+    const d = trainerIntakeDecision(state.scenarioBuilderIntake);
+    state.trainerIntakeCheck = d;
+    if(d.block){ render(); const b = document.getElementById('trainerPiiBlock'); if(b) b.scrollIntoView({block:'center'}); return; }
+    checkInterpretationFromIntake(); // warnings stay on screen above the interpretation check; they never stop it
+  });
+  const rc = document.getElementById('btnTrainerRecheck'); if(rc) rc.addEventListener('click', ()=> render());
+  const tryBtn = document.getElementById('btnTryScenario');
+  if(tryBtn) tryBtn.addEventListener('click', ()=>{
+    const gen = state.scenarioBuilderGenerated; if(!gen) return;
+    const block = trainerSaveBlockReason(gen);
+    if(block){ state.scenarioBuilderError = block; render(); return; }
+    startTrainerTrial(gen, 'builder');
+  });
+  document.querySelectorAll('[data-tr-hide]').forEach(el=>el.addEventListener('click', ()=>{ const [type, id, status] = el.getAttribute('data-tr-hide').split('|'); state.trHidePending = {type, id, status}; render(); }));
+  document.querySelectorAll('[data-tr-hide-cancel]').forEach(el=>el.addEventListener('click', ()=>{ state.trHidePending = null; render(); }));
+  document.querySelectorAll('[data-tr-hide-confirm]').forEach(el=>el.addEventListener('click', async ()=>{
+    el.disabled = true;
+    const [type, id, status] = el.getAttribute('data-tr-hide-confirm').split('|');
+    const name = type==='cohort' ? ((trainingCohortById(id)||{}).name||'Cohort') : ((trainingTraineeById(id)||{}).fullName||'Trainee');
+    const shared = await setTrainingVisibility(type, id, status, state.trDraft.assignBy);
+    state.trHidePending = null;
+    trSetMsg({ok:true, shared}, `${name} ${status==='test'?'marked as test':'removed'}. Restore it any time from “Test & removed”.`);
+    render();
+  }));
+  document.querySelectorAll('[data-tr-restore]').forEach(el=>el.addEventListener('click', async ()=>{
+    el.disabled = true;
+    const [type, id] = el.getAttribute('data-tr-restore').split('|');
+    const shared = await setTrainingVisibility(type, id, 'active', state.trDraft.assignBy);
+    trSetMsg({ok:true, shared}, 'Restored.');
+    render();
+  }));
+  const st = document.getElementById('trShowTest'); if(st) st.addEventListener('change', e=>{ state.trShowTest = !!e.target.checked; render(); });
+}
+function applyTrainerTemplate(sid){
+  const tpl = trainerTemplateById(sid); if(!tpl) return;
+  state.scenarioBuilderIntake = Object.assign(emptyScenarioIntake(), JSON.parse(JSON.stringify(tpl.intake)));
+  state.scenarioBuilderTemplateId = sid;
+  state.ldBuilderMode = 'scratch'; state.scenarioBuilderMode = 'scratch';
+  state.trainerIntakeCheck = null; state.scenarioBuilderError = null; state.scenarioBuilderSavedNotice = null;
+  resetScenarioBuilderFlow();
+  render();
+  const f = document.getElementById('trainerIntakeForm'); if(f) f.scrollIntoView({block:'start'});
+}
+
+// ---------- DIAGNOSTIC 12: L&D trainer builder, gameplay beginners, test data (v41.4) ----------
+// Deterministic, no API calls, nothing sent to the server. Every piece of state it touches is restored afterwards.
+function runDiagnostic12(){
+  const el = document.getElementById('diag12Result'); if(!el) return;
+  const keys = ['view','scenarioBuilderIntake','scenarioBuilderStep','scenarioBuilderInterpretation','scenarioBuilderGenerated','scenarioBuilderMode','ldBuilderMode','scenarioBuilderTemplateId','trainerIntakeCheck','trainerTrialScenario','trainingRecords','trainingAttempts','attemptHistory','teamProgressLog','assignments','trShowTest','trHidePending','trResultsCohort','trDraft','scenarioBuilderError'];
+  const snap = {}; keys.forEach(k=>{ snap[k] = state[k]; });
+  const rows = []; const add = (label, pass, detail)=> rows.push({label, pass:!!pass, detail:detail||''});
+  const realFetch = window.fetch; let fetchCalls = 0;
+  try{
+    // --- 1. trainer wording (L&D only), TL wording unchanged ---
+    state.scenarioBuilderIntake = emptyScenarioIntake(); state.scenarioBuilderStep = 'intake'; state.scenarioBuilderInterpretation = null; state.scenarioBuilderGenerated = null;
+    state.view = 'tl';
+    const tlForm = renderScenarioIntakeForm(), tlBody = renderCreateScenarioSectionBody();
+    const tlLabels = ['1. What happened?','2. What was the coaching issue?','3. What should the correct handling have looked like?','4. What evidence should the agent be able to investigate?','5. What should the player do during the simulation?'];
+    add('TL Create Scenario keeps its exact five questions and modes, with no trainer wording or template option', tlLabels.every(l=>tlForm.indexOf(l)>=0) && TRAINER_QUESTIONS.every(Q=>tlForm.indexOf(Q.label)<0) && tlBody.indexOf('Start from a template')<0 && tlBody.indexOf('Create from scratch')>=0 && tlBody.indexOf('Duplicate existing')>=0);
+    state.view = 'training'; state.ldBuilderMode = 'scratch';
+    const trForm = renderTrainerIntakeForm();
+    const order = TRAINER_QUESTIONS.map(Q=>trForm.indexOf(Q.label));
+    add('L&D shows the five trainer questions in order, each with a worked example', order.every((p,i)=>p>=0 && (i===0 || p>order[i-1])) && (trForm.match(/class="trainer-example"/g)||[]).length===5 && tlLabels.every(l=>trForm.indexOf(l)<0));
+    add('Trainer questions write into the same five intake fields as the TL builder', ['intakeStruggle','intakeWhatHappened','intakeCorrectProcess','intakeEvidence','intakePlayerBehavior'].every(id=>trForm.indexOf('id="'+id+'"')>=0) && TRAINER_QUESTIONS.map(Q=>Q.field).join(',')==='struggle,whatHappened,correctProcess,evidence,playerBehavior');
+    // --- 2. templates ---
+    state.ldBuilderMode = null;
+    const ldBody = renderTrainerCreateScenarioBody();
+    add('L&D Create Scenario opens on “Start from a template”, listed first', ldBuilderMode()==='template' && ldBody.indexOf('Start from a template') < ldBody.indexOf('Create from scratch') && ldBody.indexOf('id="trainerTemplatePicker"')>=0);
+    const gp = ['Missing win','Stuck or open round','Game crashed mid-spin','Free spins not credited','Game won’t load'];
+    add('Gameplay templates cover missing win, stuck round, crash mid-spin, free spins, game won’t load (trn-6..trn-10)', gp.every((iss,i)=>TRAINER_TEMPLATES.some(t=>t.topic==='Gameplay' && t.issue===iss && t.scenarioId==='trn-'+(6+i))));
+    const before = JSON.stringify(scenarioById('trn-6'));
+    const tpl6 = trainerTemplateById('trn-6');
+    state.scenarioBuilderIntake = Object.assign(emptyScenarioIntake(), JSON.parse(JSON.stringify(tpl6.intake))); state.scenarioBuilderTemplateId = 'trn-6';
+    const filled = renderTrainerIntakeForm();
+    add('Using a template pre-fills all five answers plus KB and tag, and leaves the source scenario unchanged', ['struggle','whatHappened','correctProcess','evidence','playerBehavior','kbInfo','escalationNotes'].every(k=>state.scenarioBuilderIntake[k]===tpl6.intake[k] && tpl6.intake[k]) && filled.indexOf('Pre-filled from the template')>=0 && JSON.stringify(scenarioById('trn-6'))===before);
+    const badTpl = TRAINER_TEMPLATES.filter(t=>{ const s = scenarioById(t.scenarioId); return !s || trainerIntakeWarnings(t.intake).length || intakePlayerDetailHits(t.intake).length || trainerTagCheck(t.intake.escalationNotes).tags.indexOf(s.correctTag)<0; });
+    add('Every template passes the plain-language check, has no player details, and names its scenario’s correct tag', !badTpl.length, badTpl.map(t=>t.scenarioId+': '+trainerIntakeWarnings(t.intake).join(' | ')).join(' / '));
+    // --- 3. plain-language check ---
+    const gapIntake = Object.assign(emptyScenarioIntake(), {struggle:'Handle a missing win', whatHappened:'Player says a spin paid nothing.', correctProcess:'Find the round and explain it.', evidence:'', playerBehavior:'Polite', kbInfo:'', escalationNotes:'Tag: Slots: Missng Win'});
+    const w = trainerIntakeWarnings(gapIntake);
+    add('Check flags: no fail condition, nothing to look up, tag not in the list, no escalation rule, no KB', w.some(x=>/what counts as a fail/.test(x)) && w.some(x=>/nothing to look up/.test(x)) && w.some(x=>/isn’t in the tag list: “Slots: Missng Win”/.test(x)) && w.some(x=>/when to escalate/.test(x)) && w.some(x=>/KB article/.test(x)), w.join(' | '));
+    const d1 = trainerIntakeDecision(gapIntake);
+    add('Warnings never block: an intake with gaps but no player details is allowed to continue', d1.block===false && d1.warnings.length>=4);
+    const d2 = trainerIntakeDecision(Object.assign({}, gapIntake, {whatHappened:'Player jo.smith@gmail.com says a spin paid nothing.'}));
+    add('Possible player details block: an email in the intake stops the check', d2.block===true && d2.pii.some(h=>h.kind==='email address'));
+    const ok = ['Player ID 900100','training account 900150','ID 900199'].every(s=>!playerDetailHits(s).length);
+    const bad = {'player or account ID':'Player ID 900200', 'player or account ID ':'Player ID 900099', 'phone number':'call 416-555-0199', 'postal code':'lives at M5V 2T6', 'card or account number':'card 4111 1111 1111 1111', 'street address':'123 Maple Street', 'date of birth':'DOB: 1990-02-03'};
+    const missed = Object.entries(bad).filter(([k,v])=>!playerDetailHits(v).some(h=>h.kind===k.trim()));
+    add('Fictional training IDs 900100-900199 are allowed; real-looking IDs, phone, postal code, card, address and date of birth are flagged', ok && !missed.length, missed.map(m=>m[1]).join(', '));
+    const genBad = cloneScenarioContentFields(scenarioById('trn-6')); genBad.personaPrompt += ' Your email is marcus.r@outlook.com.';
+    add('Saving is blocked while the scenario has player details (L&D)', /Possible player details/.test(trainerSaveBlockReason(genBad)) && trainerSaveBlockReason(cloneScenarioContentFields(scenarioById('trn-6')))==='');
+    const genGap = cloneScenarioContentFields(scenarioById('trn-6'));
+    genGap.caseData = genGap.caseData.map(c=>Object.assign({}, c, {gated:false})); genGap.correctTag = 'Slots: Missng Win'; genGap.processGrounding = Object.assign({}, genGap.processGrounding, {criticalErrors:''});
+    const sw = trainerScenarioWarnings(genGap);
+    add('Before saving, the same check runs on the built scenario (fail, look-up, tag) as warnings only', sw.some(x=>/counts as a fail/.test(x)) && sw.some(x=>/click to check/.test(x)) && sw.some(x=>/isn’t in the tag list/.test(x)) && trainerSaveBlockReason(genGap)==='');
+    // --- 4. Try it yourself ---
+    window.fetch = function(){ fetchCalls++; return Promise.resolve(new Response('{}')); };
+    const trial = Object.assign(cloneScenarioContentFields(scenarioById('trn-10')), {id:'trial_diag12', isTrainerTrial:true, audience:'training'});
+    state.trainerTrialScenario = trial;
+    add('A trial scenario can be played (it resolves like any scenario) and shows the “nothing is saved” banner', scenarioById('trial_diag12')===trial && /nothing from this chat is saved/.test(trainerTrialBannerHtml(trial)) && trainerTrialBannerHtml(scenarioById('trn-10'))==='');
+    state.attemptHistory = {}; state.teamProgressLog = []; state.trainingAttempts = []; state.assignments = [];
+    const ctx = {scenario: trial, agentName:'Diag Trainer', transcript:[{speaker:'player',text:'hi'}], actionLog:[], evaluation:{questions:[{id:'q1',letter:'A'},{id:'q2',letter:'A'},{id:'q3',letter:'A'}]}, tlOverrides:{}};
+    archiveAttempt(ctx);
+    add('Try it yourself is never saved: no history, no Team Progress, no Training result, no assignment change, nothing sent to the server', ctx.archived===true && !Object.keys(state.attemptHistory).length && !state.teamProgressLog.length && !state.trainingAttempts.length && !state.assignments.length && fetchCalls===0);
+    window.fetch = realFetch;
+    // --- 5. gameplay beginners ---
+    const ids = ['trn-6','trn-7','trn-8','trn-9','trn-10'];
+    const G = ids.map(scenarioById);
+    add('trn-6..trn-10 exist as Foundation, Training-only, single-issue beginner chats with a calm player', G.every(s=>s && s.difficulty==='Foundation' && scenarioAudience(s)==='training' && s.complexity==='Single issue' && s.playerIntensity===1 && s.topic==='Gameplay'));
+    add('They are marked kbStatus "mixed" (not validated) and each lists what QA/L&D must confirm', G.every(s=>s.kbStatus==='mixed' && Array.isArray(s.kbPendingConfirmation) && s.kbPendingConfirmation.length && /unverified/.test(s.kbSource)));
+    add('They stay out of the agent library and Practice, and are offered to L&D for assignment', G.every(s=>!practicePoolFor('Someone').some(x=>x.id===s.id) && !LIBRARY_SCENARIOS.some(x=>x.id===s.id) && trainingScenarioPool().some(x=>x.id===s.id)));
+    add('Every correct tag and tag option is in the approved catalogue', G.every(s=>!scenarioTagProblems(s).length), G.map(s=>s.id+': '+scenarioTagProblems(s).join(' ')).filter(x=>!/: $/.test(x)).join(' / '));
+    add('No player details: only fictional training IDs 900106-900110 appear', G.every(s=>!scenarioPlayerDetailHits(s).length) && G.every((s,i)=>JSON.stringify(s.caseData).indexOf('9001'+String(6+i).padStart(2,'0'))>=0));
+    const gate = (s, re)=> (s.caseData||[]).find(c=>re.test(c.tab+' '+c.label));
+    const t6 = gate(scenarioById('trn-6'), /Test Account/), t10 = gate(scenarioById('trn-10'), /Test Account/);
+    add('Missing win and game won’t load: the test-account check is a Case Data card the trainee has to open', t6 && t6.gated && /test account/i.test(t6.gateLabel) && t10 && t10.gated && /test account/i.test(t10.gateLabel) && /loads and plays normally/.test(t10.value));
+    const s10 = scenarioById('trn-10'), s4 = scenarioById('trn-4'), loc = gate(s10, /geolocation/i);
+    add('Game won’t load is kept separate from trn-4: gated geolocation card shows inside Ontario, Outside Jurisdiction is a wrong option, trn-4 unchanged', loc && loc.gated && /inside Ontario/.test(loc.value) && s10.correctTag==="Slots: Game Doesn't Load" && s10.tagOptions.includes('Location: Outside Jurisdiction') && s4.correctTag==='Location: Outside Jurisdiction' && s4.tagOptions.includes("Slots: Game Doesn't Load") && s4.kbStatus==='validated');
+    const s7 = scenarioById('trn-7');
+    add('Stuck round: escalation only after troubleshooting, with the template flagged for confirmation (Tech Escalations expired)', /Player ID, Game Name, Timeframe & Date, Round ID, Description, Chat ID/.test(s7.processGrounding.escalationCriteria) && s7.kbPendingConfirmation.some(x=>/EXPIRED on 2026-10-24/.test(x)) && /premature escalation/.test(s7.processGrounding.criticalErrors));
+    add('Crash mid-spin: always tagged Slots: Game Crashed Mid-Spin and never escalated to Tech', scenarioById('trn-8').correctTag==='Slots: Game Crashed Mid-Spin' && /not escalated to Tech/.test(scenarioById('trn-8').processGrounding.escalationCriteria));
+    add('Free spins: not opted in but all other requirements met = Award Promotion, tagged Promo: Deposit Offer', scenarioById('trn-9').correctTag==='Promo: Deposit Offer' && scenarioById('trn-9').processGrounding.requiredActions.some(x=>/Award Promotion/.test(x)));
+    add('Existing beginner scenarios trn-1..trn-5 are unchanged (still KB-validated, same tags)', ['trn-1','trn-2','trn-3','trn-4','trn-5'].every(id=>scenarioById(id).kbStatus==='validated') && TRAINING_BEGINNER_SCENARIOS.length===5 && scenarioById('trn-1').correctTag==='Withdrawal: Interac: In Progress');
+    // --- 6. test data ---
+    const ev = {questions:[{id:'q1',letter:'A'},{id:'q2',letter:'A'},{id:'q3',letter:'A'}]};
+    state.trainingRecords = [
+      {type:'training-cohort', id:'tc_d12r', name:'Diag12 Real Cohort', startDate:'2026-11-10', trainer:'Diag', createdAt:1},
+      {type:'training-cohort', id:'tc_d12t', name:'Diag12 Test Cohort', startDate:'2026-11-10', trainer:'Diag', createdAt:2},
+      {type:'training-trainee', id:'tt_d12a', fullName:'Odile Brackenridge', cohortId:'tc_d12r', createdAt:3},
+      {type:'training-trainee', id:'tt_d12b', fullName:'Pim Wexworth', cohortId:'tc_d12r', createdAt:4},
+      {type:'training-trainee', id:'tt_d12c', fullName:'Quinlan Testperson', cohortId:'tc_d12t', createdAt:5},
+      {type:'training-assignment', id:'ta_d12a', traineeId:'tt_d12a', cohortId:'tc_d12r', scenarioId:'trn-1', assignedAt:6},
+      {type:'training-assignment', id:'ta_d12c', traineeId:'tt_d12c', cohortId:'tc_d12t', scenarioId:'trn-1', assignedAt:7},
+    ];
+    state.trainingAttempts = [
+      {agentName:'Odile Brackenridge', deviceId:'d12', timestamp:10, scenarioId:'trn-1', scenarioTitle:'Real attempt', evaluation:ev, pct:90, pass:true, space:'training', traineeId:'tt_d12a', cohortId:'tc_d12r'},
+      {agentName:'Quinlan Testperson', deviceId:'d12', timestamp:11, scenarioId:'trn-1', scenarioTitle:'Test attempt', evaluation:ev, pct:40, pass:false, space:'training', traineeId:'tt_d12c', cohortId:'tc_d12t'},
+    ];
+    state.trShowTest = false; state.trResultsCohort = ''; state.trHidePending = null; state.trDraft = {};
+    const now = Date.now();
+    state.trainingRecords.push({type:'training-visibility', id:'tv_cohort_tc_d12t', targetType:'cohort', targetId:'tc_d12t', status:'test', at:now, updatedAt:now});
+    const res = renderTrResultsBody(), asg = renderTrAssignBody(), coh = renderTrCohortsBody(), trn = renderTrTraineesBody();
+    add('A test cohort and its trainees, attempts and assignments are kept out of Results and assignment lists', res.indexOf('Quinlan Testperson')<0 && res.indexOf('Odile Brackenridge')>=0 && asg.indexOf('Quinlan Testperson')<0 && asg.indexOf('Diag12 Test Cohort')<0 && asg.indexOf('Odile Brackenridge')>=0);
+    add('Test records are listed under “Test & removed” with a Restore button, and nothing was deleted', /Test &amp; removed cohorts \(1\)/.test(coh) && coh.indexOf('data-tr-restore="cohort|tc_d12t"')>=0 && /Test &amp; removed trainees \(1\)/.test(trn) && state.trainingAttempts.length===2);
+    add('A test trainee can still log in as a trainee (so L&D can keep testing with them)', !!activeTraineeFor('Quinlan Testperson'));
+    state.trainingRecords.push({type:'training-visibility', id:'tv_trainee_tt_d12b', targetType:'trainee', targetId:'tt_d12b', status:'removed', at:now+1, updatedAt:now+1});
+    add('A removed trainee can no longer log in as a trainee, and their name is free to register again', !activeTraineeFor('Pim Wexworth') && trainingNameClash(['Pim Wexworth'])==='' && trainingNameClash(['Odile Brackenridge'])!=='');
+    state.trainingRecords.push({type:'training-visibility', id:'tv_cohort_tc_d12t', targetType:'cohort', targetId:'tc_d12t', status:'active', at:now+2, updatedAt:now+2});
+    add('Restore brings a cohort back everywhere (latest record wins)', renderTrResultsBody().indexOf('Quinlan Testperson')>=0 && !isHiddenCohort(trainingCohortById('tc_d12t')));
+    state.trainingRecords.push({type:'training-visibility', id:'tv_cohort_tc_d12t', targetType:'cohort', targetId:'tc_d12t', status:'test', at:now+3, updatedAt:now+3});
+    state.trShowTest = true;
+    add('“Show test records” brings test results back into view on demand', renderTrResultsBody().indexOf('Quinlan Testperson')>=0);
+    const tlLog = applyTlReviews([...state.trainingAttempts, ...state.trainingRecords]);
+    add('Test/removed records are Training records: they never reach the TL log', tlLog.length===0 && isTrainingRecord({type:'training-visibility'}));
+  }catch(err){ add('Error: '+err.message, false); }
+  window.fetch = realFetch;
+  keys.forEach(k=>{ state[k] = snap[k]; });
+  const n = rows.filter(r=>r.pass).length;
+  el.innerHTML = `<div class="diag-result"><div style="margin-bottom:6px;">${n} of ${rows.length} pass.</div>${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;"><span class="${r.pass?'diag-pass':'diag-fail'}">${r.pass?'PASS':'FAIL'}</span> ${escapeHtml(r.label)}${r.detail?`<div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${escapeHtml(r.detail)}</div>`:''}</div>`).join('')}</div>`;
 }
 
 // ---------- DIAGNOSTIC 9: TRAINING SEPARATION (v40) ----------
