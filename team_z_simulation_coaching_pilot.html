@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Betty Coaching Simulator - Simulation Engine - v41.5</title>
+<title>Betty Coaching Simulator - Simulation Engine - v42</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3529,7 +3529,7 @@ The TL described:
 - Tags / documentation / escalation requirements the TL specified: ${intake.escalationNotes || '(none specified - do not invent any escalation, reporting or tagging requirement)'}
 - Difficulty: ${intake.difficulty || interp?.difficulty || 'Applied'}
 - Topic/category: ${intake.topic || interp?.topic || 'General'}
-
+${intakeMaterialPromptBlock(intake)}${intakeMaterialText(intake) ? 'Because L&D training material is supplied: processGrounding.kbText must restate the specific game facts from it that this chat depends on (exact rule, symbol, paytable or payout values), so the grader can check the trainee against them; kbArticles stays limited to KB articles actually named.\n' : ''}
 ${interp ? `CONFIRMED INTERPRETATION - the TL reviewed this summary of the scenario and approved it. It is AUTHORITATIVE: your evidenceReconciliation, caseData, persona, requiredActions and criticalErrors must all agree with it, and you must not add a coaching objective that is not in it.
 ${formatInterpretationText(interp)}
 ` : ''}
@@ -3630,7 +3630,7 @@ The TL described:
 - KB/process source: ${intake.kbInfo || '(none provided)'}
 - Tags / documentation / escalation requirements: ${intake.escalationNotes || '(none specified)'}
 - Optional topic/difficulty hints: ${[intake.topic, intake.difficulty].filter(Boolean).join(' / ') || '(none)'}
-${previous ? `\nYOUR PREVIOUS SUMMARY (the TL said it was wrong in some way):\n${formatInterpretationText(previous)}\n` : ''}${correction ? `\nTHE TL'S CORRECTION - this overrides your previous summary and anything it contradicts; keep everything it does not touch: ${correction}\n` : ''}
+${intakeMaterialPromptBlock(intake)}${previous ? `\nYOUR PREVIOUS SUMMARY (the TL said it was wrong in some way):\n${formatInterpretationText(previous)}\n` : ''}${correction ? `\nTHE TL'S CORRECTION - this overrides your previous summary and anything it contradicts; keep everything it does not touch: ${correction}\n` : ''}
 RULES:
 1. Reconcile all supplied evidence chronologically before concluding anything. Later account records, replacement rewards, gameplay history, transaction history or other direct evidence may supersede or explain earlier statuses. Do not build the summary around an earlier record while ignoring later confirmed evidence. If evidence genuinely cannot be reconciled, say so in "openIssue" and "processGaps" instead of choosing a narrative.
 2. Use the TL's own words for every screen, tab, status, team and label. Never invent screen names, tabs, inboxes, teams or UI labels.
@@ -3728,7 +3728,7 @@ function resetScenarioBuilderFlow(){
 
 function normForMatch(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
 function intakeSourceBlob(intake){
-  return normForMatch([intake.whatHappened, intake.struggle, intake.desiredBehavior, intake.correctProcess, intake.evidence, intake.kbInfo, intake.playerBehavior, intake.escalationNotes, intake.topic].join(' \n '));
+  return normForMatch([intake.whatHappened, intake.struggle, intake.desiredBehavior, intake.correctProcess, intake.evidence, intake.kbInfo, intake.playerBehavior, intake.escalationNotes, intake.topic, intakeMaterialText(intake)].join(' \n '));
 }
 function formatEvidenceReconciliation(er){
   if(!er) return '';
@@ -3838,7 +3838,8 @@ function normalizeGeneratedScenario(raw, intake, interp){
     kbStatus:'tl_coaching_draft', engineTestRG:false, rgScoringRelevant: hasSecondary,
     readiness:'PRACTICE_ONLY',
     metadata:{kbSources:[], lastValidatedDate:null, validatedBy:null, reviewTriggerCategory:topic, policyVersionRef:null},
-    kbSource: intake.kbInfo ? 'TL-provided process info (not independently verified): ' + intake.kbInfo.slice(0,300) : 'No specific KB citation provided by the creating TL - coaching draft only.',
+    kbSource: intakeMaterials(intake).length ? 'L&D training material: ' + intakeMaterials(intake).map(m=>m.title).join(', ') + (intake.kbInfo ? ' + process info provided (not independently verified): ' + intake.kbInfo.slice(0,300) : '') : intake.kbInfo ? 'TL-provided process info (not independently verified): ' + intake.kbInfo.slice(0,300) : 'No specific KB citation provided by the creating TL - coaching draft only.',
+    ...(intakeMaterials(intake).length ? { trainingMaterialIds: intakeMaterials(intake).map(m=>m.id) } : {}),
     playerKnowledge:{ situation: String(raw.playerKnowledgeSituation||'') },
     personaPrompt: String(raw.personaPrompt||''),
     caseData,
@@ -3920,7 +3921,10 @@ function cloneScenarioContentFields(s){
     kbSource:s.kbSource||'',
     playerKnowledge: s.playerKnowledge||{situation:''},
     personaPrompt:s.personaPrompt||'',
-    caseData: (s.caseData||[]).map((c,i)=>({id:c.id||('c'+(i+1)), tab:c.tab, label:c.label, value:c.value, gated:!!c.gated, gateLabel:c.gateLabel||'Investigate'})),
+    caseData: (s.caseData||[]).map((c,i)=>({id:c.id||('c'+(i+1)), tab:c.tab, label:c.label, value:c.value, gated:!!c.gated, gateLabel:c.gateLabel||'Investigate', ...(c.imageId ? {imageId:c.imageId, imageDescription:c.imageDescription||''} : {})})),
+    ...(Array.isArray(s.playerShots) && s.playerShots.length ? { playerShots: s.playerShots.filter(p=>p && p.imageId).map(p=>({imageId:p.imageId, description:p.description||''})) } : {}),
+    ...((!s.isCustom && !s.isTrainerTrial && PLAYER_SCREENSHOTS[s.id]) ? { builtinShotOf: s.id } : (s.builtinShotOf ? { builtinShotOf: s.builtinShotOf } : (s.isTrainerTrial && s.trialOf && PLAYER_SCREENSHOTS[s.trialOf] ? { builtinShotOf: s.trialOf } : {}))),
+    ...(Array.isArray(s.trainingMaterialIds) && s.trainingMaterialIds.length ? { trainingMaterialIds: s.trainingMaterialIds.slice() } : {}),
     correctTag:s.correctTag, tagOptions:[...(s.tagOptions||[])],
     ...(s.correctSecondaryTag ? {correctSecondaryTag:s.correctSecondaryTag, secondaryTagOptions:[...(s.secondaryTagOptions||['None'])]} : {}),
     ahtTargetMinutes:s.ahtTargetMinutes||12,
@@ -4026,6 +4030,14 @@ async function saveScenarioBuilderDraft(){
   const ldBlock = state.view==='training' ? trainerSaveBlockReason(gen) : '';
   if(ldBlock){ state.scenarioBuilderError = ldBlock; render(); return; }
   const ldWarnings = state.view==='training' ? trainerScenarioWarnings(gen) : [];
+  // v42: screenshots - descriptions are what the grader reads, so they're required; player details blocked for TLs too.
+  gen.playerShots = (gen.playerShots||[]).filter(p=>p && p.imageId).map(p=>({imageId:p.imageId, description:cleanShotText(p.description)}));
+  if(!gen.playerShots.length) delete gen.playerShots;
+  (gen.caseData||[]).forEach(c=>{ if(c.imageId) c.imageDescription = cleanShotText(c.imageDescription); });
+  const shotProblems = builderShotProblems(gen);
+  if(shotProblems.length){ state.scenarioBuilderError = shotProblems.join(' '); render(); return; }
+  const shotPii = playerDetailHits([...(gen.playerShots||[]).map(p=>p.description), ...(gen.caseData||[]).map(c=>c.imageDescription)].filter(Boolean).join('\n'));
+  if(shotPii.length){ state.scenarioBuilderError = 'A screenshot description has a possible player detail - ' + shotPii.map(h=>h.kind + ' \u201c' + h.text + '\u201d').join('; ') + '. Use made-up details.'; render(); return; }
   if(!gen.title || !gen.title.trim()){ state.scenarioBuilderError = 'Title is required.'; render(); return; }
   if(state.scenarioBuilderVisibility==='private' && !state.scenarioBuilderTargetAgent){
     state.scenarioBuilderError = 'Pick the agent this private scenario is for.'; render(); return;
@@ -4762,7 +4774,7 @@ function renderSide(){
       if(!reviewItemVisible(c, state.investigated)) return;
       const revealed = !c.gated || state.investigated[c.id];
       if(revealed){
-        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(c.label)}</div><div class="cvalue">${escapeHtml(c.value)}</div>${simulatedWorkflowNote(c)}</div>`;
+        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(c.label)}</div><div class="cvalue">${escapeHtml(c.value)}</div>${caseImageHtml(c)}${simulatedWorkflowNote(c)}</div>`;
       }else{
         caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(c.label)}</div><div class="gated-msg">${c.reviewRole ? 'Not yet requested.' : 'Not yet investigated.'}</div><button class="small" data-investigate="${c.id}" style="margin-top:6px;">${escapeHtml(c.gateLabel||'Investigate')}</button>${simulatedWorkflowNote(c)}</div>`;
       }
@@ -7376,7 +7388,7 @@ function formatTranscriptForEval(transcript, s){
 }
 
 function formatCaseDataForEval(s){
-  return s.caseData.map(c=>`- [${c.tab}] ${c.gated ? 'GATED (required a click to reveal - see Action Log for proof)' : 'NOT GATED (shown to the agent automatically from the start, no click needed)'} - ${c.label}${c.reviewRole?' [SIMULATED WORKFLOW ACTION]':''}: ${c.value}`).join('\n') || '(none defined for this scenario)';
+  return s.caseData.map(c=>`- [${c.tab}] ${c.gated ? 'GATED (required a click to reveal - see Action Log for proof)' : 'NOT GATED (shown to the agent automatically from the start, no click needed)'} - ${c.label}${c.reviewRole?' [SIMULATED WORKFLOW ACTION]':''}: ${c.value}${c.imageId && c.imageDescription ? ' [Screenshot attached - it shows: ' + cleanShotText(c.imageDescription) + ']' : ''}`).join('\n') || '(none defined for this scenario)';
 }
 
 function formatActionLogForEval(actionLog){
@@ -10175,7 +10187,7 @@ function renderChallengeSide(){
       if(!reviewItemVisible(cd, slot.investigated)) return;
       const revealed = !cd.gated || slot.investigated[cd.id];
       if(revealed){
-        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(cd.label)}</div><div class="cvalue">${escapeHtml(cd.value)}</div>${simulatedWorkflowNote(cd)}</div>`;
+        caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(cd.label)}</div><div class="cvalue">${escapeHtml(cd.value)}</div>${caseImageHtml(cd)}${simulatedWorkflowNote(cd)}</div>`;
       }else{
         caseHtml += `<div class="case-card"><div class="clabel">${escapeHtml(cd.label)}</div><div class="gated-msg">${cd.reviewRole ? 'Not yet requested.' : 'Not yet investigated.'}</div><button class="small" data-challenge-investigate="${cd.id}" style="margin-top:6px;">${escapeHtml(cd.gateLabel||'Investigate')}</button>${simulatedWorkflowNote(cd)}</div>`;
       }
@@ -11329,7 +11341,7 @@ function topicOptionsForBuilder(){ return [...new Set(SCENARIOS.map(s=>s.topic))
 
 function emptyScenarioIntake(){
   // Five core questions + two optional. Everything else (briefing, persona, Case Data, process grounding, tags...) is generated output, never input.
-  return { whatHappened:'', struggle:'', correctProcess:'', evidence:'', playerBehavior:'', kbInfo:'', escalationNotes:'', difficulty:'', topic:'', desiredBehavior:'' };
+  return { whatHappened:'', struggle:'', correctProcess:'', evidence:'', playerBehavior:'', kbInfo:'', escalationNotes:'', difficulty:'', topic:'', desiredBehavior:'', materialIds:[] };
 }
 
 function renderCreateScenarioSectionBody(){
@@ -11484,6 +11496,7 @@ function renderScenarioPreviewEditForm(){
         <label style="font-size:11.5px;color:var(--text2);display:flex;align-items:center;gap:4px;"><input type="checkbox" data-case-field="gated" data-case-row="${idx}" ${c.gated?'checked':''}> Requires investigation (gated)</label>
         ${c.gated ? `<input data-case-field="gateLabel" data-case-row="${idx}" placeholder="Button label" value="${escapeHtml(c.gateLabel||'Investigate')}" style="flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-family:inherit;font-size:12px;">` : ''}
       </div>
+      ${renderCaseRowImageControls(c, idx)}
     </div>
   `).join('');
   const hasSecondary = !!gen.correctSecondaryTag;
@@ -11505,7 +11518,7 @@ function renderScenarioPreviewEditForm(){
       <span style="font-size:10px;font-weight:700;color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:2px 7px;">${escapeHtml(SCENARIO_KB_STATUS_LABELS[gen.kbStatus]||gen.kbStatus)}</span>
     </div>
     ${state.scenarioBuilderPendingReviewReset ? `<div style="color:var(--warn);font-size:12px;margin-top:8px;">This scenario was previously reviewed. Saving these edits returns it to "Pending QA Review" and clears its KB-validated/coaching-grounded status until it's reviewed again.</div>` : ''}
-    ${warnBoxHtml}${uiPanelHtml}
+    ${warnBoxHtml}${uiPanelHtml}${renderBuilderMaterialChips(gen)}
     <div style="display:grid;gap:10px;margin-top:12px;">
       <label style="font-size:12px;color:var(--text2);">Title
         <input id="editTitle" value="${escapeHtml(gen.title)}" style="width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">
@@ -11574,6 +11587,7 @@ function renderScenarioPreviewEditForm(){
         ${caseRows}
         <button class="small" id="btnAddCaseRow">+ Add case data item</button>
       </div>
+      ${renderBuilderPlayerShotsPanel(gen)}
       <label style="font-size:12px;color:var(--text2);">Required actions (one per line)
         <textarea id="editRequiredActions" style="width:100%;min-height:50px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;">${escapeHtml((gen.processGrounding.requiredActions||[]).join('\n'))}</textarea>
       </label>
@@ -11798,6 +11812,12 @@ function renderSystemTestsSectionBody(){
       <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks, no API calls: screenshots exist only on the agreed scenarios, are labelled mock-ups with no player details, are sent once and only after the agent asks, show as a picture in the chat, and reach the grader as a text note in the transcript. Other scenarios' player prompts and chat bubbles are unchanged.</div>
       <button id="runDiag13" style="margin-top:10px;">Run test</button>
       <div id="diag13Result"></div>
+    </div>
+    <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">14. Uploaded screenshots &amp; training material (v42)</h2>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks, no API calls: uploaded screenshots are sent only after the agent asks and once each, show as a picture in the chat, reach the grader as their description, survive duplicating, and go through the player-details check. Black-out and replace edits are burned into the image. Selected L&amp;D training material reaches both builder prompts as the source of truth for game facts. Scenarios without screenshots or material are unchanged.</div>
+      <button id="runDiag14" style="margin-top:10px;">Run test</button>
+      <div id="diag14Result"></div>
     </div>
 
     <div class="diag-section">
@@ -12833,6 +12853,7 @@ state.trDraft = {};
 state.trMsg = null;
 state.trGraduating = null;
 state.trCancelPending = null;
+state.trMatDraft = null; state.trMatError = ''; state.trMatRemovePending = null; // v42
 state.trResultsCohort = '';
 state.trLastIdentityRefresh = 0;
 
@@ -13241,6 +13262,7 @@ function renderTrainingArea(){
     <div style="margin-top:16px;">
     ${renderDashSection('tr-cohorts', 'Cohorts', `${trainingCohorts().filter(c=>!isHiddenCohort(c)).length} cohort${trainingCohorts().filter(c=>!isHiddenCohort(c)).length===1?'':'s'}`, renderTrCohortsBody, 'flag', '#e2a33d')}
     ${renderDashSection('tr-trainees', 'Trainees', `${trainees.length-graduated} in training · ${graduated} graduated`, renderTrTraineesBody, 'users', '#a06bd6')}
+    ${renderDashSection('tr-materials', 'Training material', `${trainingMaterials().length} item${trainingMaterials().length===1?'':'s'} · games, payouts, screenshots`, renderTrMaterialsBody, 'archive', '#2bb3c0')}
     ${renderDashSection('tr-create', 'Create Scenario', `${(state.customScenarios||[]).filter(cs=>scenarioAudience(cs)==='training').length} Training-only custom scenario${(state.customScenarios||[]).filter(cs=>scenarioAudience(cs)==='training').length===1?'':'s'}`, renderCreateScenarioSectionBody, 'grid', '#e05a8e')}
     ${renderDashSection('tr-assign', 'Assign Scenarios', `${open} open assignment${open===1?'':'s'}`, renderTrAssignBody, 'bolt', '#5b7cff')}
     ${renderDashSection('tr-results', 'Results', `${visibleTrainingAttempts().length} Training attempt${visibleTrainingAttempts().length===1?'':'s'}`, renderTrResultsBody, 'chart', '#3ecf8e')}
@@ -13412,7 +13434,8 @@ function scenarioPlayerDetailHits(s){
   const pg = s.processGrounding||{};
   const parts = [s.title, s.internalTitle, s.playerName, s.agentBriefing, s.preChatReason, s.preChatContext, s.personaPrompt,
     (s.playerKnowledge||{}).situation, s.playerKnowledgeSituation,
-    ...(s.caseData||[]).flatMap(c=>[c.tab, c.label, c.value]),
+    ...(s.caseData||[]).flatMap(c=>[c.tab, c.label, c.value, c.imageDescription]),
+    ...(s.playerShots||[]).map(p=>p && p.description),
     pg.kbText, ...(pg.requiredActions||[]), ...(pg.optionalActions||[]), pg.escalationCriteria, pg.criticalErrors];
   return playerDetailHits(parts.filter(Boolean).join('\n'));
 }
@@ -13446,7 +13469,7 @@ function trainerIntakeWarnings(intake){
   if(!TR_FAIL_WORDS.test(v('correctProcess') + '\n' + v('struggle'))) w.push('You haven’t said what counts as a fail. Add a line to question 3, e.g. “Fail: escalating before troubleshooting.”');
   if(v('evidence').length < 10) w.push('The trainee has nothing to look up. Add at least one record in question 4 (e.g. Round History) so the chat can be graded on what they checked.');
   else if(!/(click|open|load|view|check|look up|search|gated)/i.test(v('evidence'))) w.push('Say which records the trainee has to click to check - otherwise the grader can’t see whether they looked anything up.');
-  if(!v('kbInfo')) w.push('You haven’t said which KB article this is based on, so grading can only follow what you wrote here.');
+  if(!v('kbInfo') && !intakeMaterials(i).length) w.push('You haven’t said which KB article this is based on, so grading can only follow what you wrote here.');
   const tc = trainerTagCheck(v('escalationNotes') + '\n' + v('correctProcess'));
   if(!tc.ok) w.push(tagWarningFor(tc));
   if(!TR_ESC_WORDS.test(v('escalationNotes') + '\n' + v('correctProcess'))) w.push('You haven’t said when to escalate - or that no escalation is needed.');
@@ -13509,6 +13532,7 @@ function renderTrainerIntakeForm(){
   return `<div class="box" id="trainerIntakeForm" style="margin-bottom:14px;">
     ${tpl ? `<div class="box" style="margin-bottom:12px;border-color:var(--accent);font-size:12.5px;">Pre-filled from the template <strong>${escapeHtml(tpl.topic)} &gt; ${escapeHtml(tpl.issue)}</strong>${tplSc ? ` (${escapeHtml(tplSc.title)})` : ''}. Change anything you like - nothing is saved until you press Save.</div>` : ''}
     <div style="font-size:13px;margin-bottom:12px;color:var(--text2);">Answer five questions about the chat you want trainees to practise. Before anything is built you’ll see a short “here’s what I understood” check, so you can correct it. You never write the player’s script, the records screen or the scoring rules - those are built from your answers.</div>
+    ${renderIntakeMaterialPicker(intake)}
     <div style="display:grid;gap:14px;">${TRAINER_QUESTIONS.map((Q,i)=>q(i+1, Q)).join('')}</div>
     <details style="margin-top:14px;" ${(intake.kbInfo||intake.escalationNotes)?'open':''}>
       <summary style="cursor:pointer;font-size:12.5px;color:var(--text2);">KB article, correct tag and escalation, topic, difficulty</summary>
@@ -13691,6 +13715,9 @@ function wireTrainerBuilderEvents(){
   if(back) back.addEventListener('click', leaveTrainerTrial);
   const d12 = document.getElementById('runDiag12'); if(d12) d12.addEventListener('click', runDiagnostic12);
   const d13 = document.getElementById('runDiag13'); if(d13) d13.addEventListener('click', runDiagnostic13);
+  const d14 = document.getElementById('runDiag14'); if(d14) d14.addEventListener('click', runDiagnostic14);
+  wireBuilderShotEvents(); // v42: TL and L&D
+  wireTrMaterialEvents();   // v42: L&D only (checks the view itself)
   if(state.view!=='training') return;
   document.querySelectorAll('[data-ld-builder-mode]').forEach(el=>el.addEventListener('click', ()=>{
     const m = el.getAttribute('data-ld-builder-mode'); const prev = ldBuilderMode();
@@ -13879,8 +13906,8 @@ function runDiagnostic12(){
 // All screenshots are drawn here (inline SVG): fictional, no real player details, no logos, labelled as mock-ups.
 // Wording on error screens is generic placeholder text, not a copy of Betty's real messages.
 // ============================================================
-const SCREENSHOT_TOKEN = /\[\[\s*SCREENSHOT\s*\]\]/gi;
-const SCREENSHOT_TOKEN_ONE = /\[\[\s*SCREENSHOT\s*\]\]/i;
+const SCREENSHOT_TOKEN = /\[\[\s*SCREENSHOT(?:\s*(\d+))?\s*\]\]/gi; // v42: [[SCREENSHOT]] = [[SCREENSHOT 1]]
+const SCREENSHOT_TOKEN_ONE = /\[\[\s*SCREENSHOT(?:\s*(\d+))?\s*\]\]/i;
 const SCREENSHOT_ASK = /\b(screen ?shots?|screen ?caps?|screen ?grabs?|pictures?|photos?|pics?|images?|snap ?shots?|show me)\b/i;
 const PLAYER_SCREENSHOTS = {
   'trn-10': {kind:'game-black', game:'Maple Fortune',
@@ -13917,40 +13944,54 @@ const PLAYER_SCREENSHOTS = {
     player:'a screenshot of the Weekend Spins Offer banner you saw on Saturday (deposit $20 or more, get 20 free spins on Maple Fortune) - it has an "Opt in" button on it',
     alt:'Screenshot of the promotion banner: "Weekend Spins Offer - deposit $20 or more this weekend and get 20 Free Spins on Maple Fortune", with an "Opt in" button. It does not show whether the player opted in.'},
 };
-// Built-in scenarios only (custom scenarios can't carry a screenshot yet). A Try-it-yourself trial of a template keeps its template's screenshot.
+// The built-in mock-up for a scenario. A Try-it-yourself trial of a template keeps its template's screenshot; v42: a
+// custom copy of a built-in scenario keeps it too (builtinShotOf). Uploaded screenshots are in scenarioShots().
 function screenshotIdFor(s){
   if(!s) return null;
-  if(s.isTrainerTrial) return s.trialOf && PLAYER_SCREENSHOTS[s.trialOf] ? s.trialOf : null;
-  if(s.isCustom) return null;
+  if(s.isTrainerTrial && s.trialOf && PLAYER_SCREENSHOTS[s.trialOf]) return s.trialOf;
+  if(s.isTrainerTrial || s.isCustom) return s.builtinShotOf && PLAYER_SCREENSHOTS[s.builtinShotOf] ? s.builtinShotOf : null;
   return PLAYER_SCREENSHOTS[s.id] ? s.id : null;
 }
 function scenarioScreenshot(s){ const k = screenshotIdFor(s); return k ? PLAYER_SCREENSHOTS[k] : null; }
 // Added to the player system prompt ONLY for scenarios that have a screenshot (empty string otherwise).
 function playerScreenshotBlock(s){
-  const sc = scenarioScreenshot(s); if(!sc) return '';
-  return `SCREENSHOT YOU CAN SEND: you have ${sc.player}. Only send it after the agent asks you for a screenshot, photo, picture or image, or asks you to show them. To send it, write a short natural line (for example "here you go") and put [[SCREENSHOT]] at the very end of that message. Send it once only - after that, refer back to it in words. Never describe it as if you had sent it before you actually have.\n\n`;
+  const shots = scenarioShots(s); if(!shots.length) return '';
+  if(shots.length===1) return `SCREENSHOT YOU CAN SEND: you have ${shots[0].player}. Only send it after the agent asks you for a screenshot, photo, picture or image, or asks you to show them. To send it, write a short natural line (for example "here you go") and put [[SCREENSHOT]] at the very end of that message. Send it once only - after that, refer back to it in words. Never describe it as if you had sent it before you actually have.\n\n`;
+  return `SCREENSHOTS YOU CAN SEND: you have ${shots.length} screenshots:\n${shots.map(x=>x.n + '. ' + x.player).join('\n')}\nOnly send one after the agent asks you for a screenshot, photo, picture or image, or asks you to show them - and send the one that fits what they asked for. To send it, write a short natural line (for example "here you go") and put its marker at the very end of that message: ${shots.map(x=>'[[SCREENSHOT ' + x.n + ']]').join(', ')}. If the agent asks for all of them you may put several markers. Send each one once only - after that, refer back to it in words. Never describe one as if you had sent it before you actually have.\n\n`;
 }
 function agentAskedForScreenshot(transcript){ return (transcript||[]).some(m=>m.speaker==='agent' && SCREENSHOT_ASK.test(m.text||'')); }
 function screenshotAlreadySent(transcript){ return (transcript||[]).some(m=>m.speaker==='player' && m.screenshotId); }
 // Builds the player message object. Strips the token; attaches the screenshot only if the agent has asked and it
 // hasn't been sent yet. The grader-facing note goes into the text so every existing transcript reader sees it.
 function playerMessage(s, transcript, rawText, extra){
-  const had = SCREENSHOT_TOKEN_ONE.test(String(rawText||''));
-  let text = String(rawText||'').replace(SCREENSHOT_TOKEN, '').replace(/[ \t]+\n/g,'\n').trim();
+  const raw = String(rawText||'');
+  const wanted = []; const re = new RegExp(SCREENSHOT_TOKEN.source, 'gi'); let mt;
+  while((mt = re.exec(raw))) wanted.push(mt[1] ? parseInt(mt[1],10) : 1);
+  if(wanted.length && scenarioShots(s).length===1) wanted.splice(0, wanted.length, 1); // one screenshot: any marker means that one
+  let text = raw.replace(re, '').replace(/[ \t]+\n/g,'\n').trim();
   const msg = Object.assign({speaker:'player', text}, extra||{});
-  const sc = scenarioScreenshot(s);
-  if(had && sc && agentAskedForScreenshot(transcript) && !screenshotAlreadySent(transcript)){
-    msg.screenshotId = screenshotIdFor(s);
-    msg.text = (text ? text + ' ' : '') + '[Player sent a screenshot: ' + sc.alt + ']';
+  const shots = scenarioShots(s);
+  if(wanted.length && shots.length && agentAskedForScreenshot(transcript)){
+    const sent = sentShotNumbers(transcript);
+    const toSend = [...new Set(wanted)].map(k=>shots.find(x=>x.n===k)).filter(x=>x && !sent.has(x.n));
+    if(toSend.length){
+      msg.text = (text ? text + ' ' : '') + toSend.map(x=>'[Player sent a screenshot: ' + x.alt + ']').join(' ');
+      const svg = toSend.find(x=>x.svgKey); if(svg) msg.screenshotId = svg.svgKey;
+      const ups = toSend.filter(x=>x.imageId).map(x=>({n:x.n, imageId:x.imageId, alt:x.alt}));
+      if(ups.length) msg.shots = ups;
+    }
   }
   return msg;
 }
 // Chat bubble body: identical to the old escapeHtml(m.text) for every message without a screenshot.
 function renderChatMessageBody(m){
   const sc = m && m.screenshotId ? PLAYER_SCREENSHOTS[m.screenshotId] : null;
-  if(!sc) return escapeHtml(m.text);
-  const text = String(m.text||'').replace(/\s*\[Player sent a screenshot: [^\]]*\]\s*$/, '');
-  return `${text ? escapeHtml(text) : ''}<figure class="player-screenshot" style="margin:${text?'8px':'0'} 0 0;max-width:200px;">${screenshotSvg(sc)}<figcaption style="font-size:10.5px;color:var(--text3);margin-top:4px;">Screenshot sent by the player (training mock-up)</figcaption></figure>`;
+  const ups = (m && Array.isArray(m.shots)) ? m.shots.filter(x=>x && x.imageId) : [];
+  if(!sc && !ups.length) return escapeHtml(m.text);
+  const text = String(m.text||'').replace(/(\s*\[Player sent a screenshot: [^\]]*\])+\s*$/, '');
+  let figs = sc ? `<figure class="player-screenshot" style="margin:${text?'8px':'0'} 0 0;max-width:200px;">${screenshotSvg(sc)}<figcaption style="font-size:10.5px;color:var(--text3);margin-top:4px;">Screenshot sent by the player (training mock-up)</figcaption></figure>` : '';
+  ups.forEach((x,i)=>{ figs += `<figure class="player-screenshot" style="margin:${text||sc||i?'8px':'0'} 0 0;max-width:240px;"><a href="${escapeHtml(imageUrl(x.imageId))}" target="_blank" rel="noopener" title="Open full size"><img src="${escapeHtml(imageUrl(x.imageId))}" alt="${escapeHtml(x.alt||'Screenshot')}" style="display:block;width:100%;border-radius:10px;border:1px solid var(--border);"></a><figcaption style="font-size:10.5px;color:var(--text3);margin-top:4px;">Screenshot sent by the player</figcaption></figure>`; });
+  return `${text ? escapeHtml(text) : ''}${figs}`;
 }
 
 // ---------- drawing ----------
@@ -14076,6 +14117,683 @@ function runDiagnostic13(){
   }catch(err){ add('Error: '+err.message, false); }
   const n = rows.filter(r=>r.pass).length;
   el.innerHTML = `<div class="diag-result"><div style="margin-bottom:6px;">${n} of ${rows.length} pass.</div>${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;"><span class="${r.pass?'diag-pass':'diag-fail'}">${r.pass?'PASS':'FAIL'}</span> ${escapeHtml(r.label)}${r.detail?`<div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${escapeHtml(r.detail)}</div>`:''}</div>`).join('')}</div>`;
+}
+
+
+// ============================================================
+// v42: UPLOADED SCREENSHOTS (TLs and L&D) + L&D TRAINING MATERIAL
+// ============================================================
+// Anyone who builds a scenario (TL Create Scenario or L&D Create Scenario) can add real screenshots:
+//  - "the player can send": works like the v41.5 mock-ups - sent only after the agent asks, each one once.
+//  - "attached to a Case Data record": the agent sees it in the Investigation Panel (e.g. a paytable or round history).
+// Every screenshot goes through the Screenshot checker first: the AI looks for player details and internal tools,
+// the uploader blacks them out or replaces them with made-up details (the scenario's player name, a training ID,
+// an @example.com email), the edited image is checked again, and the uploader confirms it. Only the EDITED image is
+// uploaded - the original never reaches the Betty server. The grader and the AI player only ever read the confirmed
+// text description, so grading stays text-based exactly as before.
+// L&D also gets a Training material library (game notes, paytables, payout rules, screenshots). A trainer can base
+// a scenario on it; for game facts the material is the source of truth, because the KB doesn't document the games.
+// Needs the v42 backend (POST/GET /api/images). Images are files on the Render disk, never inside store.json.
+
+const SHOT_MAX_SIDE = 1400;
+const SHOT_KINDS = {
+  name:'Name', username:'Username', email:'Email address', phone:'Phone number', address:'Address or postal code',
+  dob:'Date of birth', player_id:'Player / user ID', card_or_account:'Card or bank account number',
+  transaction_or_reference:'Transaction or reference number', ip:'IP address', photo_of_person:'Photo of a person', other:'Other detail',
+};
+const SHOT_REPLACE_KINDS = ['name','username','email','player_id','transaction_or_reference'];
+const SHOT_SURNAMES = ['Morgan','Ellis','Parker','Reid','Hayes','Brooks','Quinn','Carter'];
+function imageUrl(id){ return BACKEND_URL + '/api/images/' + encodeURIComponent(id); }
+function cleanShotText(t){ return String(t||'').replace(/[\[\]]/g,'').replace(/\s+/g,' ').trim(); }
+function shotRand(n){ return Math.floor(Math.random()*n); }
+function fakeLike(t){
+  const U='ABCDEFGHJKLMNPQRSTUVWXYZ', L='abcdefghjkmnpqrstuvwxyz';
+  return String(t||'').replace(/[A-Z]/g,()=>U[shotRand(U.length)]).replace(/[a-z]/g,()=>L[shotRand(L.length)]).replace(/[0-9]/g,()=>String(shotRand(10)));
+}
+function trainingIdFake(){ return String(TRAINING_PLAYER_ID_MIN + shotRand(TRAINING_PLAYER_ID_MAX - TRAINING_PLAYER_ID_MIN + 1)); }
+function shotDefaultReplacement(kind, text, playerName){
+  const first = (String(playerName||'').trim().split(/\s+/)[0] || 'Alex').replace(/[^A-Za-z'-]/g,'') || 'Alex';
+  const t = String(text||'').trim();
+  if(kind==='name') return /\s/.test(t) ? first + ' ' + SHOT_SURNAMES[shotRand(SHOT_SURNAMES.length)] : first;
+  if(kind==='username') return first.toLowerCase() + (10 + shotRand(89));
+  if(kind==='email') return first.toLowerCase() + '@example.com';
+  if(kind==='player_id') return /^\d{5,7}$/.test(t) ? trainingIdFake() : fakeLike(t);
+  if(kind==='transaction_or_reference') return fakeLike(t) || 'TRN' + (1000 + shotRand(8999));
+  return '';
+}
+
+// ---------- scenario screenshots: built-in mock-up (v41.5) + uploaded ones, numbered 1..n ----------
+function scenarioShots(s){
+  if(!s) return [];
+  const out = [];
+  const key = screenshotIdFor(s);
+  if(key) out.push({n:1, svgKey:key, player:PLAYER_SCREENSHOTS[key].player, alt:PLAYER_SCREENSHOTS[key].alt});
+  (Array.isArray(s.playerShots) ? s.playerShots : []).forEach(p=>{
+    if(!p || !p.imageId) return;
+    const d = cleanShotText(p.description) || 'a screenshot';
+    out.push({n: out.length+1, imageId: p.imageId, player: 'a screenshot showing: ' + d, alt: 'Screenshot: ' + d});
+  });
+  return out;
+}
+function sentShotNumbers(transcript){
+  const set = new Set();
+  (transcript||[]).forEach(m=>{ if(!m || m.speaker!=='player') return; if(m.screenshotId) set.add(1); (m.shots||[]).forEach(x=>x && set.add(x.n)); });
+  return set;
+}
+function caseImageHtml(c){
+  if(!c || !c.imageId) return '';
+  return `<a href="${escapeHtml(imageUrl(c.imageId))}" target="_blank" rel="noopener" title="Open full size" style="display:block;margin-top:6px;"><img src="${escapeHtml(imageUrl(c.imageId))}" alt="${escapeHtml(c.imageDescription||'Screenshot')}" loading="lazy" style="display:block;max-width:100%;max-height:260px;border-radius:8px;border:1px solid var(--border);"></a>`;
+}
+function shotThumbHtml(imageId, alt, h){
+  return `<img src="${escapeHtml(imageUrl(imageId))}" alt="${escapeHtml(alt||'Screenshot')}" loading="lazy" style="display:block;max-height:${h||90}px;max-width:160px;border-radius:6px;border:1px solid var(--border);background:#000;">`;
+}
+
+// ---------- L&D training material ----------
+function trainingMaterials(){
+  return latestTrainingById('training-material').filter(m=>m && m.status!=='removed').sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+}
+function trainingMaterialById(id){ return trainingMaterials().find(m=>m.id===id) || null; }
+function intakeMaterials(intake){ return ((intake && intake.materialIds) || []).map(trainingMaterialById).filter(Boolean); }
+function intakeMaterialText(intake){
+  const mats = intakeMaterials(intake); if(!mats.length) return '';
+  let t = mats.map(m=>`### ${m.title}${m.topic ? ' (' + m.topic + ')' : ''}\n${String(m.notes||'').trim()}${(m.images||[]).length ? '\nScreenshots in this material:\n' + m.images.map(i=>'- ' + cleanShotText(i.description)).join('\n') : ''}`).join('\n\n');
+  if(t.length > 14000) t = t.slice(0, 14000) + '\n(... material shortened)';
+  return t;
+}
+function intakeMaterialPromptBlock(intake){
+  const t = intakeMaterialText(intake); if(!t) return '';
+  return `\nL&D TRAINING MATERIAL - written by Betty's L&D trainers from what they teach new hires. Betty's KB does not document individual games, so for game rules, game mechanics, symbols, paytables, features, payouts and how a round is settled, this material IS the source of truth: use it exactly, never contradict it, and never add game facts it does not contain. It does not override Betty process (escalations, tags, verification, RG) unless it states that process explicitly.\n${t}\n`;
+}
+function materialPlayerDetailHits(m){
+  return playerDetailHits([m.title, m.topic, m.notes, ...((m.images||[]).map(i=>i.description))].filter(Boolean).join('\n'));
+}
+function materialImagesForPicker(purpose){
+  const out = [];
+  trainingMaterials().forEach(m=>(m.images||[]).forEach(i=>{ if(i && i.imageId && !(purpose==='player' && i.internalTool)) out.push({imageId:i.imageId, description:i.description||'', internalTool:!!i.internalTool, from:m.title}); }));
+  return out;
+}
+
+// ---------- Screenshot checker: canvas helpers (pure, testable) ----------
+function shotSampleBackground(ctx, W, H, b){
+  const pts = [];
+  const push = (x,y)=>{ x = Math.max(0, Math.min(W-1, Math.round(x))); y = Math.max(0, Math.min(H-1, Math.round(y))); pts.push([x,y]); };
+  const steps = 12;
+  for(let i=0;i<=steps;i++){
+    const fx = b.x + b.w*i/steps, fy = b.y + b.h*i/steps;
+    push(fx, b.y-2); push(fx, b.y+b.h+2); push(b.x-2, fy); push(b.x+b.w+2, fy);
+  }
+  const rs=[], gs=[], bs=[];
+  pts.forEach(([x,y])=>{ const d = ctx.getImageData(x,y,1,1).data; rs.push(d[0]); gs.push(d[1]); bs.push(d[2]); });
+  const med = a=>{ a.sort((p,q)=>p-q); return a[Math.floor(a.length/2)]; };
+  return [med(rs), med(gs), med(bs)];
+}
+function shotDrawReplacement(ctx, W, H, b, text){
+  const [r,g,bl] = shotSampleBackground(ctx, W, H, b);
+  ctx.fillStyle = `rgb(${r},${g},${bl})`;
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+  const t = String(text||'');
+  if(!t) return;
+  const lum = 0.299*r + 0.587*g + 0.114*bl;
+  ctx.fillStyle = lum > 140 ? '#111111' : '#ffffff';
+  let size = Math.max(7, Math.floor(b.h*0.72));
+  const font = s=>`500 ${s}px Arial, Helvetica, sans-serif`;
+  ctx.font = font(size);
+  while(size > 7 && ctx.measureText(t).width > b.w*0.96){ size--; ctx.font = font(size); }
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.fillText(t, b.x + Math.max(1, b.w*0.02), b.y + b.h/2 + 0.5, b.w*0.98);
+}
+// Burns every box into the canvas. Returns the replacement values used (so the re-check can ignore them).
+function shotApplyBoxes(canvas, boxes){
+  const ctx = canvas.getContext('2d'); const W = canvas.width, H = canvas.height; const used = [];
+  // Sample all backgrounds BEFORE painting anything, so two neighbouring boxes don't sample each other.
+  const plan = (boxes||[]).filter(b=>b && b.action!=='keep' && b.w>1 && b.h>1).map(b=>({b, bg: b.action==='replace' ? shotSampleBackground(ctx, W, H, b) : null}));
+  plan.forEach(({b})=>{
+    if(b.action==='replace' && String(b.replacement||'').trim()){
+      shotDrawReplacement(ctx, W, H, b, String(b.replacement).trim());
+      used.push(String(b.replacement).trim());
+    } else { ctx.fillStyle = '#000000'; ctx.fillRect(b.x, b.y, b.w, b.h); }
+  });
+  return used;
+}
+function shotCanvasBase64(canvas){ return canvas.toDataURL('image/jpeg', 0.86).split(',')[1]; }
+
+function buildShotScanPrompt(W, H, purpose, allowed){
+  return `You are checking a screenshot before it is used in an internal customer-support training simulator at Betty, an online casino in Ontario. Nothing real about a player (or any other real person) may stay visible. The image is ${W} x ${H} pixels.
+
+1. Find EVERY readable piece of personal or account information about a real person: names (first or last, including greetings like "Hi Sarah", chat headers and signatures), usernames or screen names, email addresses, phone numbers, street addresses or postal codes, dates of birth, player / user / account IDs, card or bank account numbers, transaction / reference / confirmation numbers, IP addresses, and photos of a person's face. Report each one separately, with a TIGHT bounding box around only that text, in pixel coordinates of this image: [left, top, right, bottom].
+${allowed && allowed.length ? 'These values are made-up training details that were put in on purpose - do NOT report them: ' + allowed.map(v=>'"' + v + '"').join(', ') + '. Training player IDs 900100-900199 and @example.com email addresses are also made up.\n' : 'Training player IDs 900100-900199 and @example.com email addresses are made up - do not report them.\n'}Solid black rectangles are details that were already removed - ignore them.
+Do NOT report: game names, amounts, bet sizes, balances, multipliers, dates or times on their own, statuses, button labels, menu items, Betty branding, promotion names or game provider names.
+
+2. Say whether this is a screen from an INTERNAL tool that players never see (for example the Midnight back office, Slack, Gigadat, Nuvei, Sendgrid, Smartico, Onfido, a KB article, the LiveChat agent view, or internal team messages) - as opposed to something a player can see (the Betty website or app, a game, a game's round history or rules, their own banking app or email).
+
+3. Describe the screenshot for a grader who cannot see it: 1-3 plain sentences naming the screen and every visible fact that matters (amounts, statuses, times, game name, messages, buttons), using the values exactly as they appear. Do not mention black boxes or redactions. No square brackets.
+
+Reply with ONLY this JSON, nothing before or after:
+{"screenType":"short name of the screen","internalTool":{"present":false,"name":""},"items":[{"kind":"name|username|email|phone|address|dob|player_id|card_or_account|transaction_or_reference|ip|photo_of_person|other","text":"exactly as shown","box":[0,0,0,0]}],"description":"..."}`;
+}
+async function scanShotCanvas(canvas, purpose, allowed){
+  const W = canvas.width, H = canvas.height;
+  const content = [
+    {type:'image', source:{type:'base64', media_type:'image/jpeg', data: shotCanvasBase64(canvas)}},
+    {type:'text', text: buildShotScanPrompt(W, H, purpose, allowed)},
+  ];
+  const {text} = await callClaudeRaw(null, [{role:'user', content}], 2000, 120000);
+  const j = parseModelJson(text);
+  if(!j || typeof j!=='object') throw new Error('The check came back in a form the app could not read. Press "Check again".');
+  const items = (Array.isArray(j.items) ? j.items : []).map(it=>{
+    const bx = Array.isArray(it && it.box) ? it.box.map(Number) : [];
+    if(bx.length!==4 || bx.some(v=>!isFinite(v))) return null;
+    let [l,t,r,b] = bx; if(r<l) [l,r]=[r,l]; if(b<t) [t,b]=[b,t];
+    l = Math.max(0, l-3); t = Math.max(0, t-3); r = Math.min(W, r+3); b = Math.min(H, b+3);
+    if(r-l < 2 || b-t < 2) return null;
+    const kind = SHOT_KINDS[it.kind] ? it.kind : 'other';
+    return {kind, text: String(it.text||'').trim(), x:l, y:t, w:r-l, h:b-t};
+  }).filter(Boolean);
+  const it = j.internalTool || {};
+  return {screenType: String(j.screenType||'').trim(), internalTool:{present: it.present===true, name: String(it.name||'').trim()}, items, description: cleanShotText(j.description)};
+}
+
+// ---------- Screenshot checker: the modal ----------
+// opts: {purpose:'player'|'reference'|'material', playerName, title, onDone({imageId, description, internalTool})}
+let shotChk = null;
+function openShotChecker(opts){
+  closeShotChecker();
+  shotChk = Object.assign({purpose:'reference', playerName:'', title:'Add a screenshot'}, opts||{}, {
+    canvas:null, orig:null, boxes:[], sel:null, scan:{status:'idle'}, canvasVer:0, scanVer:-1, allowed:[],
+    description:'', descEdited:false, foundTexts:[], confirmed:false, notInternal:false, busy:false, error:'', drag:null, nextId:1,
+  });
+  const overlay = document.createElement('div');
+  overlay.id = 'shotCheckerOverlay'; overlay.className = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal" style="max-width:1080px;width:96vw;max-height:94vh;overflow:auto;" id="shotCheckerModal"></div>`;
+  document.body.appendChild(overlay);
+  document.addEventListener('paste', shotOnPaste);
+  document.addEventListener('keydown', shotOnKey);
+  shotRenderModal();
+}
+function closeShotChecker(){
+  const o = document.getElementById('shotCheckerOverlay'); if(o) o.remove();
+  document.removeEventListener('paste', shotOnPaste);
+  document.removeEventListener('keydown', shotOnKey);
+  shotChk = null;
+}
+function shotOnPaste(e){
+  if(!shotChk || shotChk.canvas) return;
+  const item = [...((e.clipboardData && e.clipboardData.items) || [])].find(i=>i.type && i.type.indexOf('image/')===0);
+  if(item){ e.preventDefault(); shotLoadFile(item.getAsFile()); }
+}
+function shotOnKey(e){
+  if(!shotChk || !shotChk.canvas) return;
+  const tag = (document.activeElement && document.activeElement.tagName) || '';
+  if((e.key==='Delete' || e.key==='Backspace') && shotChk.sel!=null && !/INPUT|TEXTAREA|SELECT/.test(tag)){
+    e.preventDefault(); shotChk.boxes = shotChk.boxes.filter(b=>b.id!==shotChk.sel); shotChk.sel = null; shotRedraw(); shotRenderPanel();
+  }
+}
+function shotLoadFile(file){
+  if(!file || !/^image\//.test(file.type||'')){ shotChk.error = 'That isn’t an image file. Use a PNG or JPG screenshot.'; shotRenderModal(); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = ()=>{
+    const k = Math.min(1, SHOT_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const W = Math.max(1, Math.round(img.naturalWidth*k)), H = Math.max(1, Math.round(img.naturalHeight*k));
+    const mk = ()=>{ const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0,0,W,H); x.drawImage(img, 0, 0, W, H); return c; };
+    shotChk.orig = mk(); shotChk.canvas = mk(); shotChk.canvasVer = 1; shotChk.error = '';
+    URL.revokeObjectURL(url);
+    shotRenderModal();
+    shotRunScan();
+  };
+  img.onerror = ()=>{ URL.revokeObjectURL(url); shotChk.error = 'That image could not be opened.'; shotRenderModal(); };
+  img.src = url;
+}
+async function shotRunScan(){
+  if(!shotChk || !shotChk.canvas) return;
+  const me = shotChk, ver = me.canvasVer;
+  me.scan = {status:'running'}; shotRenderPanel();
+  try{
+    const r = await scanShotCanvas(me.canvas, me.purpose, me.allowed);
+    if(shotChk!==me || me.canvasVer!==ver) return;
+    me.scan = Object.assign({status:'done'}, r); me.scanVer = ver;
+    r.items.forEach(it=>{ if(it.text && it.text.length>=3 && !me.foundTexts.includes(it.text)) me.foundTexts.push(it.text); });
+    r.items.forEach(it=>{
+      const replace = SHOT_REPLACE_KINDS.includes(it.kind);
+      me.boxes.push(Object.assign({id: me.nextId++, source:'ai', action: replace ? 'replace' : 'blackout', replacement: replace ? shotDefaultReplacement(it.kind, it.text, me.playerName) : ''}, it));
+    });
+    if(!me.descEdited && r.description) me.description = r.description;
+  }catch(err){
+    if(shotChk!==me) return;
+    me.scan = {status:'error', error: err.message || String(err)};
+  }
+  shotRedraw(); shotRenderPanel();
+}
+function shotPendingBoxes(){ return (shotChk ? shotChk.boxes : []).filter(b=>b.action!=='keep'); }
+function shotSaveBlockers(){
+  const c = shotChk; if(!c || !c.canvas) return ['Add a screenshot first.'];
+  const out = [];
+  if(c.scan.status==='running') out.push('Wait for the check to finish.');
+  if(shotPendingBoxes().length) out.push('Press “Apply and check again” so your changes are burned into the image and checked.');
+  else if(c.scanVer!==c.canvasVer || c.scan.status!=='done') out.push('The final image hasn’t been checked yet - press “Check again”.');
+  if(c.purpose==='player' && c.scan.status==='done' && c.scan.internalTool && c.scan.internalTool.present && !c.notInternal) out.push('Players never have screenshots of internal tools. Attach it to a Case Data record instead (as something the agent looks up), or tick the box if this really is a screen the player can see.');
+  const d = cleanShotText(c.description);
+  if(!d) out.push('Write what the screenshot shows - the grader and the AI player only read this description.');
+  else {
+    const h = playerDetailHits(d); if(h.length) out.push('The description still has a possible player detail: ' + h.map(x=>x.kind + ' “' + x.text + '”').join(', ') + '. Use the made-up values.');
+    const left = c.foundTexts.filter(t=>!c.allowed.includes(t) && d.toLowerCase().indexOf(t.toLowerCase())>=0 && !c.boxes.some(b=>b.text===t && b.action==='keep'));
+    if(left.length) out.push('The description still mentions ' + left.map(t=>'“' + t + '”').join(', ') + ' from the original screenshot. Use the made-up values instead.');
+  }
+  if(!c.confirmed) out.push('Tick the confirmation once you’ve looked at the final image yourself.');
+  return out;
+}
+function shotPurposeText(p){
+  return p==='player' ? 'The player sends this in the chat - only after the agent asks for a screenshot, and only once.'
+    : p==='material' ? 'Saved with this training material. Trainers can reuse it in scenarios.'
+    : 'Attached to this Case Data record - the agent sees it in the Investigation Panel.';
+}
+function shotRenderModal(){
+  const c = shotChk; const m = document.getElementById('shotCheckerModal'); if(!c || !m) return;
+  if(!c.canvas){
+    const lib = materialImagesForPicker(c.purpose);
+    m.innerHTML = `<h2 style="margin-top:0;">${escapeHtml(c.title)}</h2>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">${escapeHtml(shotPurposeText(c.purpose))}</div>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;margin-top:6px;">Before it's saved, the screenshot is checked for player details (names, emails, IDs, card numbers...) and internal tools. You black them out or swap them for made-up details${c.playerName ? ` - names become <strong>${escapeHtml(c.playerName)}</strong>, the player in this scenario` : ''}. Only the edited image is saved.</div>
+      ${c.error ? `<div class="box" style="margin-top:10px;border-color:var(--bad);color:var(--bad);font-size:12.5px;">${escapeHtml(c.error)}</div>` : ''}
+      <label id="shotDrop" style="display:block;margin-top:14px;border:2px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;color:var(--text2);font-size:13px;">
+        <input type="file" id="shotFile" accept="image/png,image/jpeg,image/webp" style="display:none;">
+        <strong style="color:var(--text);">Choose a screenshot</strong>, drop it here, or paste it (Ctrl/Cmd + V)
+      </label>
+      ${lib.length ? `<div style="margin-top:16px;"><div style="font-size:12.5px;font-weight:600;margin-bottom:6px;">Or use a screenshot already checked in Training material</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">${lib.map((x,i)=>`<button type="button" class="small" data-shot-lib="${i}" title="${escapeHtml(x.description)}" style="padding:6px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;max-width:180px;text-align:left;">${shotThumbHtml(x.imageId, x.description, 80)}<span style="font-size:11px;color:var(--text3);">${escapeHtml(x.from)}</span></button>`).join('')}</div></div>` : ''}
+      <div style="margin-top:16px;display:flex;gap:8px;"><button id="shotCancel">Cancel</button></div>`;
+    document.getElementById('shotCancel').addEventListener('click', closeShotChecker);
+    const f = document.getElementById('shotFile'); f.addEventListener('change', e=>shotLoadFile(e.target.files && e.target.files[0]));
+    const drop = document.getElementById('shotDrop');
+    drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.style.borderColor = 'var(--accent)'; });
+    drop.addEventListener('dragleave', ()=>{ drop.style.borderColor = 'var(--border)'; });
+    drop.addEventListener('drop', e=>{ e.preventDefault(); shotLoadFile(e.dataTransfer.files && e.dataTransfer.files[0]); });
+    m.querySelectorAll('[data-shot-lib]').forEach(el=>el.addEventListener('click', ()=>{
+      const x = lib[Number(el.getAttribute('data-shot-lib'))]; if(!x) return;
+      const done = c.onDone; closeShotChecker(); if(done) done({imageId:x.imageId, description:cleanShotText(x.description), internalTool:x.internalTool});
+    }));
+    return;
+  }
+  m.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <h2 style="margin:0;">${escapeHtml(c.title)}</h2>
+      <div style="font-size:12px;color:var(--text3);">${escapeHtml(shotPurposeText(c.purpose))}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr);gap:16px;margin-top:12px;align-items:start;" id="shotGrid">
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Drag on the image to draw a box over anything else that must go. Drag a box to move it, drag its corner to resize, press Delete to remove the selected box.</div>
+        <canvas id="shotView" style="width:100%;height:auto;display:block;border:1px solid var(--border);border-radius:8px;cursor:crosshair;touch-action:none;background:#000;"></canvas>
+      </div>
+      <div id="shotPanel"></div>
+    </div>`;
+  const v = document.getElementById('shotView'); v.width = c.canvas.width; v.height = c.canvas.height;
+  shotWireCanvas(v);
+  shotRedraw(); shotRenderPanel();
+}
+function shotRedraw(){
+  const c = shotChk; const v = document.getElementById('shotView'); if(!c || !v || !c.canvas) return;
+  const x = v.getContext('2d');
+  x.drawImage(c.canvas, 0, 0);
+  const lw = Math.max(2, Math.round(c.canvas.width/400));
+  c.boxes.forEach(b=>{
+    if(b.action==='keep'){ x.setLineDash([6,4]); x.strokeStyle = '#3ecf8e'; x.lineWidth = lw; x.strokeRect(b.x, b.y, b.w, b.h); x.setLineDash([]); return; }
+    if(b.action==='replace' && String(b.replacement||'').trim()){ x.save(); shotDrawReplacement(x, v.width, v.height, b, String(b.replacement).trim()); x.restore(); }
+    else { x.fillStyle = 'rgba(0,0,0,0.82)'; x.fillRect(b.x, b.y, b.w, b.h); }
+    x.strokeStyle = b.id===c.sel ? '#ffc400' : '#ff4d6d'; x.lineWidth = lw; x.strokeRect(b.x, b.y, b.w, b.h);
+    const hs = Math.max(8, lw*4); x.fillStyle = x.strokeStyle; x.fillRect(b.x+b.w-hs/2, b.y+b.h-hs/2, hs, hs);
+  });
+  if(c.drag && c.drag.mode==='draw'){ const d = c.drag; x.setLineDash([6,4]); x.strokeStyle = '#ffc400'; x.lineWidth = lw; x.strokeRect(Math.min(d.x0,d.x1), Math.min(d.y0,d.y1), Math.abs(d.x1-d.x0), Math.abs(d.y1-d.y0)); x.setLineDash([]); }
+}
+function shotWireCanvas(v){
+  const pt = e=>{ const r = v.getBoundingClientRect(); return {x:(e.clientX-r.left)*v.width/r.width, y:(e.clientY-r.top)*v.height/r.height, k:v.width/r.width}; };
+  v.addEventListener('pointerdown', e=>{
+    const c = shotChk; if(!c) return; const p = pt(e); const hs = 14*p.k;
+    const hit = [...c.boxes].reverse().find(b=>p.x>=b.x-hs/2 && p.x<=b.x+b.w+hs/2 && p.y>=b.y-hs/2 && p.y<=b.y+b.h+hs/2);
+    if(hit){
+      const corner = Math.abs(p.x-(hit.x+hit.w))<=hs && Math.abs(p.y-(hit.y+hit.h))<=hs;
+      c.sel = hit.id; c.drag = {mode: corner ? 'resize' : 'move', id:hit.id, px:p.x, py:p.y, ox:hit.x, oy:hit.y, ow:hit.w, oh:hit.h};
+    } else { c.sel = null; c.drag = {mode:'draw', x0:p.x, y0:p.y, x1:p.x, y1:p.y}; }
+    v.setPointerCapture(e.pointerId); shotRedraw();
+  });
+  v.addEventListener('pointermove', e=>{
+    const c = shotChk; if(!c || !c.drag) return; const p = pt(e); const d = c.drag;
+    if(d.mode==='draw'){ d.x1 = Math.max(0, Math.min(v.width, p.x)); d.y1 = Math.max(0, Math.min(v.height, p.y)); }
+    else { const b = c.boxes.find(q=>q.id===d.id); if(!b) return;
+      if(d.mode==='move'){ b.x = Math.max(0, Math.min(v.width-b.w, d.ox + p.x-d.px)); b.y = Math.max(0, Math.min(v.height-b.h, d.oy + p.y-d.py)); }
+      else { b.w = Math.max(4, Math.min(v.width-b.x, d.ow + p.x-d.px)); b.h = Math.max(4, Math.min(v.height-b.y, d.oh + p.y-d.py)); } }
+    shotRedraw();
+  });
+  const end = ()=>{
+    const c = shotChk; if(!c || !c.drag) return; const d = c.drag; c.drag = null;
+    if(d.mode==='draw'){
+      const w = Math.abs(d.x1-d.x0), h = Math.abs(d.y1-d.y0);
+      if(w>=5 && h>=5){ const b = {id:c.nextId++, source:'manual', kind:'other', text:'', action:'blackout', replacement:'', x:Math.min(d.x0,d.x1), y:Math.min(d.y0,d.y1), w, h}; c.boxes.push(b); c.sel = b.id; }
+    }
+    shotRedraw(); shotRenderPanel();
+  };
+  v.addEventListener('pointerup', end); v.addEventListener('pointercancel', end);
+}
+function shotRenderPanel(){
+  const c = shotChk; const p = document.getElementById('shotPanel'); if(!c || !p) return;
+  const sc = c.scan || {};
+  const status = sc.status==='running' ? `<div class="box" style="font-size:12.5px;">Checking the screenshot for player details and internal tools…</div>`
+    : sc.status==='error' ? `<div class="box" style="font-size:12.5px;border-color:var(--bad);color:var(--bad);">The check couldn’t run: ${escapeHtml(sc.error)}<div style="margin-top:8px;"><button class="small" id="shotRescan">Check again</button></div></div>`
+    : sc.status==='done' ? `<div class="box" style="font-size:12.5px;${sc.items.length ? 'border-color:var(--warn);' : (shotPendingBoxes().length ? '' : 'border-color:var(--ok);')}">
+        <div><strong>${escapeHtml(sc.screenType || 'Screenshot')}</strong></div>
+        <div style="margin-top:4px;color:var(--text2);">${c.scanVer===c.canvasVer && !shotPendingBoxes().length ? (sc.items.length ? 'The last check still found something - see the boxes below.' : '<span style="color:var(--ok);">Last check: no player details found.</span>') : `${sc.items.length} possible detail${sc.items.length===1?'':'s'} found on the last check.`}</div>
+        ${sc.internalTool && sc.internalTool.present ? `<div style="margin-top:6px;color:${c.purpose==='player'?'var(--bad)':'var(--warn)'};"><strong>Internal tool${sc.internalTool.name ? ': ' + escapeHtml(sc.internalTool.name) : ''}.</strong> ${c.purpose==='player' ? 'A player can never have a screenshot of this.' : 'Fine for the agent to look at - just make sure no player details are left.'}</div>
+          ${c.purpose==='player' ? `<label style="display:flex;gap:6px;align-items:flex-start;margin-top:6px;font-size:12px;"><input type="checkbox" id="shotNotInternal" ${c.notInternal?'checked':''}> This is a screen the player can see (the check got it wrong)</label>` : ''}` : ''}
+      </div>` : '';
+  const rows = c.boxes.map((b,i)=>`<div class="box" style="padding:8px 10px;margin-top:6px;font-size:12px;${b.id===c.sel?'border-color:#ffc400;':''}" data-shot-row="${b.id}">
+      <div style="display:flex;justify-content:space-between;gap:6px;align-items:center;">
+        <span><strong>${i+1}. ${escapeHtml(SHOT_KINDS[b.kind]||'Detail')}</strong>${b.text ? ` <span style="color:var(--text3);">found: “${escapeHtml(b.text)}”</span>` : (b.source==='manual' ? ' <span style="color:var(--text3);">(your box)</span>' : '')}</span>
+        <button class="small" data-shot-del="${b.id}" title="Remove this box" style="color:var(--bad);">✕</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">
+        <select data-shot-action="${b.id}" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 6px;font-size:12px;">
+          <option value="replace" ${b.action==='replace'?'selected':''}>Replace with made-up text</option>
+          <option value="blackout" ${b.action==='blackout'?'selected':''}>Black out</option>
+          ${b.source==='ai' ? `<option value="keep" ${b.action==='keep'?'selected':''}>Leave it - not a real player detail</option>` : ''}
+        </select>
+        ${b.action==='replace' ? `<input data-shot-repl="${b.id}" value="${escapeHtml(b.replacement||'')}" placeholder="Made-up text" style="flex:1;min-width:110px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 6px;font-size:12px;">` : ''}
+      </div>
+    </div>`).join('');
+  const blockers = shotSaveBlockers();
+  p.innerHTML = `${status}
+    <div style="margin-top:10px;font-size:12.5px;font-weight:600;">Details to remove (${shotPendingBoxes().length})</div>
+    ${rows || `<div style="font-size:12px;color:var(--text3);margin-top:4px;">${sc.status==='running' ? 'Waiting for the check…' : 'None. Draw a box on the image if you spot anything the check missed.'}</div>`}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
+      <button class="small primary" id="shotApply" ${shotPendingBoxes().length && sc.status!=='running' ? '' : 'disabled'}>Apply and check again</button>
+      <button class="small" id="shotRescan2" ${sc.status==='running'?'disabled':''}>Check again</button>
+      <button class="small" id="shotStartOver" ${sc.status==='running'?'disabled':''}>Start over</button>
+    </div>
+    <label style="display:block;margin-top:14px;font-size:12.5px;font-weight:600;" for="shotDesc">What the screenshot shows</label>
+    <div style="font-size:11.5px;color:var(--text3);margin-top:2px;">The grader${c.purpose==='player' ? ' and the AI player' : ''} can’t see images - they only read this. Written by the check; correct it if anything is wrong or missing.</div>
+    <textarea id="shotDesc" style="width:100%;min-height:80px;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:12.5px;">${escapeHtml(c.description)}</textarea>
+    <label style="display:flex;gap:6px;align-items:flex-start;margin-top:10px;font-size:12.5px;"><input type="checkbox" id="shotConfirm" ${c.confirmed?'checked':''}> I’ve looked at the final image myself: no real player details are visible, and anything replaced uses made-up details.</label>
+    ${c.error ? `<div style="margin-top:8px;font-size:12px;color:var(--bad);">${escapeHtml(c.error)}</div>` : ''}
+    ${blockers.length ? `<ul style="margin:10px 0 0;padding-left:18px;font-size:11.5px;color:var(--text3);">${blockers.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul>` : ''}
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="primary" id="shotSave" ${blockers.length || c.busy ? 'disabled' : ''}>${c.busy ? 'Saving…' : 'Save screenshot'}</button>
+      <button id="shotCancel2">Cancel</button>
+    </div>`;
+  const on = (id, ev, fn)=>{ const el = document.getElementById(id); if(el) el.addEventListener(ev, fn); };
+  on('shotRescan', 'click', shotRunScan);
+  on('shotRescan2', 'click', ()=>{ c.boxes = c.boxes.filter(b=>b.source!=='ai' || b.action!=='keep'); shotRunScan(); });
+  on('shotStartOver', 'click', ()=>{
+    const x = c.canvas.getContext('2d'); x.drawImage(c.orig, 0, 0);
+    c.boxes = []; c.sel = null; c.allowed = []; c.canvasVer++; c.confirmed = false; shotRedraw(); shotRunScan();
+  });
+  on('shotApply', 'click', ()=>{
+    const used = shotApplyBoxes(c.canvas, c.boxes);
+    c.allowed = [...new Set([...c.allowed, ...used])];
+    c.boxes = []; c.sel = null; c.canvasVer++; c.confirmed = false;
+    shotRedraw(); shotRunScan();
+  });
+  on('shotNotInternal', 'change', e=>{ c.notInternal = !!e.target.checked; shotRenderPanel(); });
+  on('shotDesc', 'input', e=>{ c.description = e.target.value; c.descEdited = true; });
+  on('shotDesc', 'change', ()=>shotRenderPanel());
+  on('shotConfirm', 'change', e=>{ c.confirmed = !!e.target.checked; shotRenderPanel(); });
+  on('shotCancel2', 'click', closeShotChecker);
+  on('shotSave', 'click', shotSave);
+  p.querySelectorAll('[data-shot-del]').forEach(el=>el.addEventListener('click', ()=>{ const id = Number(el.getAttribute('data-shot-del')); c.boxes = c.boxes.filter(b=>b.id!==id); if(c.sel===id) c.sel = null; shotRedraw(); shotRenderPanel(); }));
+  p.querySelectorAll('[data-shot-action]').forEach(el=>el.addEventListener('change', e=>{
+    const b = c.boxes.find(q=>q.id===Number(el.getAttribute('data-shot-action'))); if(!b) return;
+    b.action = e.target.value;
+    if(b.action==='replace' && !b.replacement) b.replacement = shotDefaultReplacement(b.kind, b.text, c.playerName) || (c.playerName || 'Alex');
+    shotRedraw(); shotRenderPanel();
+  }));
+  p.querySelectorAll('[data-shot-repl]').forEach(el=>el.addEventListener('input', e=>{ const b = c.boxes.find(q=>q.id===Number(el.getAttribute('data-shot-repl'))); if(b){ b.replacement = e.target.value; shotRedraw(); } }));
+  p.querySelectorAll('[data-shot-row]').forEach(el=>el.addEventListener('click', e=>{ if(/SELECT|INPUT|BUTTON/.test(e.target.tagName)) return; c.sel = Number(el.getAttribute('data-shot-row')); shotRedraw(); shotRenderPanel(); }));
+}
+async function uploadShotCanvas(canvas){
+  let resp;
+  try{
+    resp = await fetch(BACKEND_URL + '/api/images', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data: shotCanvasBase64(canvas), mediaType:'image/jpeg'})});
+  }catch(err){ throw new Error('Couldn’t reach the server - check your connection and try again (it can take up to a minute to wake up).'); }
+  if(resp.status===404) throw new Error('The server hasn’t been updated for screenshots yet. The new backend (index.js, v42) needs to be deployed on Render first.');
+  let j = {}; try{ j = await resp.json(); }catch(e){}
+  if(!resp.ok || !j.id) throw new Error('Saving the screenshot failed' + (j.error ? ': ' + j.error : ' (HTTP ' + resp.status + ')') + '.');
+  return j.id;
+}
+async function shotSave(){
+  const c = shotChk; if(!c || shotSaveBlockers().length) return;
+  c.busy = true; c.error = ''; shotRenderPanel();
+  try{
+    const imageId = await uploadShotCanvas(c.canvas);
+    const done = c.onDone; const result = {imageId, description: cleanShotText(c.description), internalTool: !!(c.scan.internalTool && c.scan.internalTool.present && !c.notInternal)};
+    closeShotChecker();
+    if(done) done(result);
+  }catch(err){
+    if(shotChk!==c) return;
+    c.busy = false; c.error = err.message || String(err); shotRenderPanel();
+  }
+}
+
+// ---------- Builder: screenshots panel inside Preview & Edit (TL and L&D) ----------
+function renderBuilderPlayerShotsPanel(gen){
+  const shots = Array.isArray(gen.playerShots) ? gen.playerShots : [];
+  const bi = gen.builtinShotOf && PLAYER_SCREENSHOTS[gen.builtinShotOf] ? PLAYER_SCREENSHOTS[gen.builtinShotOf] : null;
+  const card = (thumb, desc, removeAttr, descAttr, n)=>`<div class="box" style="padding:10px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+      <div style="flex:0 0 auto;">${thumb}</div>
+      <div style="flex:1;min-width:220px;">
+        <div style="font-size:11.5px;color:var(--text3);">Screenshot ${n} - what the grader and the player read:</div>
+        ${descAttr ? `<textarea ${descAttr} style="width:100%;min-height:52px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-family:inherit;font-size:12.5px;">${escapeHtml(desc)}</textarea>` : `<div style="font-size:12.5px;margin-top:4px;">${escapeHtml(desc)}</div>`}
+        <button class="small" ${removeAttr} style="margin-top:6px;color:var(--bad);">Remove</button>
+      </div>
+    </div>`;
+  let n = 0;
+  return `<div id="builderShotsPanel" style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+    <div style="font-size:12px;color:var(--text2);font-weight:600;">Screenshots the player can send</div>
+    <div style="font-size:11.5px;color:var(--text3);margin:2px 0 8px;">The player only sends one after the agent asks for a screenshot, photo or picture, and sends each one once. To give the <em>agent</em> a screenshot to look up instead (a paytable, round history, rules screen), attach it to a Case Data record above.</div>
+    ${bi ? card(`<div style="width:110px;">${screenshotSvg(bi)}</div>`, bi.alt + ' (built-in mock-up from the original scenario)', 'data-remove-builtin-shot', '', ++n) : ''}
+    ${shots.map((p,i)=>card(shotThumbHtml(p.imageId, p.description, 110), p.description||'', `data-remove-player-shot="${i}"`, `data-player-shot-desc="${i}"`, ++n)).join('')}
+    <button class="small" id="btnAddPlayerShot">+ Add a screenshot the player can send</button>
+  </div>`;
+}
+function renderCaseRowImageControls(c, idx){
+  if(c && c.imageId) return `<div style="display:flex;gap:10px;align-items:flex-start;margin-top:8px;flex-wrap:wrap;">
+      ${shotThumbHtml(c.imageId, c.imageDescription, 80)}
+      <div style="flex:1;min-width:200px;">
+        <div style="font-size:11.5px;color:var(--text3);">Screenshot - what the grader reads:</div>
+        <textarea data-case-image-desc="${idx}" style="width:100%;min-height:44px;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-family:inherit;font-size:12px;">${escapeHtml(c.imageDescription||'')}</textarea>
+        <button class="small" data-case-image-remove="${idx}" style="margin-top:4px;color:var(--bad);">Remove screenshot</button>
+      </div>
+    </div>`;
+  return `<button class="small" data-case-image-add="${idx}" style="margin-top:6px;">+ Attach a screenshot</button>`;
+}
+function renderBuilderMaterialChips(gen){
+  const mats = (gen.trainingMaterialIds||[]).map(id=>trainingMaterialById(id) || {title:'(removed material)'});
+  if(!mats.length) return '';
+  return `<div style="font-size:12px;color:var(--text2);margin-top:8px;">Based on L&amp;D training material: ${mats.map(m=>`<span style="display:inline-block;border:1px solid var(--border);border-radius:10px;padding:1px 8px;margin:2px 4px 0 0;">${escapeHtml(m.title)}</span>`).join('')}</div>`;
+}
+function wireBuilderShotEvents(){
+  const gen = state.scenarioBuilderGenerated; if(!gen) return;
+  const add = document.getElementById('btnAddPlayerShot');
+  if(add) add.addEventListener('click', ()=>openShotChecker({purpose:'player', playerName: gen.playerName, title:'Add a screenshot the player can send', onDone: r=>{
+    const g = state.scenarioBuilderGenerated; if(!g) return;
+    g.playerShots = (g.playerShots||[]).concat([{imageId:r.imageId, description:r.description}]); render();
+  }}));
+  document.querySelectorAll('[data-remove-player-shot]').forEach(el=>el.addEventListener('click', ()=>{ const i = Number(el.getAttribute('data-remove-player-shot')); gen.playerShots = (gen.playerShots||[]).filter((_,j)=>j!==i); render(); }));
+  document.querySelectorAll('[data-player-shot-desc]').forEach(el=>el.addEventListener('input', e=>{ const p = (gen.playerShots||[])[Number(el.getAttribute('data-player-shot-desc'))]; if(p) p.description = e.target.value; }));
+  document.querySelectorAll('[data-remove-builtin-shot]').forEach(el=>el.addEventListener('click', ()=>{ delete gen.builtinShotOf; render(); }));
+  document.querySelectorAll('[data-case-image-add]').forEach(el=>el.addEventListener('click', ()=>{
+    const idx = Number(el.getAttribute('data-case-image-add'));
+    const row = (gen.caseData||[])[idx]; if(!row) return;
+    openShotChecker({purpose:'reference', playerName: gen.playerName, title:'Attach a screenshot to “' + (row.label || row.tab || 'this record') + '”', onDone: r=>{
+      const g = state.scenarioBuilderGenerated; const c = g && (g.caseData||[])[idx]; if(!c) return;
+      c.imageId = r.imageId; c.imageDescription = r.description; render();
+    }});
+  }));
+  document.querySelectorAll('[data-case-image-remove]').forEach(el=>el.addEventListener('click', ()=>{ const c = (gen.caseData||[])[Number(el.getAttribute('data-case-image-remove'))]; if(c){ delete c.imageId; delete c.imageDescription; render(); } }));
+  document.querySelectorAll('[data-case-image-desc]').forEach(el=>el.addEventListener('input', e=>{ const c = (gen.caseData||[])[Number(el.getAttribute('data-case-image-desc'))]; if(c) c.imageDescription = e.target.value; }));
+}
+// Saving: screenshot descriptions follow the same rules as every other scenario text.
+function builderShotProblems(gen){
+  const out = [];
+  (gen.playerShots||[]).forEach((p,i)=>{ if(!cleanShotText(p.description)) out.push('Screenshot ' + (i+1) + ' the player can send has no description - the grader and the player only read the description.'); });
+  (gen.caseData||[]).forEach(c=>{ if(c.imageId && !cleanShotText(c.imageDescription)) out.push('The screenshot on Case Data “' + (c.label||c.tab||'') + '” has no description - the grader only reads the description.'); });
+  return out;
+}
+
+// ---------- L&D: Training material section ----------
+function emptyMaterialDraft(){ return {id:null, title:'', topic:'', notes:'', images:[]}; }
+function renderTrMaterialsBody(){
+  const mats = trainingMaterials();
+  const d = state.trMatDraft;
+  const inp = 'width:100%;margin-top:4px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;';
+  const form = d ? `<div class="box" id="trMaterialForm" style="margin-bottom:14px;border-color:var(--accent);">
+      <div style="font-weight:700;margin-bottom:8px;">${d.id ? 'Edit training material' : 'New training material'}</div>
+      <div style="display:grid;gap:10px;">
+        <label style="font-size:12.5px;color:var(--text2);">Title <span style="color:var(--text3);">(e.g. “Maple Fortune - how it pays”)</span><input id="trMatTitle" value="${escapeHtml(d.title)}" style="${inp}"></label>
+        <label style="font-size:12.5px;color:var(--text2);">Topic <span style="color:var(--text3);">(e.g. Gameplay, Slots, Live casino, Bingo, Payouts, Promotions)</span><input id="trMatTopic" list="trMatTopics" value="${escapeHtml(d.topic)}" style="${inp}">
+          <datalist id="trMatTopics">${['Gameplay','Slots','Live casino','Bingo','Crash games','Table games','Payouts','Promotions','Account','Payments'].map(t=>`<option value="${t}">`).join('')}</datalist></label>
+        <label style="font-size:12.5px;color:var(--text2);">What you teach about it
+          <div style="font-size:11.5px;color:var(--text3);margin-top:2px;">How the game works, the paytable and which lines pay, features and bonus rounds, how a round is settled, payout rules, what players usually get confused about. Scenarios built on this material treat it as the source of truth for game facts. No real player details.</div>
+          <textarea id="trMatNotes" style="${inp}min-height:170px;">${escapeHtml(d.notes)}</textarea></label>
+        <div>
+          <div style="font-size:12.5px;color:var(--text2);">Screenshots <span style="color:var(--text3);">(paytable, rules tab, round history, feature screens)</span></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">${(d.images||[]).map((im,i)=>`<div class="box" style="padding:8px;max-width:230px;">${shotThumbHtml(im.imageId, im.description, 90)}
+              <textarea data-trmat-img-desc="${i}" style="width:100%;min-height:50px;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 7px;font-family:inherit;font-size:11.5px;">${escapeHtml(im.description||'')}</textarea>
+              <button class="small" data-trmat-img-remove="${i}" style="margin-top:4px;color:var(--bad);">Remove</button></div>`).join('')}</div>
+          <button class="small" id="btnTrMatAddImage" style="margin-top:6px;">+ Add a screenshot</button>
+        </div>
+      </div>
+      ${state.trMatError ? `<div style="margin-top:10px;font-size:12.5px;color:var(--bad);">${escapeHtml(state.trMatError)}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:12px;"><button class="primary" id="btnTrMatSave">Save material</button><button id="btnTrMatCancel">Cancel</button></div>
+    </div>` : `<button class="primary" id="btnTrMatNew" style="margin-bottom:14px;">+ Add training material</button>`;
+  const list = mats.length ? mats.map(m=>`<div class="box" style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div><strong>${escapeHtml(m.title)}</strong> <span style="font-size:11.5px;color:var(--text3);">${escapeHtml(m.topic||'')}${m.createdBy ? ' · ' + escapeHtml(m.createdBy) : ''}</span></div>
+        <div style="display:flex;gap:6px;">${state.trMatRemovePending===m.id ? `<span style="font-size:12px;color:var(--text2);">Remove it? Scenarios already built on it keep working.</span><button class="small" data-trmat-remove-confirm="${escapeHtml(m.id)}" style="color:var(--bad);">Remove</button><button class="small" data-trmat-remove-cancel>Keep</button>` : `<button class="small" data-trmat-edit="${escapeHtml(m.id)}">Edit</button><button class="small" data-trmat-remove="${escapeHtml(m.id)}" style="color:var(--bad);">Remove</button>`}</div>
+      </div>
+      <div style="font-size:12.5px;color:var(--text2);margin-top:6px;white-space:pre-wrap;max-height:90px;overflow:hidden;">${escapeHtml(String(m.notes||'').slice(0,400))}${String(m.notes||'').length>400?'…':''}</div>
+      ${(m.images||[]).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${m.images.map(im=>shotThumbHtml(im.imageId, im.description, 60)).join('')}</div>` : ''}
+    </div>`).join('') : `<div class="empty" style="padding:8px 0;">No training material yet.</div>`;
+  return `<div style="color:var(--text2);font-size:13px;margin-bottom:14px;max-width:760px;line-height:1.6;">Your class material on games, payouts and anything else the KB doesn’t cover. When you create a scenario you can base it on one or more of these - the builder then treats your material as the source of truth for the game facts, and the grader marks trainees against it. Screenshots go through the same player-details check as everywhere else.</div>
+    ${form}${list}`;
+}
+function wireTrMaterialEvents(){
+  if(state.view!=='training') return;
+  const nw = document.getElementById('btnTrMatNew'); if(nw) nw.addEventListener('click', ()=>{ state.trMatDraft = emptyMaterialDraft(); state.trMatError = ''; render(); });
+  const cancel = document.getElementById('btnTrMatCancel'); if(cancel) cancel.addEventListener('click', ()=>{ state.trMatDraft = null; state.trMatError = ''; render(); });
+  const d = state.trMatDraft;
+  if(d){
+    [['trMatTitle','title'],['trMatTopic','topic'],['trMatNotes','notes']].forEach(([id,k])=>{ const el = document.getElementById(id); if(el) el.addEventListener('input', e=>{ d[k] = e.target.value; }); });
+    document.querySelectorAll('[data-trmat-img-desc]').forEach(el=>el.addEventListener('input', e=>{ const im = d.images[Number(el.getAttribute('data-trmat-img-desc'))]; if(im) im.description = e.target.value; }));
+    document.querySelectorAll('[data-trmat-img-remove]').forEach(el=>el.addEventListener('click', ()=>{ const i = Number(el.getAttribute('data-trmat-img-remove')); d.images = d.images.filter((_,j)=>j!==i); render(); }));
+    const addImg = document.getElementById('btnTrMatAddImage');
+    if(addImg) addImg.addEventListener('click', ()=>openShotChecker({purpose:'material', playerName:'', title:'Add a screenshot to this material', onDone: r=>{
+      if(!state.trMatDraft) return; state.trMatDraft.images = (state.trMatDraft.images||[]).concat([r]); render();
+    }}));
+    const save = document.getElementById('btnTrMatSave');
+    if(save) save.addEventListener('click', async ()=>{
+      const title = String(d.title||'').trim();
+      const by = String(state.scenarioBuilderTLName||'').trim();
+      if(!title){ state.trMatError = 'Give the material a title.'; render(); return; }
+      if(!String(d.notes||'').trim() && !(d.images||[]).length){ state.trMatError = 'Add what you teach, a screenshot, or both.'; render(); return; }
+      if((d.images||[]).some(im=>!cleanShotText(im.description))){ state.trMatError = 'Every screenshot needs a description - scenarios and the grader only read the description.'; render(); return; }
+      const hits = materialPlayerDetailHits(d);
+      if(hits.length){ state.trMatError = playerDetailMessage(hits); render(); return; }
+      if(!by){ state.trMatError = 'Enter your name under Create Scenario (“Your name (trainer)”) first, so others know who wrote this.'; render(); return; }
+      save.disabled = true;
+      const now = Date.now(); const prev = d.id ? trainingMaterialById(d.id) : null;
+      const rec = {type:'training-material', id: d.id || trId('tm_'), title, topic:String(d.topic||'').trim(), notes:String(d.notes||'').trim(),
+        images:(d.images||[]).map(im=>({imageId:im.imageId, description:cleanShotText(im.description), internalTool:!!im.internalTool})),
+        createdBy: prev ? prev.createdBy : by, createdAt: prev ? prev.createdAt : now, updatedBy: by, updatedAt: now, status:'active'};
+      const shared = await pushTrainingRecord(rec);
+      state.trMatDraft = null; state.trMatError = '';
+      trSetMsg({ok:true, shared}, `Saved “${title}”. Use it under Create Scenario.`);
+      render();
+    });
+  }
+  document.querySelectorAll('[data-trmat-edit]').forEach(el=>el.addEventListener('click', ()=>{
+    const m = trainingMaterialById(el.getAttribute('data-trmat-edit')); if(!m) return;
+    state.trMatDraft = JSON.parse(JSON.stringify({id:m.id, title:m.title, topic:m.topic||'', notes:m.notes||'', images:m.images||[]})); state.trMatError = ''; render();
+    const f = document.getElementById('trMaterialForm'); if(f) f.scrollIntoView({block:'start'});
+  }));
+  document.querySelectorAll('[data-trmat-remove]').forEach(el=>el.addEventListener('click', ()=>{ state.trMatRemovePending = el.getAttribute('data-trmat-remove'); render(); }));
+  document.querySelectorAll('[data-trmat-remove-cancel]').forEach(el=>el.addEventListener('click', ()=>{ state.trMatRemovePending = null; render(); }));
+  document.querySelectorAll('[data-trmat-remove-confirm]').forEach(el=>el.addEventListener('click', async ()=>{
+    const m = trainingMaterialById(el.getAttribute('data-trmat-remove-confirm')); if(!m) return;
+    el.disabled = true;
+    const shared = await pushTrainingRecord(Object.assign({}, m, {status:'removed', updatedAt: Date.now(), updatedBy: String(state.scenarioBuilderTLName||'').trim() || null}));
+    state.trMatRemovePending = null; trSetMsg({ok:true, shared}, `Removed “${m.title}”.`); render();
+  }));
+  // Intake: pick material to base the scenario on.
+  document.querySelectorAll('[data-intake-material]').forEach(el=>el.addEventListener('change', e=>{
+    const id = el.getAttribute('data-intake-material'); const intake = state.scenarioBuilderIntake;
+    const cur = new Set(intake.materialIds||[]); if(e.target.checked) cur.add(id); else cur.delete(id);
+    intake.materialIds = [...cur]; state.trainerIntakeCheck = null; render();
+  }));
+}
+function renderIntakeMaterialPicker(intake){
+  const mats = trainingMaterials();
+  const sel = new Set((intake && intake.materialIds) || []);
+  return `<div class="box" id="intakeMaterialPicker" style="margin-bottom:14px;padding:10px 12px;">
+    <div style="font-size:13px;font-weight:600;">Base it on your training material (optional)</div>
+    ${mats.length ? `<div style="font-size:12px;color:var(--text2);margin-top:2px;">Tick the material this chat is about. The builder uses it as the source of truth for the game facts, so you don’t need to repeat them below - just describe the player’s problem.</div>
+      <div style="display:flex;gap:4px 16px;flex-wrap:wrap;margin-top:8px;">${mats.map(m=>`<label style="font-size:12.5px;display:flex;align-items:center;gap:5px;"><input type="checkbox" data-intake-material="${escapeHtml(m.id)}" ${sel.has(m.id)?'checked':''}> ${escapeHtml(m.title)}${m.topic ? ` <span style="color:var(--text3);">(${escapeHtml(m.topic)})</span>` : ''}</label>`).join('')}</div>`
+      : `<div style="font-size:12px;color:var(--text2);margin-top:2px;">No training material yet. Add your game notes and screenshots under <strong>Training material</strong> on this page, then pick them here.</div>`}
+  </div>`;
+}
+
+// ---------- DIAGNOSTIC 14: uploaded screenshots + training material (v42) ----------
+// Deterministic, no API calls, nothing sent to the server. State it touches is restored afterwards.
+function runDiagnostic14(){
+  const el = document.getElementById('diag14Result'); if(!el) return;
+  const rows = []; const add = (label, pass, detail)=> rows.push({label, pass:!!pass, detail:detail||''});
+  const snapRec = state.trainingRecords;
+  try{
+    const base = cloneScenarioContentFields(scenarioById('noc-1'));
+    const s = Object.assign(base, {id:'cs_d14', playerName:'Marcus', playerShots:[{imageId:'img_d14aaaaaa', description:'Maple Fortune paytable, top line pays from reel 1 only'}, {imageId:'img_d14bbbbbb', description:'Round history: bet $0.50, win $0.00'}]});
+    const plain = scenarioById('noc-1');
+    add('A scenario with no screenshots gets exactly the same player prompt as before', playerScreenshotBlock(plain)==='' && !/SCREENSHOT/.test(buildPlayerSystemPrompt(plain, null)));
+    add('Uploaded screenshots are listed for the AI player with numbered markers', /SCREENSHOTS YOU CAN SEND/.test(playerScreenshotBlock(s)) && /\[\[SCREENSHOT 2\]\]/.test(playerScreenshotBlock(s)) && /round history: bet \$0\.50/i.test(playerScreenshotBlock(s)));
+    const one = Object.assign(cloneScenarioContentFields(plain), {id:'cs_d14b', playerShots:[{imageId:'img_d14cccccc', description:'Login page showing Invalid credentials'}]});
+    add('One uploaded screenshot uses the same wording as the built-in mock-ups', /^SCREENSHOT YOU CAN SEND: you have a screenshot showing: Login page showing Invalid credentials\./.test(playerScreenshotBlock(one)));
+    const notAsked = [{speaker:'player', text:'it wont load'}, {speaker:'agent', text:'Which game is it?'}];
+    const m1 = playerMessage(s, notAsked, 'maple fortune [[SCREENSHOT 1]]', {turn:2});
+    add('Nothing is sent before the agent asks, and the marker never shows', !m1.shots && !m1.screenshotId && m1.text==='maple fortune');
+    const asked = notAsked.concat([{speaker:'agent', text:'Can you send me a screenshot of the round history?'}]);
+    const m2 = playerMessage(s, asked, 'sure [[SCREENSHOT 2]]', {turn:3});
+    add('After the agent asks, the right screenshot is attached and the grader reads its description', m2.shots && m2.shots.length===1 && m2.shots[0].n===2 && m2.shots[0].imageId==='img_d14bbbbbb' && m2.text==='sure [Player sent a screenshot: Screenshot: Round history: bet $0.50, win $0.00]');
+    const m3 = playerMessage(s, asked.concat([m2]), 'here they are [[SCREENSHOT 1]] [[SCREENSHOT 2]]', {turn:4});
+    add('Each screenshot is sent once only (2 already sent, 1 still sends)', m3.shots && m3.shots.length===1 && m3.shots[0].n===1 && (m3.text.match(/\[Player sent a screenshot/g)||[]).length===1);
+    const body = renderChatMessageBody(m2);
+    add('The chat shows the uploaded picture instead of the bracket note', /<img [^>]*\/api\/images\/img_d14bbbbbb/.test(body) && body.indexOf('[Player sent a screenshot')<0 && /^sure/.test(body));
+    const bi = Object.assign(cloneScenarioContentFields(scenarioById('trn-10')), {id:'cs_d14c'});
+    add('A copy of a built-in scenario keeps its mock-up screenshot', bi.builtinShotOf==='trn-10' && scenarioShots(bi).length===1 && !!scenarioShots(bi)[0].svgKey);
+    const withCase = Object.assign(cloneScenarioContentFields(plain), {id:'cs_d14d'});
+    withCase.caseData = [{id:'c1', tab:'Round History', label:'Round R-1', value:'Bet $0.50, win $0.00', gated:true, gateLabel:'Open', imageId:'img_d14dddddd', imageDescription:'Round history row: bet $0.50, win $0.00, symbols on reels 3-5'}];
+    const copy = cloneScenarioContentFields(Object.assign({}, s, {caseData: withCase.caseData}));
+    add('Duplicating keeps uploaded screenshots and Case Data images', copy.playerShots.length===2 && copy.caseData[0].imageId==='img_d14dddddd' && /symbols on reels 3-5/.test(copy.caseData[0].imageDescription));
+    add('The grader reads the Case Data screenshot description', /Screenshot attached - it shows: Round history row: bet \$0\.50/.test(formatCaseDataForEval(withCase)));
+    add('A revealed Case Data record shows its screenshot', /<img [^>]*img_d14dddddd/.test(caseImageHtml(withCase.caseData[0])) && caseImageHtml({label:'x'})==='');
+    const pii = Object.assign(cloneScenarioContentFields(plain), {playerShots:[{imageId:'img_x0000000', description:'Email sarah.jones@gmail.com shown'}]});
+    const piiCase = Object.assign(cloneScenarioContentFields(plain), {caseData:[{id:'c1', tab:'T', label:'L', value:'v', imageId:'img_y0000000', imageDescription:'Player ID 4471203 at the top'}]});
+    add('Player details in a screenshot description are caught like any other scenario text', scenarioPlayerDetailHits(pii).some(h=>h.kind==='email address') && scenarioPlayerDetailHits(piiCase).some(h=>h.kind==='player or account ID'));
+    add('Made-up replacements: the scenario player’s name, a training ID, an @example.com email', shotDefaultReplacement('name','Sarah','Marcus')==='Marcus' && /^Marcus [A-Z][a-z]+$/.test(shotDefaultReplacement('name','Sarah Jones','Marcus')) && isTrainingPlayerId(shotDefaultReplacement('player_id','4471203'.slice(0,6),'Marcus')) && shotDefaultReplacement('email','s@x.com','Marcus')==='marcus@example.com' && /^[A-Z]\d[a-z]{2}$/.test(fakeLike('K7tq')));
+    // canvas: black-out and replace are burned into the pixels
+    const cv = document.createElement('canvas'); cv.width = 120; cv.height = 40; const cx = cv.getContext('2d');
+    cx.fillStyle = '#ffffff'; cx.fillRect(0,0,120,40); cx.fillStyle = '#000'; cx.font = '14px Arial'; cx.fillText('Sarah', 4, 26); cx.fillText('4471203', 60, 26);
+    const used = shotApplyBoxes(cv, [{x:2,y:10,w:50,h:22,action:'replace',replacement:'Marcus'}, {x:58,y:10,w:60,h:22,action:'blackout'}, {x:0,y:0,w:10,h:5,action:'keep'}]);
+    const px = (x,y)=>Array.from(cx.getImageData(x,y,1,1).data).slice(0,3).join(',');
+    add('Black-out boxes become solid black; replace boxes are painted over in the background colour with the made-up text', px(88,20)==='0,0,0' && px(50,12)==='255,255,255' && used.length===1 && used[0]==='Marcus' && px(3,2)==='255,255,255');
+    // training material in the prompts
+    state.trainingRecords = (snapRec||[]).concat([{type:'training-material', id:'tm_d14', title:'Maple Fortune - how it pays', topic:'Slots', notes:'Lines pay left to right from reel 1 only. Gold Maple x3 pays 10x the line bet.', images:[{imageId:'img_d14eeeeee', description:'Paytable screen'}], status:'active', updatedAt:1}]);
+    const intake = Object.assign(emptyScenarioIntake(), {whatHappened:'Marcus says 3 Gold Maples paid nothing.', materialIds:['tm_d14']});
+    const gp = buildScenarioGenerationPrompt(intake, null), ip = buildInterpretationPrompt(intake, '', null);
+    add('Selected training material goes into both the understanding check and the build, as the source of truth for game facts', /L&D TRAINING MATERIAL/.test(gp) && /Gold Maple x3 pays 10x/.test(gp) && /L&D TRAINING MATERIAL/.test(ip) && /Paytable screen/.test(ip));
+    const noMat = Object.assign(emptyScenarioIntake(), {whatHappened:'x'});
+    add('Without material the prompts are unchanged', !/L&D TRAINING MATERIAL/.test(buildScenarioGenerationPrompt(noMat, null)) && !/L&D TRAINING MATERIAL/.test(buildInterpretationPrompt(noMat, '', null)));
+    const norm = normalizeGeneratedScenario({title:'T', caseData:[]}, intake, null);
+    add('A scenario built on material records it as its source (no “no KB article” warning)', (norm.trainingMaterialIds||[]).includes('tm_d14') && /^L&D training material: Maple Fortune - how it pays/.test(norm.kbSource) && !trainerScenarioWarnings(norm).some(w=>/No KB article is named/.test(w)));
+    add('The trainer isn’t told to name a KB article when material is ticked', !trainerIntakeWarnings(intake).some(w=>/KB article/.test(w)) && trainerIntakeWarnings(noMat).some(w=>/KB article/.test(w)));
+    add('Player details in training material block saving', materialPlayerDetailHits({title:'x', notes:'call 416-555-0199'}).length>0 && materialPlayerDetailHits({title:'x', notes:'Lines pay from reel 1'}).length===0);
+  }catch(err){ add('Error: ' + err.message, false); }
+  state.trainingRecords = snapRec;
+  const n = rows.filter(r=>r.pass).length;
+  el.innerHTML = `<div class="diag-result"><div style="margin-bottom:6px;">${n} of ${rows.length} pass.</div>${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;"><span class="${r.pass?'diag-pass':'diag-fail'}">${r.pass?'PASS':'FAIL'}</span> ${escapeHtml(r.label)}${r.detail ? `<div style="font-size:11.5px;color:var(--text3);">${escapeHtml(r.detail)}</div>` : ''}</div>`).join('')}</div>`;
 }
 
 // ---------- DIAGNOSTIC 9: TRAINING SEPARATION (v40) ----------
