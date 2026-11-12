@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Betty Coaching Simulator - Simulation Engine - v41.4</title>
+<title>Betty Coaching Simulator - Simulation Engine - v41.5</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4717,7 +4717,7 @@ function renderMain(){
   state.transcript.forEach(m=>{
     if(m.speaker==='system'){ msgs+=`<div class="msg system">${escapeHtml(m.text)}</div>`; return; }
     const who = m.speaker==='player' ? s.playerName : 'You (Agent)';
-    msgs += `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${escapeHtml(m.text)}</div>`;
+    msgs += `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${renderChatMessageBody(m)}</div>`;
   });
   if(state.simStatus==='opening' || (state.simStatus==='active' && playerIsTyping(state))) msgs += `<div class="typing">${escapeHtml(s.playerName)} is typing...</div>`;
   const composerDisabled = state.simStatus!=='active' ? 'disabled' : '';
@@ -6607,7 +6607,7 @@ async function deliverSingleChatOpening(token){
   if(token !== state.openingToken || state.simStatus !== 'opening') return; // restarted or abandoned while generating
   const joinedAt = Date.now();
   state.turnCounter++;
-  state.transcript.push({speaker:'player', text:r.text, turn:state.turnCounter, ts:joinedAt});
+  state.transcript.push(playerMessage(state.activeScenario, state.transcript, r.text, {turn:state.turnCounter, ts:joinedAt}));
   state.chatStartedAt = joinedAt;
   state.ahtStartTime = state.ahtMode ? joinedAt : null;
   state.simStatus = 'active';
@@ -6879,7 +6879,7 @@ async function triggerPlayerNudge(level){
     const apiMsgs = [...transcriptToApiMessages(), {role:'user', content:'(the agent has not responded yet)'}];
     const {text:reply} = await callClaude(sys + nudgeInstruction, apiMsgs, 'quick');
     state.turnCounter++;
-    state.transcript.push({speaker:'player', text:reply, turn:state.turnCounter, ts:Date.now()});
+    state.transcript.push(playerMessage(state.activeScenario, state.transcript, reply, {turn:state.turnCounter, ts:Date.now()}));
     state.silenceNudgeCount = level;
   }catch(err){
     console.error('Silence nudge failed (non-fatal, will retry on the next check):', err);
@@ -6896,7 +6896,7 @@ async function triggerPlayerLeaves(reasonTag){
     const apiMsgs = [...transcriptToApiMessages(), {role:'user', content:'(the agent has not responded yet)'}];
     const {text:reply} = await callClaude(sys + leaveInstruction, apiMsgs, 'quick');
     state.turnCounter++;
-    state.transcript.push({speaker:'player', text:reply, turn:state.turnCounter, ts:Date.now()});
+    state.transcript.push(playerMessage(state.activeScenario, state.transcript, reply, {turn:state.turnCounter, ts:Date.now()}));
     state.transcript.push({speaker:'system', text:'(Player left the chat - no response from agent)', ts:Date.now()});
   }catch(err){
     console.error('Player-leaves message generation failed, ending the chat anyway:', err);
@@ -7020,7 +7020,7 @@ OTHER RULES:
 
 ENDING THE CHAT EARLY (rare - most conversations should run their natural course to resolution): if the agent has clearly and repeatedly failed you - ignoring what you asked, giving irrelevant or unhelpful answers more than once, being rude, or leaving you with a genuinely nonsensical response - you may end the conversation yourself. Write your final in-character message (reflecting your persona and frustration - a brief line like "forget it, this isn't helping" or "I'm done, I'll try again later"), then end that message with the exact text [END_CHAT] on its own, nothing after it. Do NOT do this just because you're unhappy with a correct-but-unwelcome outcome (a real policy limit, a correct explanation you don't like, a genuinely unavoidable answer) - if the agent has handled things correctly, stay in the conversation and see it through, even if you remain unhappy with the result. This is a last resort for real agent failure, not a way to express disappointment.
 
-${buildPlayerIntensityBlock(s)}
+${playerScreenshotBlock(s)}${buildPlayerIntensityBlock(s)}
 
 Respond with ONLY your next in-character message as the player. No labels, no stage directions, no quotation marks around the whole message.`;
 }
@@ -7354,7 +7354,7 @@ async function generateSinglePlayerReply(transcriptRef){
     const endedByPlayer = /\[END_CHAT\]\s*$/.test(rawReply);
     const reply = rawReply.replace(/\[END_CHAT\]\s*$/, '').trim();
     state.turnCounter++;
-    state.transcript.push({speaker:'player', text:reply, turn:state.turnCounter, ts:Date.now()});
+    state.transcript.push(playerMessage(state.activeScenario, state.transcript, reply, {turn:state.turnCounter, ts:Date.now()}));
     if(!b.timer && !b.pending) state.silenceActionInFlight = false;
     if(endedByPlayer){
       state.playerLeftEarly = true;
@@ -8356,7 +8356,7 @@ function renderHistoricalTranscriptHtml(transcript, playerName){
   transcript.forEach(m=>{
     if(m.speaker==='system'){ msgs+=`<div class="msg system">${escapeHtml(m.text)}</div>`; return; }
     const who = m.speaker==='player' ? playerName : 'Agent';
-    msgs += `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${escapeHtml(m.text)}</div>`;
+    msgs += `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${renderChatMessageBody(m)}</div>`;
   });
   return `<div class="chatlog" style="max-height:340px;border-radius:10px;margin-top:6px;">${msgs}</div>`;
 }
@@ -9741,7 +9741,7 @@ async function arriveChallengeSlot(slotIndex){
   if(!state.challenge || state.challenge.slots[slotIndex]!==slot) return;    // session was exited while the opener was generating
   const joinedAt = Date.now();
   slot.turnCounter++;
-  slot.transcript.push({speaker:'player', text:r.text, turn:slot.turnCounter, ts:joinedAt});   // always the first transcript turn, always speaker:'player'
+  slot.transcript.push(playerMessage(slot.scenario, slot.transcript, r.text, {turn:slot.turnCounter, ts:joinedAt}));   // always the first transcript turn, always speaker:'player'
   if(!slot.chatStartedAt) slot.chatStartedAt = joinedAt;                                       // handling clock starts at delivery, exactly once
   slot.status='active';
   slot.silenceActionInFlight = false;
@@ -9801,7 +9801,7 @@ async function generateChallengePlayerReply(slotIndex, slot){
     const endedByPlayer = /\[END_CHAT\]\s*$/.test(rawReply);
     const reply = rawReply.replace(/\[END_CHAT\]\s*$/, '').trim();
     slot.turnCounter++;
-    slot.transcript.push({speaker:'player', text:reply, turn:slot.turnCounter, ts:Date.now()});
+    slot.transcript.push(playerMessage(slot.scenario, slot.transcript, reply, {turn:slot.turnCounter, ts:Date.now()}));
     if(!b.timer && !b.pending) slot.silenceActionInFlight = false;
     if(endedByPlayer){
       slot.playerLeftEarly = true;
@@ -9845,7 +9845,7 @@ async function triggerChallengeNudge(slotIndex, level){
     const apiMsgs = [...transcriptToApiMessages(slot.transcript), {role:'user', content:'(the agent has not responded yet)'}];
     const {text:reply} = await callClaude(sys + nudgeInstruction, apiMsgs, 'quick');
     slot.turnCounter++;
-    slot.transcript.push({speaker:'player', text:reply, turn:slot.turnCounter, ts:Date.now()});
+    slot.transcript.push(playerMessage(slot.scenario, slot.transcript, reply, {turn:slot.turnCounter, ts:Date.now()}));
     slot.silenceNudgeCount = level;
   }catch(err){
     console.error('Challenge slot nudge failed (non-fatal):', err);
@@ -9864,7 +9864,7 @@ async function triggerChallengeLeave(slotIndex, reasonTag){
     const apiMsgs = [...transcriptToApiMessages(slot.transcript), {role:'user', content:'(the agent has not responded yet)'}];
     const {text:reply} = await callClaude(sys + leaveInstruction, apiMsgs, 'quick');
     slot.turnCounter++;
-    slot.transcript.push({speaker:'player', text:reply, turn:slot.turnCounter, ts:Date.now()});
+    slot.transcript.push(playerMessage(slot.scenario, slot.transcript, reply, {turn:slot.turnCounter, ts:Date.now()}));
     slot.transcript.push({speaker:'system', text:'(Player left the chat - no response from agent)', ts:Date.now()});
   }catch(err){
     console.error('Challenge slot leave-message generation failed, ending anyway:', err);
@@ -10132,7 +10132,7 @@ function renderChallengeMain(){
     : renderPreChatCardHtml(activeSlot.scenario) + activeSlot.transcript.map(m=>{
         if(m.speaker==='system') return `<div class="msg system">${escapeHtml(m.text)}</div>`;
         const who = m.speaker==='player' ? activeSlot.scenario.playerName : 'You (Agent)';
-        return `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${escapeHtml(m.text)}</div>`;
+        return `<div class="msg ${m.speaker}"><div class="who">${escapeHtml(who)}</div>${renderChatMessageBody(m)}</div>`;
       }).join('') + ((activeSlot.status==='active' && playerIsTyping(activeSlot)) ? `<div class="typing">${escapeHtml(activeSlot.scenario.playerName)} is typing...</div>` : '');
 
   return `<div class="main">
@@ -11791,6 +11791,13 @@ function renderSystemTestsSectionBody(){
       <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks, no API calls: the TL builder wording is unchanged and L&amp;D gets the trainer wording with worked examples; templates open first and pre-fill the form; the plain-language check warns but never blocks, except for player details (training IDs 900100-900199 allowed); Try it yourself is never saved; trn-6 to trn-10 are Training-only, Foundation, kbStatus mixed and kept apart from trn-4; test and removed cohorts and trainees stay out of Results and assignment lists.</div>
       <button id="runDiag12" style="margin-top:10px;">Run test</button>
       <div id="diag12Result"></div>
+    </div>
+
+    <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">13. Player screenshots (v41.5)</h2>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks, no API calls: screenshots exist only on the agreed scenarios, are labelled mock-ups with no player details, are sent once and only after the agent asks, show as a picture in the chat, and reach the grader as a text note in the transcript. Other scenarios' player prompts and chat bubbles are unchanged.</div>
+      <button id="runDiag13" style="margin-top:10px;">Run test</button>
+      <div id="diag13Result"></div>
     </div>
 
     <div class="diag-section">
@@ -13683,6 +13690,7 @@ function wireTrainerBuilderEvents(){
   const back = document.getElementById('btnTrialBack');
   if(back) back.addEventListener('click', leaveTrainerTrial);
   const d12 = document.getElementById('runDiag12'); if(d12) d12.addEventListener('click', runDiagnostic12);
+  const d13 = document.getElementById('runDiag13'); if(d13) d13.addEventListener('click', runDiagnostic13);
   if(state.view!=='training') return;
   document.querySelectorAll('[data-ld-builder-mode]').forEach(el=>el.addEventListener('click', ()=>{
     const m = el.getAttribute('data-ld-builder-mode'); const prev = ldBuilderMode();
@@ -13857,6 +13865,215 @@ function runDiagnostic12(){
   }catch(err){ add('Error: '+err.message, false); }
   window.fetch = realFetch;
   keys.forEach(k=>{ state[k] = snap[k]; });
+  const n = rows.filter(r=>r.pass).length;
+  el.innerHTML = `<div class="diag-result"><div style="margin-bottom:6px;">${n} of ${rows.length} pass.</div>${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;"><span class="${r.pass?'diag-pass':'diag-fail'}">${r.pass?'PASS':'FAIL'}</span> ${escapeHtml(r.label)}${r.detail?`<div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${escapeHtml(r.detail)}</div>`:''}</div>`).join('')}</div>`;
+}
+
+// ============================================================
+// v41.5: PLAYER SCREENSHOTS
+// In scenarios where a real player would have something on screen to show, the simulated player can send ONE
+// mock-up screenshot - but only after the agent asks for it. The image shows in the chat; the transcript text gets
+// "[Player sent a screenshot: ...]" so the grader (which only reads text) knows exactly what the agent was shown.
+// Evaluator prompts are unchanged. Scenarios without a screenshot get a byte-identical player prompt, and the player
+// answers a screenshot request naturally from what they know.
+// All screenshots are drawn here (inline SVG): fictional, no real player details, no logos, labelled as mock-ups.
+// Wording on error screens is generic placeholder text, not a copy of Betty's real messages.
+// ============================================================
+const SCREENSHOT_TOKEN = /\[\[\s*SCREENSHOT\s*\]\]/gi;
+const SCREENSHOT_TOKEN_ONE = /\[\[\s*SCREENSHOT\s*\]\]/i;
+const SCREENSHOT_ASK = /\b(screen ?shots?|screen ?caps?|screen ?grabs?|pictures?|photos?|pics?|images?|snap ?shots?|show me)\b/i;
+const PLAYER_SCREENSHOTS = {
+  'trn-10': {kind:'game-black', game:'Maple Fortune',
+    player:'a photo of your phone screen with Maple Fortune open in the Betty app - the whole game area is just black, no error message',
+    alt:'Phone screenshot: Maple Fortune open in the Betty app. The game area is completely black. No error message is shown.'},
+  'trn-7': {kind:'frozen-spin', game:'Maple Fortune', bet:'$1.00',
+    player:'a screenshot of Maple Fortune frozen in the middle of your $1.00 spin - the reels are blurred mid-spin and the spin button is greyed out',
+    alt:'Phone screenshot: Maple Fortune frozen mid-spin. Bet CA$1.00. Reels are blurred mid-spin and the spin button is greyed out. No error message and no result shown.'},
+  'trn-4': {kind:'game-loading-stuck',
+    player:'a screenshot of a game that never opens - just the loading screen stuck on "Loading Game 0 %" with your Betty header at the top. There is no error message',
+    alt:'Phone screenshot: a game stuck on its loading screen at "Loading Game 0 %", Betty header visible at the top. No error message. It does not show where the player is.'},
+  'aht-1': {kind:'location-restricted',
+    player:'a screenshot of the message you get when you open a game: "Something went wrong - You are logging in from a restricted location. Your login has been denied." with a Previous Page button',
+    alt:'Phone screenshot: white box over the game page - "Something went wrong. You are logging in from a restricted location. Your login has been denied." with a "Previous Page" button. It does not show where the player is.'},
+  'trn-3': {kind:'login-error',
+    player:'a screenshot of the Betty login page with the email and password boxes outlined in red and "Invalid credentials" written under them',
+    alt:'Phone screenshot: Betty login page, email and password boxes outlined in red, message "Invalid credentials". No lock or restriction message.'},
+  'esc-16': {kind:'login-error',
+    player:'a screenshot of the Betty login page with the email and password boxes outlined in red and "Invalid credentials" written under them',
+    alt:'Phone screenshot: Betty login page, email and password boxes outlined in red, message "Invalid credentials". No lock or restriction message.'},
+  'esc-8': {kind:'bingo-disconnect',
+    player:'a screenshot you took when it happened: your bingo card with a "Connection lost - reconnecting" message over it',
+    alt:'Screenshot: a live Bingo card mid-round with a "Connection lost - reconnecting…" message over it. It does not show whether the card or Crack the Code progress were saved.'},
+  'noc-5': {kind:'bank-etransfer', amount:'$75.00', when:'Today', message:'k7tq2mz', confirmation:'A7kP2x***m9Q',
+    player:'a screenshot of the "Money Sent" details page in your banking app for the $75.00 Interac e-Transfer you sent about 20 minutes ago - status Sent, recipient Wyzia Financial Inc., the message code k7tq2mz, and a confirmation number the bank shows partly hidden',
+    alt:'Banking app screenshot ("Money Sent" details): $75.00 Interac e-Transfer, Status: Sent, today, Recipient: Wyzia Financial Inc., Message: k7tq2mz, Confirmation #: A7kP2x***m9Q (partly hidden by the bank). This is the player\u2019s bank screen, not the deposit confirmation email, and the confirmation number is not complete.'},
+  'noc-8': {kind:'bank-etransfer', amount:'$300.00', when:'Today', message:'r4nb8xw', confirmation:'Q2wE8r***t5Z',
+    player:'a screenshot of the "Money Sent" details page in your banking app for the $300.00 Interac e-Transfer you sent about an hour ago - status Sent, recipient Wyzia Financial Inc., the message code r4nb8xw, and a confirmation number the bank shows partly hidden',
+    alt:'Banking app screenshot ("Money Sent" details): $300.00 Interac e-Transfer, Status: Sent, today, Recipient: Wyzia Financial Inc., Message: r4nb8xw, Confirmation #: Q2wE8r***t5Z (partly hidden by the bank). This is the player\u2019s bank screen, not the deposit confirmation email, and the confirmation number is not complete.'},
+  'trn-5': {kind:'bank-etransfer', amount:'$40.00', when:'Today', message:'p2vh6jd', confirmation:'L9sD3f***c2K',
+    player:'a screenshot of the "Money Sent" details page in your banking app for the $40.00 Interac e-Transfer you sent about 20 minutes ago - status Sent, recipient Wyzia Financial Inc., the message code p2vh6jd, and a confirmation number the bank shows partly hidden',
+    alt:'Banking app screenshot ("Money Sent" details): $40.00 Interac e-Transfer, Status: Sent, today, Recipient: Wyzia Financial Inc., Message: p2vh6jd, Confirmation #: L9sD3f***c2K (partly hidden by the bank). This is the player\u2019s bank screen, not the deposit confirmation email, and the confirmation number is not complete.'},
+  'trn-9': {kind:'promo-banner',
+    player:'a screenshot of the Weekend Spins Offer banner you saw on Saturday (deposit $20 or more, get 20 free spins on Maple Fortune) - it has an "Opt in" button on it',
+    alt:'Screenshot of the promotion banner: "Weekend Spins Offer - deposit $20 or more this weekend and get 20 Free Spins on Maple Fortune", with an "Opt in" button. It does not show whether the player opted in.'},
+};
+// Built-in scenarios only (custom scenarios can't carry a screenshot yet). A Try-it-yourself trial of a template keeps its template's screenshot.
+function screenshotIdFor(s){
+  if(!s) return null;
+  if(s.isTrainerTrial) return s.trialOf && PLAYER_SCREENSHOTS[s.trialOf] ? s.trialOf : null;
+  if(s.isCustom) return null;
+  return PLAYER_SCREENSHOTS[s.id] ? s.id : null;
+}
+function scenarioScreenshot(s){ const k = screenshotIdFor(s); return k ? PLAYER_SCREENSHOTS[k] : null; }
+// Added to the player system prompt ONLY for scenarios that have a screenshot (empty string otherwise).
+function playerScreenshotBlock(s){
+  const sc = scenarioScreenshot(s); if(!sc) return '';
+  return `SCREENSHOT YOU CAN SEND: you have ${sc.player}. Only send it after the agent asks you for a screenshot, photo, picture or image, or asks you to show them. To send it, write a short natural line (for example "here you go") and put [[SCREENSHOT]] at the very end of that message. Send it once only - after that, refer back to it in words. Never describe it as if you had sent it before you actually have.\n\n`;
+}
+function agentAskedForScreenshot(transcript){ return (transcript||[]).some(m=>m.speaker==='agent' && SCREENSHOT_ASK.test(m.text||'')); }
+function screenshotAlreadySent(transcript){ return (transcript||[]).some(m=>m.speaker==='player' && m.screenshotId); }
+// Builds the player message object. Strips the token; attaches the screenshot only if the agent has asked and it
+// hasn't been sent yet. The grader-facing note goes into the text so every existing transcript reader sees it.
+function playerMessage(s, transcript, rawText, extra){
+  const had = SCREENSHOT_TOKEN_ONE.test(String(rawText||''));
+  let text = String(rawText||'').replace(SCREENSHOT_TOKEN, '').replace(/[ \t]+\n/g,'\n').trim();
+  const msg = Object.assign({speaker:'player', text}, extra||{});
+  const sc = scenarioScreenshot(s);
+  if(had && sc && agentAskedForScreenshot(transcript) && !screenshotAlreadySent(transcript)){
+    msg.screenshotId = screenshotIdFor(s);
+    msg.text = (text ? text + ' ' : '') + '[Player sent a screenshot: ' + sc.alt + ']';
+  }
+  return msg;
+}
+// Chat bubble body: identical to the old escapeHtml(m.text) for every message without a screenshot.
+function renderChatMessageBody(m){
+  const sc = m && m.screenshotId ? PLAYER_SCREENSHOTS[m.screenshotId] : null;
+  if(!sc) return escapeHtml(m.text);
+  const text = String(m.text||'').replace(/\s*\[Player sent a screenshot: [^\]]*\]\s*$/, '');
+  return `${text ? escapeHtml(text) : ''}<figure class="player-screenshot" style="margin:${text?'8px':'0'} 0 0;max-width:200px;">${screenshotSvg(sc)}<figcaption style="font-size:10.5px;color:var(--text3);margin-top:4px;">Screenshot sent by the player (training mock-up)</figcaption></figure>`;
+}
+
+// ---------- drawing ----------
+function svgEsc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function svgText(x, y, t, o){ o = o||{}; return `<text x="${x}" y="${y}" font-family="Inter,Arial,sans-serif" font-size="${o.size||12}" font-weight="${o.weight||400}" fill="${o.fill||'#fff'}" text-anchor="${o.anchor||'start'}">${svgEsc(t)}</text>`; }
+function svgWrap(x, y, t, width, o){ // naive word wrap: ~0.55em per character
+  o = o||{}; const size = o.size||12; const max = Math.max(8, Math.floor(width/(size*0.55)));
+  const lines = []; let cur = '';
+  String(t).split(/\s+/).forEach(w=>{ if((cur+' '+w).trim().length > max){ lines.push(cur.trim()); cur = w; } else cur += ' ' + w; });
+  if(cur.trim()) lines.push(cur.trim());
+  return lines.map((l,i)=>svgText(x, y + i*(size*1.35), l, o)).join('');
+}
+// Styled after real player screenshots shared by the TL (Betty's dark in-game header with Betty Coins / Level pills,
+// the dark "Error" card with a white OK button, a bank "Money Sent" details screen). Every value is fictional.
+function screenshotSvg(sc){
+  const W = 240, H = 430, Y = '#ffc400';
+  const frame = (inner, bg)=>{ const light = /^#f/i.test(bg||''); return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${svgEsc(sc.alt)}" xmlns="http://www.w3.org/2000/svg" style="display:block;border-radius:18px;">
+    <rect x="0" y="0" width="${W}" height="${H}" rx="18" fill="${bg||'#111'}"/>
+    ${svgText(14, 18, '9:41', {size:10, weight:600, fill:light?'#333':'#ddd'})}${svgText(W-14, 18, '●●●  ▮', {size:9, fill:light?'#333':'#ddd', anchor:'end'})}
+    ${inner}
+    <rect x="0" y="${H-22}" width="${W}" height="22" fill="#000" opacity=".55"/>
+    ${svgText(W/2, H-8, 'Training mock-up · not a real screen', {size:9, fill:'#ccc', anchor:'middle'})}
+  </svg>`; };
+  // Betty in-game header: back arrow + pills (fictional values)
+  const pill = (x, w, top, bottom)=>`<rect x="${x}" y="32" width="${w}" height="34" rx="17" fill="#18181c" stroke="#3a3a40"/>${svgText(x+w/2, 47, top, {size:10, weight:700, anchor:'middle'})}${svgText(x+w/2, 59, bottom, {size:7, fill:'#aaa', anchor:'middle'})}`;
+  const bettyHeader = ()=>`<rect x="0" y="26" width="${W}" height="46" fill="#0d0d10"/>${svgText(10, 55, '‹', {size:20, fill:'#fff'})}
+    <circle cx="70" cy="30" r="5" fill="${Y}"/>${pill(30, 80, '12,480', 'Betty Coins')}${pill(116, 56, '42', 'Level')}${pill(178, 56, '0', 'Free Cards')}`;
+  const gameStrip = (name)=>`<rect x="0" y="72" width="${W}" height="16" fill="#000"/>${svgText(8, 84, name, {size:8, weight:700})}${svgText(W-8, 84, 'Net Position: CA$0.00   00:00:19', {size:7.5, fill:'#ddd', anchor:'end'})}`;
+  const errorCard = (y, title, msg)=>`<rect x="16" y="${y}" width="${W-32}" height="132" rx="6" fill="#121418"/>
+    ${svgText(30, y+28, title, {size:14, weight:700})}${svgWrap(30, y+52, msg, W-60, {size:11, fill:'#b8bcc6'})}
+    <rect x="30" y="${y+92}" width="${W-60}" height="28" rx="3" fill="#fff"/>${svgText(W/2, y+111, 'OK', {size:12, weight:700, fill:'#111', anchor:'middle'})}`;
+  const reelsArt = (y0)=>{ let r = ''; for(let c=0;c<5;c++) for(let k=0;k<3;k++){ const x = 14 + c*43, y = y0 + k*62;
+      r += `<rect x="${x}" y="${y}" width="38" height="56" rx="6" fill="#2a2140"/><rect x="${x+6}" y="${y+8+((c+k)%3)*6}" width="26" height="${26-((c*7+k)%3)*5}" rx="4" fill="${['#e2a33d','#5b7cff','#3ecf8e','#e05a5a'][(c+k)%4]}" opacity=".45"/>`; }
+    return r; };
+  if(sc.kind==='game-black') return frame(bettyHeader() + `<rect x="0" y="72" width="${W}" height="${H-94}" fill="#000"/>`, '#000');
+  if(sc.kind==='frozen-spin'){
+    return frame(bettyHeader() + `<rect x="0" y="88" width="${W}" height="${H-110}" fill="#140f22"/>${gameStrip(sc.game.toUpperCase())}${svgText(W/2, 116, 'MAPLE FORTUNE', {size:14, weight:700, fill:'#e2a33d', anchor:'middle'})}${reelsArt(128)}
+      <circle cx="${W/2}" cy="342" r="22" fill="#555"/>${svgText(W/2, 347, 'SPIN', {size:10, weight:700, fill:'#999', anchor:'middle'})}
+      ${svgText(14, 386, 'BALANCE', {size:7.5, fill:'#ccc'})}${svgText(14, 398, 'CA$48.20', {size:10, weight:700})}${svgText(W/2, 386, 'TOTAL WIN', {size:7.5, fill:'#ccc', anchor:'middle'})}${svgText(W/2, 398, 'CA$0.00', {size:10, weight:700, anchor:'middle'})}${svgText(W-14, 386, 'BET', {size:7.5, fill:'#ccc', anchor:'end'})}${svgText(W-14, 398, 'CA$1.00', {size:10, weight:700, anchor:'end'})}`, '#140f22');
+  }
+  if(sc.kind==='game-loading-stuck'){
+    return frame(bettyHeader() + `<defs><radialGradient id="lg1"><stop offset="70%" stop-color="#000"/><stop offset="82%" stop-color="#2bd9ff"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs>
+      <rect x="0" y="72" width="${W}" height="${H-94}" fill="#04051a"/><circle cx="${W/2}" cy="230" r="78" fill="url(#lg1)"/><circle cx="${W/2}" cy="230" r="62" fill="#000"/>
+      ${svgText(W/2, 226, 'Loading Game', {size:13, weight:600, anchor:'middle'})}${svgText(W/2, 246, '0 %', {size:13, weight:600, anchor:'middle'})}`, '#04051a');
+  }
+  if(sc.kind==='location-restricted'){
+    return frame(bettyHeader() + `<rect x="0" y="72" width="${W}" height="${H-94}" fill="#0b1a33"/>
+      <rect x="16" y="168" width="${W-32}" height="120" rx="10" fill="#fff"/>
+      ${svgText(W/2, 194, 'Something went wrong', {size:14, fill:'#222', anchor:'middle'})}
+      ${svgText(W/2, 216, 'You are logging in from a restricted', {size:10, fill:'#444', anchor:'middle'})}${svgText(W/2, 230, 'location. Your login has been denied.', {size:10, fill:'#444', anchor:'middle'})}
+      <rect x="${W/2-42}" y="248" width="84" height="24" rx="2" fill="#1d1d1d"/>${svgText(W/2, 264, 'Previous Page', {size:10, anchor:'middle'})}`, '#0b1a33');
+  }
+  if(sc.kind==='location-block'){
+    return frame(bettyHeader() + `<rect x="0" y="72" width="${W}" height="${H-94}" fill="#140f22"/>${reelsArt(110)}<rect x="0" y="72" width="${W}" height="${H-94}" fill="#000" opacity=".6"/>
+      ${errorCard(170, 'Location check failed', 'We couldn’t confirm you’re in a province where you can play.')}`, '#140f22');
+  }
+  if(sc.kind==='login-error'){
+    return frame(`<rect x="0" y="26" width="${W}" height="${H-48}" fill="#121212"/>${svgText(14, 60, '\u2039', {size:18})}<circle cx="44" cy="54" r="12" fill="${Y}"/>${svgText(44, 59, 'B', {size:12, weight:700, fill:'#111', anchor:'middle'})}
+      <rect x="${W-80}" y="42" width="68" height="22" rx="11" fill="#1d1d1d" stroke="${Y}"/>${svgText(W-46, 57, 'Ontario \u2304', {size:9, anchor:'middle'})}
+      <rect x="14" y="84" width="${W-28}" height="40" rx="6" fill="#000" stroke="#d93a2e"/>${svgText(22, 98, 'Email', {size:8, fill:'#aaa'})}${svgText(22, 114, '\u2022\u2022\u2022\u2022\u2022\u2022\u2022@\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022', {size:10.5})}
+      <rect x="14" y="134" width="${W-28}" height="40" rx="6" fill="#000" stroke="#d93a2e"/>${svgText(22, 148, 'Password', {size:8, fill:'#aaa'})}
+      ${svgText(14, 196, 'Invalid credentials', {size:11, fill:'#ff4d3d'})}
+      <rect x="14" y="210" width="12" height="12" rx="2" fill="${Y}"/>${svgText(20, 220, '\u2713', {size:9, weight:700, fill:'#111', anchor:'middle'})}${svgText(14, 238, 'I am eligible and fit to play', {size:9})}${svgText(W-14, 221, 'Forgot Password?', {size:9, weight:600, anchor:'end'})}
+      <rect x="14" y="330" width="${W-28}" height="34" rx="17" fill="${Y}"/>${svgText(W/2, 351, 'Log In', {size:12, fill:'#111', anchor:'middle'})}
+      ${svgText(W/2, 384, 'New to Betty? Sign Up', {size:9.5, anchor:'middle'})}`, '#121212');
+  }
+  if(sc.kind==='bingo-disconnect'){
+    const nums = [[3,18,31,52,64],[7,22,40,49,70],[11,26,0,58,61],[14,19,38,47,73],[2,29,44,55,67]];
+    let grid = '';
+    nums.forEach((row,r)=>row.forEach((n,c)=>{ const x = 30 + c*37, y = 126 + r*37; grid += `<rect x="${x}" y="${y}" width="33" height="33" rx="5" fill="${(r+c)%4===0?'#e2a33d':'#fff'}"/>${svgText(x+16.5, y+21, n===0?'FREE':String(n), {size:n===0?8:12, weight:700, fill:'#222', anchor:'middle'})}`; }));
+    return frame(bettyHeader() + `<rect x="0" y="72" width="${W}" height="${H-94}" fill="#2a1b3d"/>${['B','I','N','G','O'].map((l,i)=>svgText(46+i*37, 116, l, {size:14, weight:700, fill:'#e2a33d', anchor:'middle'})).join('')}${grid}
+      <rect x="0" y="72" width="${W}" height="${H-94}" fill="#000" opacity=".55"/>
+      ${errorCard(180, 'Connection lost', 'Reconnecting…')}`, '#2a1b3d');
+  }
+  if(sc.kind==='bank-etransfer'){
+    const row = (y, k, v, sub)=>`<line x1="14" y1="${y-16}" x2="${W-14}" y2="${y-16}" stroke="#ddd"/>${svgText(14, y, k, {size:9.5, weight:600, fill:'#2e6b3a'})}${svgText(104, y, v, {size:10, weight:600, fill:'#222'})}${sub?svgText(104, y+13, sub, {size:8.5, fill:'#777'}):''}`;
+    return frame(`<rect x="0" y="26" width="${W}" height="${H-48}" fill="#f2f2f2"/>${svgText(22, 52, '‹', {size:18, fill:'#222'})}${svgText(W/2, 52, 'View Details', {size:11, weight:700, fill:'#222', anchor:'middle'})}
+      ${svgText(W/2, 92, 'Money Sent', {size:20, weight:700, fill:'#222', anchor:'middle'})}${svgText(W/2, 112, 'Status: Sent', {size:11, fill:'#333', anchor:'middle'})}
+      <rect x="0" y="126" width="${W}" height="${H-170}" fill="#fff"/>
+      ${row(156, 'Date Sent', sc.when)}
+      ${row(194, 'From Account', 'CHEQUING ACCOUNT', '•••••••')}
+      ${row(236, 'Amount', sc.amount)}
+      ${row(274, 'Recipient', 'Wyzia Financial Inc.')}
+      ${row(312, 'Message', sc.message)}
+      ${row(350, 'Confirmation #', sc.confirmation)}`, '#f2f2f2');
+  }
+  if(sc.kind==='promo-banner'){
+    return frame(bettyHeader() + `<rect x="0" y="72" width="${W}" height="${H-94}" fill="#121214"/>
+      <rect x="14" y="88" width="${W-28}" height="250" rx="14" fill="#2a1b3d"/>
+      ${svgText(30, 120, 'WEEKEND SPINS OFFER', {size:13, weight:700, fill:Y})}
+      ${svgText(30, 158, '20 Free Spins', {size:24, weight:700})}
+      ${svgWrap(30, 186, 'Deposit $20 or more this weekend and get 20 Free Spins on Maple Fortune.', W-60, {size:11, fill:'#ddd'})}
+      ${svgText(30, 248, 'Sat - Sun only. Terms apply.', {size:9, fill:'#aaa'})}
+      <rect x="30" y="278" width="96" height="34" rx="17" fill="${Y}"/>${svgText(78, 300, 'Opt in', {size:13, weight:700, fill:'#111', anchor:'middle'})}`, '#121214');
+  }
+  return '';
+}
+
+// ---------- DIAGNOSTIC 13: player screenshots (v41.5) ----------
+function runDiagnostic13(){
+  const el = document.getElementById('diag13Result'); if(!el) return;
+  const rows = []; const add = (label, pass, detail)=> rows.push({label, pass:!!pass, detail:detail||''});
+  try{
+    const ids = Object.keys(PLAYER_SCREENSHOTS);
+    add('Every screenshot belongs to a real scenario and draws a labelled mock-up', ids.every(id=>scenarioById(id) && /Training mock-up/.test(screenshotSvg(PLAYER_SCREENSHOTS[id]))), ids.filter(id=>!scenarioById(id)).join(', '));
+    add('No player details in any screenshot or its grader note', ids.every(id=>{ const sc = PLAYER_SCREENSHOTS[id]; return !playerDetailHits(sc.alt + ' ' + sc.player + ' ' + screenshotSvg(sc).replace(/<[^>]+>/g,' ')).length; }));
+    add('Deliberately left without a screenshot: Games Not Loading (conduct, noc-6), Missing Bingo Cards (esc-7), duplicate account (esc-17), promo opt-in disputes (esc-1, esc-6), and chats where the player says they took none (trn-6, trn-8)', ['noc-6','esc-7','esc-17','esc-1','esc-6','trn-6','trn-8','noc-1'].every(id=>!scenarioScreenshot(scenarioById(id))));
+    const s = scenarioById('trn-10'), plain = scenarioById('noc-1');
+    add('Player prompt gets the screenshot instructions only where a screenshot exists', /SCREENSHOT YOU CAN SEND/.test(buildPlayerSystemPrompt(s, null)) && !/SCREENSHOT/.test(buildPlayerSystemPrompt(plain, null)) && playerScreenshotBlock(plain)==='');
+    const notAsked = [{speaker:'player', text:'maple fortune wont open'}, {speaker:'agent', text:'Is it just this one game?'}];
+    const m1 = playerMessage(s, notAsked, 'yeah just that one [[SCREENSHOT]]', {turn:2});
+    add('If the agent hasn’t asked, nothing is sent and the token never shows', !m1.screenshotId && m1.text==='yeah just that one');
+    const asked = notAsked.concat([{speaker:'agent', text:'Could you send me a screenshot of what you see?'}]);
+    const m2 = playerMessage(s, asked, 'here you go [[SCREENSHOT]]', {turn:3});
+    add('After the agent asks, the screenshot is attached and the grader sees what it shows in the transcript', m2.screenshotId==='trn-10' && /^here you go \[Player sent a screenshot: Phone screenshot: Maple Fortune/.test(m2.text) && formatTranscriptForEval(asked.concat([m2]).map((m,i)=>Object.assign({turn:i+1}, m)), s).indexOf('[Player sent a screenshot:')>=0);
+    const m3 = playerMessage(s, asked.concat([m2]), 'sending it again [[SCREENSHOT]]', {turn:4});
+    add('It is sent once only', !m3.screenshotId && m3.text==='sending it again');
+    const body = renderChatMessageBody(m2), plainMsg = {speaker:'player', text:'hi <b>there</b>'};
+    add('The chat shows the picture instead of the bracket note; ordinary messages render exactly as before', /<svg/.test(body) && body.indexOf('[Player sent a screenshot')<0 && renderChatMessageBody(plainMsg)===escapeHtml(plainMsg.text));
+    add('Bank screenshots show the Message code but only a partly hidden confirmation number, so asking for the confirmation email or full IRN is still needed', ['noc-5','noc-8','trn-5'].every(id=>/partly hidden by the bank/.test(PLAYER_SCREENSHOTS[id].alt) && /Message: /.test(PLAYER_SCREENSHOTS[id].alt)));
+    const tr = Object.assign(cloneScenarioContentFields(scenarioById('trn-7')), {id:'trial_d13', isTrainerTrial:true, trialOf:'trn-7'});
+    add('Try it yourself runs of a template keep the template’s screenshot', scenarioScreenshot(tr)===PLAYER_SCREENSHOTS['trn-7']);
+  }catch(err){ add('Error: '+err.message, false); }
   const n = rows.filter(r=>r.pass).length;
   el.innerHTML = `<div class="diag-result"><div style="margin-bottom:6px;">${n} of ${rows.length} pass.</div>${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;"><span class="${r.pass?'diag-pass':'diag-fail'}">${r.pass?'PASS':'FAIL'}</span> ${escapeHtml(r.label)}${r.detail?`<div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${escapeHtml(r.detail)}</div>`:''}</div>`).join('')}</div>`;
 }
