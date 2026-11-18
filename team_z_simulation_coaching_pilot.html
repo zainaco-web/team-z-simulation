@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Betty Coaching Simulator - Simulation Engine - v41.6</title>
+<title>Betty Coaching Simulator - Simulation Engine - v41.7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2307,6 +2307,8 @@ let state = {
   activeScenario:null,
   activePersonaTrait:null,
   assignments:[],
+  staffRoles:[], // v41.7: [{type:'staff-role', name, role:'Shift Supervisor', status:'active'|'removed', by, at}] - latest per name wins
+  tpShowRemoved:false, // v41.7: Team Progress shows removed agents only when asked
   tlRosters:[], // [{tlName, agents:[canonicalName,...]}] - which agents belong to which TL, for scoped Team Progress views
   tlRosterLoadError:null,
   agentDirectory:[], // [{canonicalName, fullName, chatName, aliases:[...]}] - canonical agent profiles for name resolution
@@ -2409,6 +2411,7 @@ let state = {
   scenarioBuilderErrorDetail:'',
   scenarioBuilderVisibility:'private', // 'private' | 'team' | 'library'
   scenarioBuilderTargetAgent:'',
+  scenarioBuilderTargetTeam:'', // v41.7: for "My team only" when the creator has no roster (e.g. a Shift Supervisor)
   scenarioBuilderDuplicateSource:'',
   scenarioBuilderSourceType:'scratch', // 'scratch' | 'duplicate' - carried onto the saved record
   scenarioBuilderDuplicatedFromId:null,
@@ -3363,6 +3366,9 @@ function practicePoolFor(agentCanonicalName){
 }
 // A TL always sees their own created scenarios regardless of visibility (private/team/library, any
 // review status) - this is their own working list, not the agent-facing pool above.
+// v41.7: CS builder only. A creator who owns no roster (e.g. a Shift Supervisor) chooses whose team "My team only" means.
+// L&D Training keeps its creator-only "team" save exactly as before.
+function builderNeedsTeamPick(name){ return state.view!=='training' && state.scenarioBuilderVisibility==='team' && !!(name||'').trim() && !isRosterOwnerName(name) && (state.tlRosters||[]).length>0; }
 function customScenariosCreatedBy(tlName){
   if(!tlName) return [];
   return state.customScenarios.filter(cs => namesMatch(cs.createdBy, tlName));
@@ -3949,6 +3955,7 @@ function startDuplicateFromSource(sourceId){
   state.scenarioBuilderVisibility = 'private';
   state.scenarioBuilderAudience = null;
   state.scenarioBuilderTargetAgent = '';
+  state.scenarioBuilderTargetTeam = '';
   state.scenarioBuilderError = null; state.scenarioBuilderErrorDetail = '';
   render();
 }
@@ -3969,6 +3976,7 @@ function startEditCustomScenario(id){
   state.scenarioBuilderVisibility = cs.visibility;
   state.scenarioBuilderAudience = scenarioAudience(cs);
   state.scenarioBuilderTargetAgent = cs.targetAgent||'';
+  state.scenarioBuilderTargetTeam = (cs.visibility==='team' && cs.targetTeam && !namesMatch(cs.targetTeam, cs.createdBy)) ? cs.targetTeam : '';
   state.scenarioBuilderError = null; state.scenarioBuilderErrorDetail = '';
   state.scenarioBuilderSavedNotice = null;
   render();
@@ -4021,7 +4029,7 @@ async function saveScenarioBuilderDraft(){
   // v41.1: in the L&D workspace there is no visibility choice - Training only stays out of the agent library (saved as a
   // creator-only "team" scenario, so no agent roster sees it), Everyone goes to the shared library through QA review.
   if(state.view==='training') state.scenarioBuilderVisibility = builderAudience()==='training' ? 'team' : 'library';
-  if(!tlName){ state.scenarioBuilderError = state.view==='training' ? 'Enter your name before saving.' : 'Enter your name as the creating TL before saving.'; render(); return; }
+  if(!tlName){ state.scenarioBuilderError = state.view==='training' ? 'Enter your name before saving.' : 'Enter your name as the creating TL or Shift Supervisor before saving.'; render(); return; }
   // v41.4 (L&D only): possible player details are the one thing that blocks saving; everything else is a warning.
   const ldBlock = state.view==='training' ? trainerSaveBlockReason(gen) : '';
   if(ldBlock){ state.scenarioBuilderError = ldBlock; render(); return; }
@@ -4029,6 +4037,9 @@ async function saveScenarioBuilderDraft(){
   if(!gen.title || !gen.title.trim()){ state.scenarioBuilderError = 'Title is required.'; render(); return; }
   if(state.scenarioBuilderVisibility==='private' && !state.scenarioBuilderTargetAgent){
     state.scenarioBuilderError = 'Pick the agent this private scenario is for.'; render(); return;
+  }
+  if(builderNeedsTeamPick(tlName) && !state.scenarioBuilderTargetTeam){ // v41.7
+    state.scenarioBuilderError = 'You don\u2019t have a roster of your own - pick which team can see this scenario.'; render(); return;
   }
   // Tags are locked to the approved catalogue (exact match). A blank correct tag is allowed (it means "unresolved - needs tag review")
   // but only for private/team scenarios; it can never enter the shared library or be approved until it is resolved.
@@ -4063,7 +4074,7 @@ async function saveScenarioBuilderDraft(){
     audience: savedAudience,
     visibility: state.scenarioBuilderVisibility,
     targetAgent: state.scenarioBuilderVisibility==='private' ? state.scenarioBuilderTargetAgent : null,
-    targetTeam: state.scenarioBuilderVisibility==='team' ? tlName : null,
+    targetTeam: state.scenarioBuilderVisibility==='team' ? (builderNeedsTeamPick(tlName) ? state.scenarioBuilderTargetTeam : tlName) : null,
     reviewStatus,
   };
 
@@ -4859,6 +4870,7 @@ function wireEvents(){
     const roster = state.tlRosters.find(r=>namesMatch(r.tlName, state.tlAlertName));
     openTeamProgress(roster || undefined);
   });
+  wireSupervisorsBlock(); // v41.7
   const btnSaveTLContact=document.getElementById('btnSaveTLContact');
   if(btnSaveTLContact) btnSaveTLContact.addEventListener('click', async ()=>{
     const name = (document.getElementById('tlContactName').value||'').trim();
@@ -5234,7 +5246,7 @@ function wireEvents(){
       let r;
       if(what==='transfer'){ const sel=document.getElementById('agentTransferSelect'); if(!sel || !sel.value){ if(sel) sel.focus(); return; } r = await transferAgent(act.canonical, sel.value); if(r.ok) r.done = `Moved ${act.canonical} to ${sel.value}.`; }
       else if(what==='delete'){ r = await hardDeleteAgent(act.canonical); if(r.ok) r.done = `Deleted ${act.canonical}.`; }
-      else { r = await setAgentStatus(act.canonical, what); if(r.ok) r.done = `${act.canonical} marked as ${what.toLowerCase()}.`; }
+      else { r = await setAgentStatus(act.canonical, what); if(r.ok) r.done = what==='Active' ? `${act.canonical} restored.` : `${act.canonical} removed (${what.toLowerCase()}). Their history is kept - restore them any time from Removed agents.`; }
       state.agentAction = null;
       state.agentMgmtMsg = r.ok ? {text: r.done + (r.warn ? ' '+r.warn : ''), color: r.warn ? 'var(--warn)' : 'var(--ok)'} : {text:r.error, color:'var(--bad)'};
       render();
@@ -5242,7 +5254,7 @@ function wireEvents(){
   });
   document.querySelectorAll('[data-agent-reactivate]').forEach(el=>{
     el.addEventListener('click', async ()=>{ const c=el.getAttribute('data-agent-reactivate'); const r = await setAgentStatus(c, 'Active');
-      state.agentMgmtMsg = r.ok ? {text:`${c} reactivated.${r.warn ? ' '+r.warn : ''}${rostersContaining(c).length ? '' : ' They are not on any roster - use Transfer to place them.'}`, color: r.warn ? 'var(--warn)' : 'var(--ok)'} : {text:r.error, color:'var(--bad)'}; render(); });
+      state.agentMgmtMsg = r.ok ? {text:`${c} restored.${r.warn ? ' '+r.warn : ''}${rostersContaining(c).length ? '' : ' They are not on any roster - use Transfer to place them.'}`, color: r.warn ? 'var(--warn)' : 'var(--ok)'} : {text:r.error, color:'var(--bad)'}; render(); });
   });
   document.querySelectorAll('[data-keep-on-roster]').forEach(el=>{
     el.addEventListener('click', async ()=>{ const c=el.getAttribute('data-keep-on-roster'), tl=el.getAttribute('data-keep-tl'); const r = await transferAgent(c, tl);
@@ -5250,7 +5262,7 @@ function wireEvents(){
   });
   document.querySelectorAll('[data-audit-delete]').forEach(el=>{
     el.addEventListener('click', ()=>{ const c=el.getAttribute('data-audit-delete'); const p=profileByCanonical(c);
-      if(p && !isActiveAgent(p)){ state.agentMgmtMsg = {text:`Reactivate ${c} first, then delete from All Registered Agents.`, color:'var(--warn)'}; render(); return; }
+      if(p && !isActiveAgent(p)){ state.agentMgmtMsg = {text:`Restore ${c} first, then delete from All Registered Agents.`, color:'var(--warn)'}; render(); return; }
       state.agentAction = {canonical:c, kind:'delete'}; state.diagSubsectionsOpen['agent-directory']=true; state.agentDirectorySearch = c; render();
       setTimeout(()=>{ const row=document.querySelector('[data-agent-row]'); if(row && row.scrollIntoView) row.scrollIntoView({behavior:'smooth', block:'center'}); },0); });
   });
@@ -5359,7 +5371,7 @@ function wireEvents(){
       if(!entry) return; // button only ever renders when a linked entry genuinely exists
       state.teamProgressReturn = null; state.tlCopy = null;
       state.historicalView = { scenarioId: entry.scenarioId, attempt: entry, standalone: true, fromTeamProgress: true };
-      state.tlReviewDraft = buildReviewDraft(entry); state.tlReviewCoachingRun = !!entry.coachingRun;
+      state.tlReviewDraft = buildReviewDraft(entry); initReviewExclusion(entry);
       state.tlReviewStatus = '';
       state.historicalTranscriptExpanded = false;
       renderEvalModal();
@@ -5443,7 +5455,8 @@ function wireEvents(){
 
   // ---------- TL SCENARIO BUILDER ----------
   const scenarioBuilderTLNameInput=document.getElementById('scenarioBuilderTLName');
-  if(scenarioBuilderTLNameInput) scenarioBuilderTLNameInput.addEventListener('input', e=>{ state.scenarioBuilderTLName = e.target.value; });
+  if(scenarioBuilderTLNameInput){ scenarioBuilderTLNameInput.addEventListener('input', e=>{ state.scenarioBuilderTLName = e.target.value; });
+    scenarioBuilderTLNameInput.addEventListener('change', ()=>{ if(state.view!=='training' && state.scenarioBuilderVisibility==='team') render(); }); } // v41.7
   document.querySelectorAll('[data-builder-mode]').forEach(el=>{
     el.addEventListener('click', ()=>{ state.scenarioBuilderMode = el.getAttribute('data-builder-mode'); resetScenarioBuilderFlow(); render(); });
   });
@@ -5581,6 +5594,8 @@ function wireEvents(){
     });
     const editTargetAgentSelect=document.getElementById('editTargetAgent');
     if(editTargetAgentSelect) editTargetAgentSelect.addEventListener('change', e=>{ state.scenarioBuilderTargetAgent = e.target.value; });
+    const editTargetTeamSelect=document.getElementById('editTargetTeam'); // v41.7
+    if(editTargetTeamSelect) editTargetTeamSelect.addEventListener('change', e=>{ state.scenarioBuilderTargetTeam = e.target.value; });
     const btnSaveScenarioBuilder=document.getElementById('btnSaveScenarioBuilder');
     if(btnSaveScenarioBuilder) btnSaveScenarioBuilder.addEventListener('click', saveScenarioBuilderDraft);
     const btnCancelScenarioBuilder=document.getElementById('btnCancelScenarioBuilder');
@@ -5860,9 +5875,36 @@ async function runSessionSummary(id){
 // excluded from averages, pass counts and pattern summaries. The TL can still change this in the TL review.
 function coachingFieldsNow(){ return state.coachingSession ? {coachingRun:true, coachName: state.coachingSession.coachName} : {}; }
 function coachingFieldsOf(rec){ return rec && rec.coachingRun ? {coachingRun:true, coachName: rec.coachName||null} : {}; }
-function coachingRunLabel(rec){ return rec && rec.coachingRun ? ('Coaching run' + (rec.coachName ? ' with ' + rec.coachName : '')) : ''; }
+function coachingRunLabel(rec){
+  if(!rec || !rec.coachingRun) return '';
+  if(rec.disregarded) return 'Disregarded' + (rec.disregardReason ? ': ' + rec.disregardReason : ''); // v41.7
+  return 'Coaching run' + (rec.coachName ? ' with ' + rec.coachName : '');
+}
+// v41.7 DISREGARD: a TL review says how the attempt counts - 'count' | 'coaching' | 'disregard'. Both exclusions ride on
+// the existing coachingRun bit, so every average, pass count, Team View cell, roster average and pattern summary that
+// already skips coaching runs skips a disregarded attempt too. The attempt and its AI score are never deleted.
+function reviewExclusionModeOf(rec){ return (!rec || !rec.coachingRun) ? 'count' : rec.disregarded ? 'disregard' : 'coaching'; }
+function initReviewExclusion(entry){ state.tlReviewCoachingRun = !!(entry && entry.coachingRun); state.tlReviewExcludeMode = reviewExclusionModeOf(entry); state.tlReviewDisregardReason = (entry && entry.disregardReason) || ''; }
+function tlCountingChoiceHtml(){
+  const m = state.tlReviewExcludeMode || 'count';
+  const opt = (v, label, hint)=>`<label style="display:flex;align-items:flex-start;gap:6px;font-size:12.5px;margin-top:4px;cursor:pointer;color:var(--text);"><input type="radio" name="tlExcludeMode" value="${v}" ${m===v?'checked':''} style="margin-top:2px;"><span><strong>${label}</strong> <span style="color:var(--text3);">${hint}</span></span></label>`;
+  return `<div id="tlCountingChoice" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+    <div style="font-size:12.5px;font-weight:700;margin-bottom:2px;">Does this attempt count?</div>
+    ${opt('count', 'Counts', '- included in the agent\u2019s and the team\u2019s scores.')}
+    ${opt('coaching', 'Coaching run', '- practice with a coach. Not counted.')}
+    ${opt('disregard', 'Disregard this attempt', '- not a real attempt, e.g. you told the agent to close early, or it was a test. Not counted.')}
+    <input id="tlDisregardReason" placeholder="Why is it disregarded? (required) e.g. I told the agent to close early - time ran short" value="${escapeHtml(state.tlReviewDisregardReason||'')}" style="${m==='disregard'?'':'display:none;'}width:100%;margin-top:6px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:12.5px;">
+    <div style="font-size:11.5px;color:var(--text3);margin-top:6px;">Not counted means it is left out of averages, pass counts, Team View and pattern summaries. The attempt and the AI score stay on record, and you can change this later. Click Save TL review to apply.</div>
+  </div>`;
+}
+function tlCountingSummaryHtml(){
+  const m = state.tlReviewExcludeMode || 'count';
+  const txt = m==='disregard' ? 'Will be disregarded (not counted)' : m==='coaching' ? 'Coaching run (not counted)' : '';
+  return `<span id="tlCountingSummary" style="font-size:12px;font-weight:700;color:var(--warn);${txt?'':'display:none;'}">${txt}</span>`;
+}
 function coachingBannerHtml(rec){
   if(!rec || !rec.coachingRun) return '';
+  if(rec.disregarded) return `<div class="box" style="border-color:var(--border);background:var(--panel2);color:var(--text2);font-size:12.5px;"><strong>Disregarded</strong>${rec.reviewedBy ? ' by '+escapeHtml(rec.reviewedBy) : ''}${rec.disregardReason ? ': '+escapeHtml(rec.disregardReason) : ''} - not counted in this agent\u2019s or the team\u2019s scores, pass counts or pattern summaries. A TL can change this in the review.</div>`;
   return `<div class="box" style="border-color:var(--warn);background:var(--warn-bg);color:var(--warn);font-size:12.5px;">${escapeHtml(coachingRunLabel(rec))} - practice with a coach, not counted in team averages or pattern summaries.</div>`;
 }
 function renderCoachNameModal(){
@@ -5883,6 +5925,70 @@ function renderCoachNameModal(){
 }
 
 // ---------- TEAM PROGRESS LOG (shared via the backend server - see note above) ----------
+// ---------- v41.7 SHIFT SUPERVISORS ----------
+// Supervisors have the same TL / Management Area access as TLs (it is one shared password). Being listed here only means
+// the app recognises them by name (sign-in message, reviewer, scenario builder) instead of treating them as an unknown
+// agent. Stored as small append-only {type:'staff-role'} records in the shared team-progress list (same route as TL
+// reviews and pattern summaries), latest record per name wins; never treated as attempts.
+const STAFF_ROLES_KEY = 'zteamz_staffRoles_v1';
+const STAFF_ROLE_SUPERVISOR = 'Shift Supervisor';
+function loadStaffRolesLocal(){ try{ const v = JSON.parse(localStorage.getItem(STAFF_ROLES_KEY)||'[]'); return Array.isArray(v) ? v : []; }catch(err){ return []; } }
+function latestStaffRoles(list){
+  const by = {};
+  (list||[]).forEach(r=>{ if(!r || r.type!=='staff-role' || !r.name) return; const k = r.name.trim().toLowerCase(); if(!by[k] || (r.at||0) >= (by[k].at||0)) by[k] = r; });
+  return Object.values(by);
+}
+function activeSupervisors(){ return latestStaffRoles(state.staffRoles).filter(r=>r.status==='active' && r.role===STAFF_ROLE_SUPERVISOR).sort((a,b)=>a.name.localeCompare(b.name)); }
+function supervisorRecordFor(name){ const k=(name||'').trim().toLowerCase(); return k ? (activeSupervisors().find(r=>r.name.trim().toLowerCase()===k)||null) : null; }
+function isRosterOwnerName(name){ const k=(name||'').trim().toLowerCase(); return !!k && (state.tlRosters||[]).some(r=>(r.tlName||'').trim().toLowerCase()===k); }
+function staffRoleFor(name){ return isRosterOwnerName(name) ? 'Team Lead' : supervisorRecordFor(name) ? STAFF_ROLE_SUPERVISOR : null; }
+async function saveStaffRole(name, status, by){
+  const n = (name||'').trim(); if(!n) return {ok:false, error:'Enter the supervisor\u2019s full name.'};
+  const at = Date.now();
+  const rec = {type:'staff-role', id:'sr_'+n.toLowerCase().replace(/\s+/g,'_'), name:n, role:STAFF_ROLE_SUPERVISOR, status, by:(by||'').trim()||null, at};
+  state.staffRoles = [...(state.staffRoles||[]), rec];
+  try{ localStorage.setItem(STAFF_ROLES_KEY, JSON.stringify([...loadStaffRolesLocal(), rec])); }catch(err){}
+  let shared = false;
+  try{ const resp = await fetch(BACKEND_URL + '/api/store/team-progress', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec)}); shared = resp.ok; }
+  catch(err){ console.error('Saving the staff role to the shared backend failed (saved on this device only):', err); }
+  return {ok:true, shared};
+}
+function renderSupervisorsBlock(){
+  const list = activeSupervisors();
+  const inputStyle = 'flex:1;min-width:180px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;';
+  return `<div class="box" style="max-width:700px;margin-top:12px;">
+    <div style="font-size:12.5px;font-weight:600;margin-bottom:4px;">Shift Supervisors (${list.length})</div>
+    <div style="font-size:11.5px;color:var(--text3);margin-bottom:8px;">Same TL / Management Area access as a Team Lead: review and override, disregard attempts, assign, and create scenarios. Adding them here means the app recognises them by name instead of treating them as an unregistered agent. They don\u2019t need a roster.</div>
+    ${list.length ? list.map(r=>`<div class="info-row" style="align-items:center;"><span class="ilabel"><strong>${escapeHtml(r.name)}</strong> <span style="color:var(--text3);">\u00b7 Shift Supervisor${r.by ? ' \u00b7 added by '+escapeHtml(r.by) : ''}</span></span><button class="small" data-remove-supervisor="${escapeHtml(r.name)}">Remove</button></div>`).join('') : '<div class="empty" style="padding:4px 0;text-align:left;">None added yet.</div>'}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+      <input id="supervisorNameInput" placeholder="Shift Supervisor\u2019s full name" style="${inputStyle}">
+      <button id="btnAddSupervisor" class="primary">Add Shift Supervisor</button>
+    </div>
+    <div id="supervisorStatus" style="${state.supervisorMsg ? '' : 'display:none;'}font-size:12px;margin-top:6px;color:${state.supervisorMsg ? state.supervisorMsg.color : 'inherit'};">${state.supervisorMsg ? escapeHtml(state.supervisorMsg.text) : ''}</div>
+  </div>`;
+}
+function wireSupervisorsBlock(){
+  const btn = document.getElementById('btnAddSupervisor');
+  if(btn) btn.addEventListener('click', async ()=>{
+    const inp = document.getElementById('supervisorNameInput'); const name = ((inp&&inp.value)||'').trim();
+    if(!name){ state.supervisorMsg = {text:'Enter the supervisor\u2019s full name.', color:'var(--bad)'}; render(); return; }
+    if(supervisorRecordFor(name)){ state.supervisorMsg = {text:`${name} is already a Shift Supervisor.`, color:'var(--warn)'}; render(); return; }
+    const prof = registeredProfileFor(name);
+    btn.disabled = true;
+    const r = await saveStaffRole(name, 'active', getLastAssigningTL());
+    state.supervisorMsg = {text:`Added ${name} as a Shift Supervisor.${prof ? ' Note: this name is also a registered agent.' : ''}${r.shared ? '' : ' Saved on this device only - the shared server did not accept it.'}`, color: (prof || !r.shared) ? 'var(--warn)' : 'var(--ok)'};
+    render();
+  });
+  document.querySelectorAll('[data-remove-supervisor]').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      const name = el.getAttribute('data-remove-supervisor'); el.disabled = true;
+      const r = await saveStaffRole(name, 'removed', getLastAssigningTL());
+      state.supervisorMsg = {text:`Removed ${name} from Shift Supervisors.${r.shared ? '' : ' Saved on this device only.'}`, color: r.shared ? 'var(--ok)' : 'var(--warn)'};
+      render();
+    });
+  });
+}
+
 async function loadTeamProgressLog(){
   // Try the shared backend first - this is what makes it genuinely team-wide, not just this device.
   try{
@@ -5919,9 +6025,11 @@ function applyTlReviews(list){
   const attempts = [], reviews = {};
   const summaries = {};
   const trainingRecs = []; // v40: Training (L&D) records ride along too; never attempts, never in the TL log
+  const staffRecs = []; // v41.7
   loadLocalPatternSummaries().forEach(s=>{ if(s && s.id) summaries[s.id] = s; });
   (list||[]).forEach(r=>{
     if(isTrainingRecord(r)){ trainingRecs.push(r); return; }
+    if(r && r.type==='staff-role'){ staffRecs.push(r); return; } // v41.7: supervisor list rides along; never an attempt
     if(r && r.type==='pattern-summary'){ if(r.id) summaries[r.id] = r; return; } // TL pattern summaries ride along in the same shared list; never treated as attempts
     if(r && r.type==='tl-review' && r.reviewKey){
       const prev = reviews[r.reviewKey];
@@ -5930,9 +6038,10 @@ function applyTlReviews(list){
   });
   const local = loadLocalTlReviews(); // this device's own saved reviews, in case the shared save didn't go through
   Object.keys(local).forEach(k=>{ const prev = reviews[k]; if(!prev || (local[k].tlReviewedAt||0) > (prev.tlReviewedAt||0)) reviews[k] = local[k]; });
-  attempts.forEach(e=>{ const r = reviews[reviewKeyFor(e)]; if(r && r.tlOverrides){ e.tlOverrides = r.tlOverrides; e.tlReviewedAt = r.tlReviewedAt; if(r.coachingRun!==undefined) e.coachingRun = !!r.coachingRun; e.reviewedBy = r.reviewedBy||null; e.reviewHistory = Array.isArray(r.reviewHistory) ? r.reviewHistory : []; } });
+  attempts.forEach(e=>{ const r = reviews[reviewKeyFor(e)]; if(r && r.tlOverrides){ e.tlOverrides = r.tlOverrides; e.tlReviewedAt = r.tlReviewedAt; if(r.coachingRun!==undefined) e.coachingRun = !!r.coachingRun; if(r.disregarded!==undefined){ e.disregarded = !!r.disregarded; e.disregardReason = r.disregardReason||null; if(!e.disregarded) delete e.disregardReason; } e.reviewedBy = r.reviewedBy||null; e.reviewHistory = Array.isArray(r.reviewHistory) ? r.reviewHistory : []; } });
   state.patternSummaries = Object.values(summaries).sort((a,b)=>(b.generatedAt||0)-(a.generatedAt||0));
   state.trainingRecords = trainingRecs;
+  if(staffRecs.length) state.staffRoles = [...staffRecs, ...loadStaffRolesLocal()]; // v41.7
   return splitTrainingAttempts(attempts); // v40: Training attempts go to state.trainingAttempts, never state.teamProgressLog
 }
 
@@ -6098,7 +6207,7 @@ function overrideValidationErrors(entry, draft){
 }
 function tlReviewerNameNow(){ const v = (state.tlReviewerName!==undefined && state.tlReviewerName!==null) ? state.tlReviewerName : getLastAssigningTL(); return (v||'').trim(); }
 function tlReviewerFieldHtml(){
-  return `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);">Reviewed by <input id="tlReviewerName" placeholder="Your name (TL) - required" value="${escapeHtml(tlReviewerNameNow())}" style="min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-family:inherit;font-size:13px;"></label>`;
+  return `<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);">Reviewed by <input id="tlReviewerName" placeholder="Your name (TL / Supervisor) - required" value="${escapeHtml(tlReviewerNameNow())}" style="min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-family:inherit;font-size:13px;"></label>`;
 }
 // The per-question editor fields that appear only when the TL's letter differs from the AI's.
 function tlOverrideBasisFieldsHtml(qid, aiQ, override){
@@ -6134,7 +6243,7 @@ function tlReviewRecordHtml(entry){
   const hist = Array.isArray(entry.reviewHistory) ? entry.reviewHistory : [];
   const histHtml = hist.length ? `<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--text2);">Earlier reviews of this attempt (${hist.length})</summary>${[...hist].reverse().map(h=>`<div style="font-size:12px;color:var(--text2);margin-top:4px;">${escapeHtml(h.reviewedBy||'Reviewer not recorded')} · ${escapeHtml(new Date(h.tlReviewedAt).toLocaleString())} · ${QA_SCORECARD.questions.map(q=>{ const o=(h.tlOverrides||{})[q.id]||{}; return q.id.toUpperCase()+' '+escapeHtml(letterWithDuty(o.letter, o.afDuty)); }).join(' · ')}</div>`).join('')}</details>` : '';
   return `<div class="box" style="border-color:var(--accent);">
-    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><strong>TL review record</strong><span style="font-size:12px;color:var(--text3);">Reviewed by ${entry.reviewedBy ? escapeHtml(entry.reviewedBy) : 'not recorded (reviewed before the audit trail)'} · ${escapeHtml(new Date(entry.tlReviewedAt).toLocaleString())}${entry.coachingRun ? ' · coaching run' : ''}</span></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><strong>TL review record</strong><span style="font-size:12px;color:var(--text3);">Reviewed by ${entry.reviewedBy ? escapeHtml(entry.reviewedBy) : 'not recorded (reviewed before the audit trail)'} · ${escapeHtml(new Date(entry.tlReviewedAt).toLocaleString())}${entry.coachingRun ? ' · '+(entry.disregarded ? 'disregarded' : 'coaching run') : ''}</span></div>
     ${rows}${histHtml}
   </div>`;
 }
@@ -6210,7 +6319,7 @@ function openTeamViewAttempt(idx){
   if(!entry || !entry.evaluation) return;
   state.teamProgressReturn = null; state.tlCopy = null;
   state.historicalView = { scenarioId: entry.scenarioId, attempt: entry, standalone: true, fromTeamProgress: true };
-  state.tlReviewDraft = buildReviewDraft(entry); state.tlReviewCoachingRun = !!entry.coachingRun;
+  state.tlReviewDraft = buildReviewDraft(entry); initReviewExclusion(entry);
   state.tlReviewStatus = '';
   state.historicalTranscriptExpanded = false;
   renderEvalModal();
@@ -6219,6 +6328,7 @@ function openTeamViewAttempt(idx){
 // ---- Team View: agent x scenario / skill / scorecard question ----
 function teamViewEntries(filter){
   let log = state.teamProgressLog.filter(isCountedTeamAttempt);
+  if(!(filter && filter.startsWith('agent:'))) log = log.filter(e=>!isRemovedAgentName(e.agentName)); // v41.7
   if(filter && filter.startsWith('tl:')){
     const r = state.tlRosters.find(x=>x.tlName===filter.slice(3));
     const agents = r ? r.agents : [];
@@ -6319,7 +6429,7 @@ function renderTeamViewSectionBody(){
     <span style="display:flex;gap:4px;">${modeBtn('scenario','By scenario')}${modeBtn('skill','By skill')}${modeBtn('question','By scorecard question')}</span>
     <button class="small" id="btnTeamViewRefresh">Refresh</button>
   </div>`;
-  const intro = `<div style="color:var(--text2);font-size:13px;margin-bottom:10px;">Where to look across the team. Scores use the TL-reviewed result where one exists, otherwise the AI score. Coaching runs are excluded.</div>`;
+  const intro = `<div style="color:var(--text2);font-size:13px;margin-bottom:10px;">Where to look across the team. Scores use the TL-reviewed result where one exists, otherwise the AI score. Coaching runs, disregarded attempts and removed agents are excluded.</div>`;
   if(!log.length) return intro + controls + `<div class="empty">No counted attempts for this selection yet.</div>`;
   const byAgent = {};
   log.forEach(e=>{ const k = canonicalNameFor(e.agentName||'(unnamed)'); (byAgent[k]=byAgent[k]||[]).push(e); });
@@ -6345,7 +6455,7 @@ function renderTeamViewSectionBody(){
     <div style="font-size:11.5px;color:var(--text3);margin-top:8px;">${legend} <span style="color:var(--warn);">●</span> = an unreviewed attempt in that cell is flagged Review recommended.</div>` + flaggedHtml;
 }
 function teamViewDashSummary(){
-  const log = state.teamProgressLog.filter(isCountedTeamAttempt);
+  const log = state.teamProgressLog.filter(isCountedTeamAttempt).filter(e=>!isRemovedAgentName(e.agentName)); // v41.7
   const flagged = log.filter(e=>reviewRecommendedReasons(e).length).length;
   const agents = new Set(log.map(e=>canonicalNameFor(e.agentName||''))).size;
   return `${agents} agent${agents===1?'':'s'} · ${flagged} review recommended`;
@@ -6368,7 +6478,9 @@ async function saveTlReview(){
   const entry = hv.attempt;
   // v39 audit trail: a reviewer name is required, and every changed letter needs a basis + explanation.
   const reviewer = tlReviewerNameNow();
-  const errors = [...(reviewer ? [] : ['add your name as the reviewer']), ...overrideValidationErrors(entry, state.tlReviewDraft)];
+  const exMode = state.tlReviewExcludeMode || (state.tlReviewCoachingRun ? 'coaching' : 'count'); // v41.7
+  const disregardReason = (state.tlReviewDisregardReason||'').trim();
+  const errors = [...(reviewer ? [] : ['add your name as the reviewer']), ...(exMode==='disregard' && !disregardReason ? ['add a reason for disregarding this attempt'] : []), ...overrideValidationErrors(entry, state.tlReviewDraft)];
   if(errors.length) return {ok:false, shared:false, errors};
   const draft = JSON.parse(JSON.stringify(state.tlReviewDraft));
   QA_SCORECARD.questions.forEach(q=>{
@@ -6378,14 +6490,16 @@ async function saveTlReview(){
     else { o.reason = (o.reason||'').trim(); if(o.basis==='KB article') o.basisArticle = (o.basisArticle||'').trim(); else delete o.basisArticle; }
   });
   const reviewHistory = [...(Array.isArray(entry.reviewHistory) ? entry.reviewHistory : []),
-    ...(entry.tlReviewedAt ? [{reviewedBy: entry.reviewedBy||null, tlReviewedAt: entry.tlReviewedAt, tlOverrides: entry.tlOverrides, coachingRun: !!entry.coachingRun}] : [])].slice(-20);
+    ...(entry.tlReviewedAt ? [{reviewedBy: entry.reviewedBy||null, tlReviewedAt: entry.tlReviewedAt, tlOverrides: entry.tlOverrides, coachingRun: !!entry.coachingRun, disregarded: !!entry.disregarded, disregardReason: entry.disregardReason||null}] : [])].slice(-20);
   const reviewedAt = Date.now();
   entry.tlOverrides = draft;
   entry.tlReviewedAt = reviewedAt;
   entry.reviewedBy = reviewer; entry.reviewHistory = reviewHistory;
-  entry.coachingRun = !!state.tlReviewCoachingRun; if(!entry.coachingRun) delete entry.coachName;
+  entry.coachingRun = exMode!=='count'; if(!entry.coachingRun) delete entry.coachName;
+  if(exMode==='disregard'){ entry.disregarded = true; entry.disregardReason = disregardReason; } else { delete entry.disregarded; delete entry.disregardReason; }
+  state.tlReviewCoachingRun = entry.coachingRun;
   const key = reviewKeyFor(entry);
-  const record = { type:'tl-review', reviewKey:key, agentName:entry.agentName, scenarioId:entry.scenarioId, tlOverrides:draft, tlReviewedAt:reviewedAt, coachingRun: entry.coachingRun, reviewedBy: reviewer, reviewHistory };
+  const record = { type:'tl-review', reviewKey:key, agentName:entry.agentName, scenarioId:entry.scenarioId, tlOverrides:draft, tlReviewedAt:reviewedAt, coachingRun: entry.coachingRun, disregarded: !!entry.disregarded, disregardReason: entry.disregardReason||null, reviewedBy: reviewer, reviewHistory };
   try{ const local = loadLocalTlReviews(); local[key] = record; localStorage.setItem(TL_REVIEWS_KEY, JSON.stringify(local)); }
   catch(err){ console.error('Saving TL review locally failed:', err); }
   try{ localStorage.setItem(TEAM_PROGRESS_KEY, JSON.stringify(state.teamProgressLog)); }catch(err){}
@@ -7801,12 +7915,14 @@ function wireTeamProgressModal(overlay, filterRoster){
       state.teamProgressOpen=false;
       overlay.remove();
       state.historicalView = { scenarioId: entry.scenarioId, attempt: entry, standalone: true, fromTeamProgress: true };
-      state.tlReviewDraft = buildReviewDraft(entry); state.tlReviewCoachingRun = !!entry.coachingRun;
+      state.tlReviewDraft = buildReviewDraft(entry); initReviewExclusion(entry);
       state.tlReviewStatus = '';
       state.historicalTranscriptExpanded = false;
       renderEvalModal();
     });
   });
+  const tpRemovedBtn=document.getElementById('btnTpToggleRemoved'); // v41.7
+  if(tpRemovedBtn) tpRemovedBtn.addEventListener('click', ()=>{ state.tpShowRemoved = !state.tpShowRemoved; redrawTeamProgress(overlay, filterRoster); });
   const backBtn=document.getElementById('btnBackToAllTeamProgress');
   if(backBtn) backBtn.addEventListener('click', ()=>{ state.teamProgressOpen=false; overlay.remove(); openTeamProgress(); });
   document.querySelectorAll('[data-view-training-attempt]').forEach(el=>{ // v40: read-only, Back returns here
@@ -7907,6 +8023,10 @@ function renderTeamProgressModal(filterRoster){
   const byAgent = {};
   log.forEach(e=>{ const key = canonicalNameFor(e.agentName); (byAgent[key]=byAgent[key]||[]).push(e); });
   gradNames.forEach(n=>{ if(!Object.keys(byAgent).some(k=>namesMatch(k, n))) byAgent[n] = []; }); // v40: a graduate with no agent attempts yet still shows, for their Training history
+  const singleAgentView = !!(filterRoster && (filterRoster.agents||[]).length===1); // v41.7
+  const removedNames = singleAgentView ? [] : Object.keys(byAgent).filter(isRemovedAgentName);
+  if(!state.tpShowRemoved) removedNames.forEach(n=>{ delete byAgent[n]; });
+  const removedToggle = removedNames.length ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;padding:6px 12px;background:var(--panel2);border-radius:8px;font-size:12.5px;color:var(--text2);"><span>${removedNames.length} removed agent${removedNames.length===1?'':'s'} ${state.tpShowRemoved?'shown below':'hidden'} (history kept)</span><button id="btnTpToggleRemoved" class="small">${state.tpShowRemoved?'Hide removed agents':'Show removed agents'}</button></div>` : '';
   const agentNames = Object.keys(byAgent).sort((a,b)=>{
     const lastA = Math.max(...byAgent[a].map(e=>e.timestamp));
     const lastB = Math.max(...byAgent[b].map(e=>e.timestamp));
@@ -7934,7 +8054,7 @@ function renderTeamProgressModal(filterRoster){
     return `<div class="box" style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <strong style="font-size:15px;">${escapeHtml(name)}${agentStatusSuffix(name) ? `<span style="font-weight:400;color:var(--text3);">${escapeHtml(agentStatusSuffix(name))}</span>` : ''}</strong>
-        <span style="color:var(--text3);font-size:12px;">${counted.length} attempt${counted.length===1?'':'s'} \u00b7 ${passCount}/${counted.length} passed${coachingRuns?` \u00b7 ${coachingRuns} coaching run${coachingRuns===1?'':'s'} excluded`:''}</span>
+        <span style="color:var(--text3);font-size:12px;">${counted.length} attempt${counted.length===1?'':'s'} \u00b7 ${passCount}/${counted.length} passed${coachingRuns?` \u00b7 ${coachingRuns} not counted (coaching or disregarded)`:''}</span>
       </div>
       ${rows}
       ${trainingHistoryBlockHtml(name)}
@@ -7946,6 +8066,7 @@ function renderTeamProgressModal(filterRoster){
     <h2>Team Progress</h2>
     ${filterBanner}
     ${ambiguousPanel}
+    ${removedToggle}
     <div style="color:var(--text2);font-size:13px;margin-bottom:6px;">Every attempt${filterRoster ? '' : ', by everyone who has used this link'} - scenario, score, and handling time where AHT Mode was on. Attempts under a full name, chat name, or other recognized alias are grouped together automatically.</div>
     <div style="color:var(--text3);font-size:11.5px;margin-bottom:16px;">Click into any attempt to review the full record - transcript, documentation, AI assessment - and, where the AI got something wrong or a case deserves leniency, set a TL override and coaching note. Scores shown here reflect the TL review once one has been saved.</div>
     ${sections}
@@ -8219,8 +8340,18 @@ function renderEvalModal(){
       });
       const reviewerInput=document.getElementById('tlReviewerName');
       if(reviewerInput) reviewerInput.addEventListener('input', e=>{ state.tlReviewerName = e.target.value; });
-      const crCheck=document.getElementById('tlCoachingRunCheck');
-      if(crCheck) crCheck.addEventListener('change', e=>{ state.tlReviewCoachingRun = e.target.checked; state.tlReviewStatus = 'Unsaved changes'; const st=document.getElementById('tlReviewStatus'); if(st) st.textContent = state.tlReviewStatus; });
+      const markReviewUnsaved = ()=>{ state.tlReviewStatus = 'Unsaved changes'; const st=document.getElementById('tlReviewStatus'); if(st) st.textContent = state.tlReviewStatus; };
+      document.querySelectorAll('input[name="tlExcludeMode"]').forEach(radio=>{ // v41.7: Counts / Coaching run / Disregard
+        radio.addEventListener('change', e=>{
+          if(!e.target.checked) return;
+          const m = e.target.value; state.tlReviewExcludeMode = m; state.tlReviewCoachingRun = m!=='count';
+          const ri=document.getElementById('tlDisregardReason'); if(ri){ ri.style.display = m==='disregard' ? '' : 'none'; if(m==='disregard') ri.focus(); }
+          const sum=document.getElementById('tlCountingSummary'); if(sum){ const t = m==='disregard' ? 'Will be disregarded (not counted)' : m==='coaching' ? 'Coaching run (not counted)' : ''; sum.textContent = t; sum.style.display = t ? '' : 'none'; }
+          markReviewUnsaved();
+        });
+      });
+      const disregardInput=document.getElementById('tlDisregardReason');
+      if(disregardInput) disregardInput.addEventListener('input', e=>{ state.tlReviewDisregardReason = e.target.value; markReviewUnsaved(); });
       const saveBtn=document.getElementById('btnSaveTlReview');
       if(saveBtn) saveBtn.addEventListener('click', async ()=>{
         const st=document.getElementById('tlReviewStatus');
@@ -8842,7 +8973,10 @@ function agentsOnMultipleRosters(){ return activeAgentProfiles().map(p=>({profil
 function attemptsForAgent(canonical){ return state.teamProgressLog.filter(e=>e && e.type!=='tl-review' && namesMatch(e.agentName, canonical)); }
 function assignmentsForCanonical(canonical){ return state.assignments.filter(a=>namesMatch(a.agentName, canonical)); }
 function agentHasHistory(canonical){ return attemptsForAgent(canonical).length>0 || assignmentsForCanonical(canonical).length>0; }
-function agentStatusSuffix(name){ const p = profileByCanonical(canonicalNameFor(name)); const s = agentStatus(p); return (p && s!=='Active') ? ` (${s.toLowerCase()})` : ''; }
+// v41.7 REMOVE AGENT: "Remove" sets the existing Left / Transferred status (nothing deleted). A removed agent drops out of
+// the roster counts, assign pickers, Team View and team-wide summaries; their own history stays and they can be restored.
+function isRemovedAgentName(name){ const p = profileByCanonical(canonicalNameFor(name||'')); return !!p && !isActiveAgent(p); }
+function agentStatusSuffix(name){ const p = profileByCanonical(canonicalNameFor(name)); const s = agentStatus(p); return (p && s!=='Active') ? ` (removed - ${s.toLowerCase()})` : ''; }
 function loadDeletedAgentsLocal(){ try{ const v=JSON.parse(localStorage.getItem(DELETED_AGENTS_KEY)||'[]'); return Array.isArray(v)?v:[]; }catch(err){ return []; } }
 function isDeletedAgentName(name){
   const k=(name||'').trim().toLowerCase();
@@ -8967,6 +9101,7 @@ function unmatchedLogNames(log){
     const raw = (e.agentName||'').trim(); if(!raw) return;
     const key = raw.toLowerCase();
     if(state.manualNameOverrides && state.manualNameOverrides[key]) return;
+    if(staffRoleFor(raw)) return; // v41.7: a TL's or supervisor's own practice isn't an unmatched agent
     if(resolveAgentName(raw).status!=='unmatched') return;
     counts[key] = counts[key] || {raw, count:0}; counts[key].count++;
   });
@@ -9287,7 +9422,7 @@ function renderTLRostersList(){
   const rows = state.tlRosters.map(r=>`<div class="box" style="margin-bottom:8px;max-width:700px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
     <div style="min-width:0;">
       <strong data-open-tl-progress="${escapeHtml(r.tlName)}" style="cursor:pointer;color:var(--accent2);">${escapeHtml(r.tlName)}</strong>
-      ${(()=>{ const act=(r.agents||[]).filter(ag=>isActiveAgent(profileByCanonical(ag))), former=(r.agents||[]).filter(ag=>!isActiveAgent(profileByCanonical(ag))); return `<div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${act.length} active agent${act.length===1?'':'s'}: ${escapeHtml(act.join(', ')) || '(none yet)'}${former.length ? ` \u00b7 former: ${escapeHtml(former.join(', '))}` : ''}</div>`; })()}
+      ${(()=>{ const act=(r.agents||[]).filter(ag=>isActiveAgent(profileByCanonical(ag))), former=(r.agents||[]).filter(ag=>!isActiveAgent(profileByCanonical(ag))); return `<div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${act.length} active agent${act.length===1?'':'s'}: ${escapeHtml(act.join(', ')) || '(none yet)'}${former.length ? ` \u00b7 removed: ${escapeHtml(former.join(', '))}` : ''}</div>`; })()}
       ${contactLineHtml(r.email, r.slackHandle)}
     </div>
     <button class="small" data-open-tl-progress="${escapeHtml(r.tlName)}">View their progress</button>
@@ -9319,7 +9454,7 @@ function renderAgentDirectoryList(searchQuery){
         <div style="font-size:11.5px;color:var(--text3);margin:6px 0;">Removes them from ${rosters.length ? escapeHtml(rosters.map(r=>r.tlName).join(', ')) : 'any roster'} and adds them to the chosen TL. Their history stays visible to every TL in Team Progress.</div>
         <button class="small primary" data-agent-confirm="transfer">Move</button> <button class="small" data-agent-cancel>Cancel</button></div>`;
     if(act==='left') panel = `<div class="box" style="margin-top:8px;border-color:var(--warn);" data-stop-row>
-        <div style="font-size:12.5px;margin-bottom:6px;">Mark ${escapeHtml(a.canonicalName)} as a former agent? Their profile, aliases and all history are kept; they just stop appearing in the assign pickers and active counts. You can reactivate them later.</div>
+        <div style="font-size:12.5px;margin-bottom:6px;">${removeAgentPromptText(a.canonicalName)}</div>
         <button class="small primary" data-agent-confirm="Left">Left the company</button> <button class="small" data-agent-confirm="Transferred">Transferred out of the team</button> <button class="small" data-agent-cancel>Cancel</button></div>`;
     if(act==='delete') panel = `<div class="box" style="margin-top:8px;border-color:var(--bad);" data-stop-row>
         <div style="font-size:12.5px;color:var(--bad);margin-bottom:6px;">Permanently delete ${escapeHtml(a.canonicalName)}? They have no attempts and no assignments. This removes the profile and their roster place, and they won't be re-created automatically.</div>
@@ -9334,7 +9469,7 @@ function renderAgentDirectoryList(searchQuery){
         </div>
         <span style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="small" data-agent-action="transfer" data-agent="${escapeHtml(a.canonicalName)}">Transfer to another TL</button>
-          <button class="small" data-agent-action="left" data-agent="${escapeHtml(a.canonicalName)}">Mark as left</button>
+          <button class="small" data-agent-action="left" data-agent="${escapeHtml(a.canonicalName)}">Remove agent</button>
           ${agentHasHistory(a.canonicalName) ? '' : `<button class="small" data-agent-action="delete" data-agent="${escapeHtml(a.canonicalName)}" style="color:var(--bad);">Delete</button>`}
         </span>
       </div>
@@ -9343,12 +9478,13 @@ function renderAgentDirectoryList(searchQuery){
   }).join('');
   return `<div style="margin-top:10px;">${rows}</div>`;
 }
+function removeAgentPromptText(name){ return `Remove ${escapeHtml(name)} from the team? They drop out of the roster counts, assign lists, Team View and team averages. Nothing is deleted: their history is kept and you can restore them from Removed agents. Why are they leaving?`; }
 function renderFormerAgentsList(){
   const list = formerAgentProfiles();
-  if(!list.length) return `<div class="empty" style="padding:8px 0;">No former agents.</div>`;
+  if(!list.length) return `<div class="empty" style="padding:8px 0;">No removed agents.</div>`;
   return list.map(a=>`<div class="box" style="margin-bottom:6px;max-width:760px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">
     <div><strong>${escapeHtml(a.canonicalName)}</strong> <span style="font-size:12px;color:var(--text3);">\u00b7 ${escapeHtml(agentStatus(a))}${a.statusChangedAt ? ' on '+escapeHtml(new Date(a.statusChangedAt).toLocaleDateString()) : ''} \u00b7 ${attemptsForAgent(a.canonicalName).length} attempts</span></div>
-    <button class="small" data-agent-reactivate="${escapeHtml(a.canonicalName)}">Reactivate</button>
+    <button class="small" data-agent-reactivate="${escapeHtml(a.canonicalName)}">Restore</button>
   </div>`).join('');
 }
 // "Reports to" for Register / Edit an Agent: a dropdown of registered TL roster names, blank by default - no TL is ever
@@ -9393,18 +9529,21 @@ function renderRosterTable(){
   }).sort((a,b)=>(b.active-a.active) || a.name.localeCompare(b.name));
   const td = 'padding:6px 8px;border-top:1px solid var(--border);';
   return `<div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;"><span style="font-size:12.5px;color:var(--text2);">Team lead</span>${sel}<span style="font-size:11.5px;color:var(--text3);">Click an agent to open Team Progress for just them. Average uses the TL-reviewed score where one exists.</span></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;"><span style="font-size:12.5px;color:var(--text2);">Team lead</span>${sel}<span style="font-size:11.5px;color:var(--text3);">Click an agent to open Team Progress for just them. Average uses the TL-reviewed score where one exists. Remove someone who has left; their history is kept and you can restore them.</span></div>
     <div style="overflow-x:auto;max-width:900px;"><table style="border-collapse:collapse;width:100%;font-size:12.5px;">
-      <thead><tr>${['Agent','TL','Status','Attempts','Last activity','Avg score','Pending'].map(c=>`<th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:600;">${c}</th>`).join('')}</tr></thead>
+      <thead><tr>${['Agent','TL','Status','Attempts','Last activity','Avg score','Pending',''].map(c=>`<th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:600;">${c}</th>`).join('')}</tr></thead>
       <tbody>${rows.length ? rows.map(r=>`<tr style="${r.active?'':'opacity:.6;'}">
         <td style="${td}"><a href="#" data-open-agent-progress="${escapeHtml(r.name)}" style="color:var(--accent2);font-weight:600;">${escapeHtml(r.name)}</a></td>
         <td style="${td}">${escapeHtml(roster.tlName)}</td>
-        <td style="${td}">${escapeHtml(r.status)}</td>
+        <td style="${td}">${r.active ? 'Active' : 'Removed ('+escapeHtml(r.status.toLowerCase())+')'}</td>
         <td style="${td}">${r.atts}</td>
         <td style="${td}">${r.last ? escapeHtml(new Date(r.last).toLocaleDateString()) : '-'}</td>
         <td style="${td}">${r.avg===null ? '-' : r.avg+'%'}</td>
         <td style="${td}">${r.pend}${r.od ? ` <span style="color:var(--bad);font-weight:700;">(${r.od} overdue)</span>` : ''}</td>
-      </tr>`).join('') : `<tr><td colspan="7" style="${td}color:var(--text3);">No agents on this roster.</td></tr>`}</tbody>
+        <td style="${td}white-space:nowrap;">${r.active ? `<button class="small" data-agent-action="remove-roster" data-agent="${escapeHtml(r.name)}">Remove</button>` : (profileByCanonical(r.name) ? `<button class="small" data-agent-reactivate="${escapeHtml(r.name)}">Restore</button>` : '')}</td>
+      </tr>${(r.active && state.agentAction && state.agentAction.kind==='remove-roster' && namesMatch(state.agentAction.canonical, r.name)) ? `<tr data-stop-row><td colspan="8" style="${td}"><div class="box" style="margin:4px 0;border-color:var(--warn);">
+          <div style="font-size:12.5px;margin-bottom:6px;">${removeAgentPromptText(r.name)}</div>
+          <button class="small primary" data-agent-confirm="Left">Left the company</button> <button class="small" data-agent-confirm="Transferred">Transferred out of the team</button> <button class="small" data-agent-cancel>Cancel</button></div></td></tr>` : ''}`).join('') : `<tr><td colspan="8" style="${td}color:var(--text3);">No agents on this roster.</td></tr>`}</tbody>
     </table></div>
   </div>`;
 }
@@ -10365,9 +10504,9 @@ function evalModalContent(){
       ${scoreHeaderHtml(ev, reviewDraft, att.ahtElapsedMinutes, att.ahtTargetMinutes, att.ahtLateStart, tlMode)}
       ${playerRatingBoxHtml(att, false)}
       ${hasFindings(ev) ? `
-      ${tlMode ? `<div class="box" style="border-color:var(--accent);"><strong>TL / Management review.</strong> The AI\u2019s assessment stays on record as-is. Use the override and note on each question below where the AI got something wrong or the case deserves leniency, then save.${att.tlReviewedAt ? `<div style="color:var(--text3);font-size:12px;margin-top:4px;">Last reviewed ${new Date(att.tlReviewedAt).toLocaleString()}</div>` : ''}</div>` : ''}
+      ${tlMode ? `<div class="box" style="border-color:var(--accent);"><strong>TL / Management review.</strong> The AI\u2019s assessment stays on record as-is. Use the override and note on each question below where the AI got something wrong or the case deserves leniency, then save.${att.tlReviewedAt ? `<div style="color:var(--text3);font-size:12px;margin-top:4px;">Last reviewed ${new Date(att.tlReviewedAt).toLocaleString()}</div>` : ''}${tlCountingChoiceHtml()}</div>` : ''}
       ${scorecardRowsHtml(ev, reviewDraft, tlMode ? 'tl' : 'agent', {compact:true})}
-      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);" title="For practice runs used in a coaching session, not a real attempt"><input type="checkbox" id="tlCoachingRunCheck" ${state.tlReviewCoachingRun?'checked':''}> Coaching run - exclude from averages, pass counts and pattern summaries</label>${tlReviewerFieldHtml()}<button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}
+      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">${tlCountingSummaryHtml()}${tlReviewerFieldHtml()}<button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}
       ${renderFindingsSection(ev)}
       <div class="box" style="margin-top:12px;">${escapeHtml(ev.overallSummary)}</div>
       ${renderEfficiencyNarrativeBox(ev)}
@@ -10376,9 +10515,9 @@ function evalModalContent(){
       ${renderEfficiencyNarrativeBox(ev)}
       ${renderCoachingSignalsBox(ev.coachingSignals)}
       <div class="box">${escapeHtml(ev.overallSummary)}</div>
-      ${tlMode ? `<div class="box" style="border-color:var(--accent);"><strong>TL / Management review.</strong> The AI\u2019s assessment stays on record as-is. Use the override and note on each question below where the AI got something wrong or the case deserves leniency, then save.${att.tlReviewedAt ? `<div style="color:var(--text3);font-size:12px;margin-top:4px;">Last reviewed ${new Date(att.tlReviewedAt).toLocaleString()}</div>` : ''}</div>` : ''}
+      ${tlMode ? `<div class="box" style="border-color:var(--accent);"><strong>TL / Management review.</strong> The AI\u2019s assessment stays on record as-is. Use the override and note on each question below where the AI got something wrong or the case deserves leniency, then save.${att.tlReviewedAt ? `<div style="color:var(--text3);font-size:12px;margin-top:4px;">Last reviewed ${new Date(att.tlReviewedAt).toLocaleString()}</div>` : ''}${tlCountingChoiceHtml()}</div>` : ''}
       ${scorecardRowsHtml(ev, reviewDraft, tlMode ? 'tl' : 'agent')}
-      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);" title="For practice runs used in a coaching session, not a real attempt"><input type="checkbox" id="tlCoachingRunCheck" ${state.tlReviewCoachingRun?'checked':''}> Coaching run - exclude from averages, pass counts and pattern summaries</label>${tlReviewerFieldHtml()}<button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}`}
+      ${tlMode ? `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">${tlCountingSummaryHtml()}${tlReviewerFieldHtml()}<button id="btnSaveTlReview" class="primary">Save TL review</button><span id="tlReviewStatus" style="font-size:12.5px;color:var(--text2);">${escapeHtml(state.tlReviewStatus||'')}</span></div>` : ''}`}
       <div class="box" style="margin-top:16px;">
         <div class="box title" style="margin-bottom:6px;">Documentation submitted</div>
         Note: ${escapeHtml(att.docNote||'(none)')}<br>Primary tag: ${escapeHtml(att.docTag||'(none)')}${att.docSecondaryTag && att.docSecondaryTag!=='None' ? `<br>Secondary RG flag: ${escapeHtml(att.docSecondaryTag)}` : ''}
@@ -11146,25 +11285,26 @@ function renderTeamLeadsRosterSectionBody(){
       </div>` : ''}
       <div id="registerAgentStatus" style="${state.regMsg ? '' : 'display:none;'}margin-top:10px;color:${state.regMsg ? state.regMsg.color : 'inherit'};">${state.regMsg ? escapeHtml(state.regMsg.text) : ''}</div>
     `, true)}
-    ${renderDashSubsection('tl-rosters', 'Team Leads', ()=>`
+    ${renderDashSubsection('tl-rosters', 'Team Leads & Shift Supervisors', ()=>`
       <div style="color:var(--text3);font-size:11.5px;margin-bottom:8px;">Click a TL's name to view just their team's progress (still fully editable/visible to any TL).</div>
       ${renderTLRostersList()}
       <div class="box" style="max-width:700px;margin-top:12px;">
         <div style="font-size:12.5px;font-weight:600;margin-bottom:6px;">Your contact details <span style="font-weight:400;color:var(--text3);">(saved on your roster entry; stored only, nothing is sent yet)</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <input id="tlContactName" placeholder="Your name (TL)" value="${escapeHtml(getLastAssigningTL())}" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+          <input id="tlContactName" placeholder="Your name (TL / Supervisor)" value="${escapeHtml(getLastAssigningTL())}" style="flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
           <input id="tlContactEmail" type="email" placeholder="Email" value="${escapeHtml(((state.tlRosters.find(r=>namesMatch(r.tlName, getLastAssigningTL()))||{}).email)||'')}" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
           <input id="tlContactSlack" placeholder="Slack handle" value="${escapeHtml(((state.tlRosters.find(r=>namesMatch(r.tlName, getLastAssigningTL()))||{}).slackHandle)||'')}" style="flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
           <button id="btnSaveTLContact" class="primary">Save</button>
         </div>
         <div id="tlContactStatus" style="display:none;font-size:12px;margin-top:6px;"></div>
       </div>
+      ${renderSupervisorsBlock()}
     `, false)}
     ${renderDashSubsection('agent-directory', 'All Registered Agents', ()=>`
       <input id="agentDirectorySearchInput" placeholder="Search agents…" value="${escapeHtml(state.agentDirectorySearch||'')}" style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;margin-bottom:10px;">
       <div style="color:var(--text3);font-size:11.5px;margin-bottom:4px;">Click an agent to load their profile into the form above for editing.</div>
       ${renderAgentDirectoryList(state.agentDirectorySearch)}
-      ${renderDashSubsection('former-agents', `Former agents (${formerAgentProfiles().length})`, renderFormerAgentsList, false)}
+      ${renderDashSubsection('former-agents', `Removed agents (${formerAgentProfiles().length})`, renderFormerAgentsList, false)}
     `, false)}
     ${renderDashSubsection('cleanup-audit', 'Clean-up audit', renderCleanupAudit, false)}
   `;
@@ -11346,7 +11486,7 @@ function renderCreateScenarioSectionBody(){
   return `
     <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Describe a coaching need in plain language and generate a structured practice scenario - no HTML, JavaScript, or JSON editing required. Every scenario you create starts as a <strong>TL Coaching Draft - Not Validated</strong>. That only changes when a reviewer explicitly marks it otherwise in the Review Queue (Scenario Library section) - nothing here is ever silently labeled as validated Betty process.</div>
     <div style="margin-bottom:14px;">
-      <input id="scenarioBuilderTLName" placeholder="${state.view==='training' ? 'Your name (trainer)' : 'Your name (creating TL)'}" value="${escapeHtml(tlName)}" style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
+      <input id="scenarioBuilderTLName" placeholder="${state.view==='training' ? 'Your name (trainer)' : 'Your name (creating TL / Supervisor)'}" value="${escapeHtml(tlName)}" style="width:100%;max-width:320px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13.5px;">
     </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;">
       <button class="small ${state.scenarioBuilderMode==='scratch'?'primary':''}" data-builder-mode="scratch">Create from scratch</button>
@@ -11675,7 +11815,8 @@ function renderScenarioPreviewEditForm(){
           <option value="">Select the agent…</option>
           ${agentOptions.map(a=>`<option value="${escapeHtml(a.canonicalName)}" ${state.scenarioBuilderTargetAgent===a.canonicalName?'selected':''}>${escapeHtml(a.canonicalName)}</option>`).join('')}
         </select>` : ''}
-      ${state.scenarioBuilderVisibility==='team' ? `<div style="font-size:12px;color:var(--text3);">Visible to agents on ${escapeHtml(state.scenarioBuilderTLName||'(your name above)')}'s roster only.</div>` : ''}
+      ${state.scenarioBuilderVisibility==='team' ? (builderNeedsTeamPick(state.scenarioBuilderTLName) ? `<div style="font-size:12px;color:var(--text3);margin-bottom:6px;">You don\u2019t have a roster of your own, so choose which team can see it:</div>
+        <select id="editTargetTeam" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-family:inherit;font-size:13px;min-width:200px;"><option value="">Select the team\u2026</option>${[...new Set(state.tlRosters.map(r=>r.tlName))].sort().map(t=>`<option value="${escapeHtml(t)}" ${namesMatch(state.scenarioBuilderTargetTeam, t)?'selected':''}>${escapeHtml(t)}\u2019s team</option>`).join('')}</select>` : `<div style="font-size:12px;color:var(--text3);">Visible to agents on ${escapeHtml(state.scenarioBuilderTLName||'(your name above)')}'s roster only.</div>`) : ''}
       ${state.scenarioBuilderVisibility==='library' ? `<div style="font-size:12px;color:var(--text3);">This does NOT publish immediately - it goes into the Review Queue (Scenario Library section) and only reaches the general practice pool once approved.</div>` : ''}
     </div>`}
 
@@ -11812,6 +11953,13 @@ function renderSystemTestsSectionBody(){
       <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks, no API calls, nothing saved: a whole team resolves to its active agents; several scenarios × a team creates each new pair, skips open duplicates and custom scenarios an agent can't see; one agent + one scenario keeps the existing flow; L&amp;D can pick several scenarios.</div>
       <button id="runDiag14" style="margin-top:10px;">Run test</button>
       <div id="diag14Result"></div>
+    </div>
+
+    <div class="diag-section">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:15px;color:var(--text);">15. Disregard, remove agent &amp; Shift Supervisors (v41.7)</h2>
+      <div style="color:var(--text2);font-size:13px;line-height:1.6;">Deterministic checks, no API calls, nothing saved: a TL can disregard an attempt (reason required) and it leaves every team number while staying on record; a removed agent leaves the roster counts, Team View and Team Progress (history kept, restorable); Shift Supervisors are recognised by name, and the sign-in message no longer tells TLs or supervisors they aren't registered.</div>
+      <button id="runDiag15" style="margin-top:10px;">Run test</button>
+      <div id="diag15Result"></div>
     </div>
 
     <div class="diag-section">
@@ -12715,6 +12863,9 @@ function renderClearDataConfirm(){
   });
 }
 
+// v41.7: shown when a typed name isn't an agent, trainee, TL or supervisor yet. Worded so TLs and supervisors never read it
+// as "you can't get in".
+const UNRECOGNIZED_NAME_TEXT = 'You can continue - this name just isn’t linked to a team yet. Agents: ask your Team Lead to add you so your results show in Team Progress. Team Leads and Shift Supervisors: nothing to do here; open the TL / Management Area as usual.';
 function renderNameModal(){
   const overlay=document.createElement('div');
   overlay.id='nameModalOverlay';
@@ -12745,6 +12896,9 @@ function renderNameModal(){
     } else if(!profile && tlRoster){
       recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--ok)';
       recognizedEl.textContent = `Recognized: ${tlRoster.tlName} · Team Lead`;
+    } else if(!profile && supervisorRecordFor(input.value)){ // v41.7
+      recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--ok)';
+      recognizedEl.textContent = `Recognized: ${supervisorRecordFor(input.value).name} · Shift Supervisor`;
     } else if(profile){
       const count = pendingAssignmentsFor(profile.canonicalName).length;
       recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--ok)';
@@ -12753,8 +12907,8 @@ function renderNameModal(){
       recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--warn)';
       recognizedEl.textContent = 'That name matches more than one registered agent - please use your full name.';
     } else if(input.value.trim()){
-      recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--warn)';
-      recognizedEl.textContent = 'You’re not on a team roster yet - you can still practice. If you’re an agent, ask your TL to add you so your results show up in Team Progress.';
+      recognizedEl.style.display = 'block'; recognizedEl.style.color = 'var(--text2)';
+      recognizedEl.textContent = UNRECOGNIZED_NAME_TEXT; // v41.7: role-neutral
     } else {
       recognizedEl.style.display = 'none';
     }
@@ -12783,7 +12937,7 @@ function renderTLPasswordModal(){
   overlay.className='modal-overlay';
   overlay.innerHTML = `<div class="modal" style="max-width:380px;">
     <h2>TL / Management Area</h2>
-    <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Team Progress, the full scenario list, and the test suite live here. For team leads, seniors, and L&D only.</div>
+    <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Team Progress, the full scenario list, and the test suite live here. For team leads, shift supervisors, seniors, and L&D only.</div>
     <input id="tlPasswordInput" type="password" placeholder="Password" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13.5px;">
     <div id="tlPasswordError" style="color:var(--bad);font-size:12.5px;margin-top:8px;display:none;">That\u2019s not it - try again.</div>
     <div style="margin-top:16px;display:flex;gap:10px;">
@@ -13292,6 +13446,7 @@ function wireTrainingEvents(){
   wireTrainerBuilderEvents(); // v41.4
   wireBulkAssignEvents(); // v41.6
   const d14 = document.getElementById('runDiag14'); if(d14) d14.addEventListener('click', runDiagnostic14);
+  const d15 = document.getElementById('runDiag15'); if(d15) d15.addEventListener('click', runDiagnostic15); // v41.7
   const rail = document.getElementById('railLDTraining');
   if(rail) rail.addEventListener('click', ()=>{
     if(state.trainingUnlocked){ state.view = state.view==='training' ? 'sim' : 'training'; render(); }
@@ -14237,6 +14392,107 @@ function runDiagnostic14(){
   el.innerHTML = `<div class="diag-result"><div style="margin-bottom:6px;">${n} of ${rows.length} pass.</div>${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;"><span class="${r.pass?'diag-pass':'diag-fail'}">${r.pass?'PASS':'FAIL'}</span> ${escapeHtml(r.label)}${r.detail?`<div style="font-size:11.5px;color:var(--text3);margin-top:3px;">${escapeHtml(r.detail)}</div>`:''}</div>`).join('')}</div>`;
 }
 
+// ---------- DIAGNOSTIC 15: disregard, remove agent, Shift Supervisors (v41.7) ----------
+async function runDiagnostic15(){
+  const el = document.getElementById('diag15Result'); if(!el) return;
+  const keys = ['tlRosters','agentDirectory','assignments','teamProgressLog','staffRoles','historicalView','tlReviewDraft','tlReviewCoachingRun','tlReviewExcludeMode','tlReviewDisregardReason','tlReviewerName','tlUnlocked','tpShowRemoved','agentAction','rosterTableTL','view','scenarioBuilderVisibility','scenarioBuilderTLName','trainingRecords','trainingAttempts','patternSummaries','manualNameOverrides'];
+  const snap = {}; keys.forEach(k=>{ snap[k] = state[k]; });
+  const lsKeys = [TL_REVIEWS_KEY, TEAM_PROGRESS_KEY, STAFF_ROLES_KEY]; const lsSnap = {};
+  lsKeys.forEach(k=>{ try{ lsSnap[k] = localStorage.getItem(k); }catch(err){} });
+  const realFetch = window.fetch; window.fetch = async ()=>{ throw new Error('diag15: offline'); };
+  const rows = []; const add = (label, pass, detail)=> rows.push({label, pass:!!pass, detail:detail||''});
+  try{
+    const ev = {questions:[{id:'q1',letter:'D'},{id:'q2',letter:'C'},{id:'q3',letter:'A'}], overallSummary:'diag'};
+    const mk = (name, ts, extra)=>Object.assign({agentName:name, deviceId:'d15', timestamp:ts, scenarioId:'noc-1', scenarioTitle:'Diag 15', evaluation:JSON.parse(JSON.stringify(ev)), attemptNum:1}, extra||{});
+    state.agentDirectory = [{canonicalName:'Emi Diagone', fullName:'Emi Diagone', aliases:[]}, {canonicalName:'Gone Diagtwo', fullName:'Gone Diagtwo', aliases:[], status:'Left', statusChangedAt:1}];
+    state.tlRosters = [{tlName:'Diag Fifteen TL', agents:['Emi Diagone','Gone Diagtwo']}];
+    state.assignments = []; state.manualNameOverrides = {};
+    const a1 = mk('Emi Diagone', 1000), a2 = mk('Emi Diagone', 2000), g1 = mk('Gone Diagtwo', 3000);
+    state.teamProgressLog = [a1, a2, g1];
+    state.tlUnlocked = true; state.view = 'sim';
+
+    // --- Disregard ---
+    add('Exclusion mode reads Counts / Coaching run / Disregard from the attempt', reviewExclusionModeOf(a1)==='count' && reviewExclusionModeOf({coachingRun:true})==='coaching' && reviewExclusionModeOf({coachingRun:true, disregarded:true})==='disregard');
+    state.historicalView = {scenarioId:'noc-1', attempt:a1, standalone:true, fromTeamProgress:true};
+    state.tlReviewDraft = buildReviewDraft(a1); initReviewExclusion(a1); state.tlReviewerName = 'Diag Reviewer';
+    const tlHtml = evalModalContent();
+    add('The TL review shows "Does this attempt count?" with Counts, Coaching run and Disregard, near the top (before the scorecard)', /Does this attempt count\?/.test(tlHtml) && (tlHtml.match(/name="tlExcludeMode"/g)||[]).length===3 && /Disregard this attempt/.test(tlHtml) && tlHtml.indexOf('Does this attempt count?') < tlHtml.indexOf('btnSaveTlReview') && tlHtml.indexOf('tlCoachingRunCheck')<0);
+    const savedHV = state.historicalView; state.historicalView = {scenarioId:'noc-1', attempt:a1, standalone:true, fromTeamProgress:false};
+    add('Agent-facing views never show the counting choice', evalModalContent().indexOf('tlExcludeMode')<0);
+    state.historicalView = savedHV;
+    state.tlReviewExcludeMode = 'disregard'; state.tlReviewDisregardReason = '';
+    const r0 = await saveTlReview();
+    add('Disregard needs a reason - saving without one is refused and nothing changes', !r0.ok && (r0.errors||[]).some(x=>/reason for disregarding/.test(x)) && !a1.disregarded && !a1.coachingRun);
+    state.tlReviewDisregardReason = 'I told the agent to close early - time ran short';
+    const r1 = await saveTlReview();
+    const localRec = (loadLocalTlReviews()||{})[reviewKeyFor(a1)] || {};
+    add('Saving with a reason marks the attempt disregarded (not counted) and keeps the AI evaluation', r1.ok && a1.disregarded===true && a1.coachingRun===true && a1.disregardReason==='I told the agent to close early - time ran short' && a1.evaluation.questions[0].letter==='D');
+    add('The saved review record carries disregarded + reason, so other TLs see it', localRec.disregarded===true && localRec.disregardReason===a1.disregardReason && localRec.coachingRun===true);
+    add('A disregarded attempt is left out of counted attempts, Team View and per-agent scoring', !isCountedTeamAttempt(a1) && isCountedTeamAttempt(a2) && !teamViewEntries('everyone').includes(a1) && !scoredAttemptsFor('Emi Diagone').includes(a1));
+    add('It is labelled "Disregarded: <reason>" and the banner names the reviewer', coachingRunLabel(a1)==='Disregarded: I told the agent to close early - time ran short' && /Disregarded<\/strong> by Diag Reviewer/.test(coachingBannerHtml(a1)));
+    const fresh = mk('Emi Diagone', 1000); applyTlReviews([fresh, localRec]);
+    add('Loading the shared list layers the disregard onto the attempt', fresh.disregarded===true && fresh.coachingRun===true && fresh.disregardReason===a1.disregardReason);
+    state.teamProgressLog = [a1, a2, g1];
+    state.tlReviewDraft = buildReviewDraft(a1); initReviewExclusion(a1);
+    add('Re-opening the review starts on Disregard with the reason filled in', state.tlReviewExcludeMode==='disregard' && state.tlReviewDisregardReason===a1.disregardReason);
+    state.tlReviewExcludeMode = 'count';
+    const r2 = await saveTlReview();
+    add('Switching back to Counts brings it back into the numbers and clears the disregard', r2.ok && !a1.coachingRun && !a1.disregarded && !a1.disregardReason && isCountedTeamAttempt(a1) && (a1.reviewHistory||[]).some(h=>h.disregarded===true));
+
+    // --- Remove agent ---
+    add('A Left / Transferred profile counts as removed; an active one does not', isRemovedAgentName('Gone Diagtwo') && !isRemovedAgentName('Emi Diagone'));
+    add('Removed agents are out of Team View for everyone / the team, but still there when you pick that agent', !teamViewEntries('everyone').includes(g1) && !teamViewEntries('tl:Diag Fifteen TL').includes(g1) && teamViewEntries('agent:Gone Diagtwo').includes(g1) && /^1 agent/.test(teamViewDashSummary()));
+    state.tpShowRemoved = false;
+    const tp = renderTeamProgressModal(state.tlRosters[0]);
+    add('Team Progress hides removed agents by default and offers "Show removed agents"', tp.indexOf('Gone Diagtwo')<0 && /1 removed agent hidden/.test(tp) && /Show removed agents/.test(tp) && tp.indexOf('Emi Diagone')>=0);
+    state.tpShowRemoved = true;
+    const tp2 = renderTeamProgressModal(state.tlRosters[0]);
+    add('"Show removed agents" brings them back, marked as removed', tp2.indexOf('Gone Diagtwo')>=0 && /removed - left/.test(tp2));
+    state.tpShowRemoved = false;
+    add('Opening Team Progress for just a removed agent still shows their history', renderTeamProgressModal({tlName:'Gone Diagtwo', agents:['Gone Diagtwo']}).indexOf('Gone Diagtwo')>=0);
+    state.rosterTableTL = 'Diag Fifteen TL'; state.agentAction = null;
+    const rt = renderRosterTable();
+    add('Roster table: Remove on active agents, Restore on removed ones', /data-agent-action="remove-roster" data-agent="Emi Diagone"/.test(rt) && /data-agent-reactivate="Gone Diagtwo"/.test(rt) && /Removed \(left\)/.test(rt));
+    state.agentAction = {canonical:'Emi Diagone', kind:'remove-roster'};
+    const rt2 = renderRosterTable();
+    add('Clicking Remove asks to confirm (Left the company / Transferred / Cancel) and says history is kept', /data-agent-confirm="Left"/.test(rt2) && /data-agent-confirm="Transferred"/.test(rt2) && /Nothing is deleted/.test(rt2));
+    state.agentAction = null;
+    const dir = renderAgentDirectoryList('');
+    add('All Registered Agents says "Remove agent" (no more "Mark as left") and the removed list is called Removed agents', /Remove agent/.test(dir) && dir.indexOf('Mark as left')<0 && /No removed agents|Restore/.test(renderFormerAgentsList()));
+
+    // --- Shift Supervisors ---
+    state.staffRoles = [
+      {type:'staff-role', name:'Sam Diagsuper', role:'Shift Supervisor', status:'active', at:1},
+      {type:'staff-role', name:'Old Diagsuper', role:'Shift Supervisor', status:'active', at:2},
+      {type:'staff-role', name:'old diagsuper', role:'Shift Supervisor', status:'removed', at:3}];
+    add('Latest record per name wins: a removed supervisor drops off the list', activeSupervisors().length===1 && activeSupervisors()[0].name==='Sam Diagsuper');
+    add('Roles are recognised: roster owner = Team Lead, listed supervisor = Shift Supervisor, anyone else = none', staffRoleFor('Diag Fifteen TL')==='Team Lead' && staffRoleFor('sam diagsuper')==='Shift Supervisor' && staffRoleFor('Old Diagsuper')===null && staffRoleFor('Nobody Here')===null);
+    const before = state.staffRoles;
+    const tlAfter = applyTlReviews([mk('Emi Diagone', 5000), {type:'staff-role', name:'New Diagsuper', role:'Shift Supervisor', status:'active', at:9}]);
+    add('Supervisor records ride along in the shared list but never become attempts', tlAfter.length===1 && tlAfter.every(e=>e.type!=='staff-role') && !!supervisorRecordFor('New Diagsuper'));
+    state.staffRoles = before; state.teamProgressLog = [a1, a2, g1];
+    add('A TL’s or supervisor’s own practice is not listed as an "unmatched" agent name', (()=>{ const u = unmatchedLogNames([mk('Sam Diagsuper', 1), mk('Diag Fifteen TL', 2), mk('Real Stranger', 3)]).map(x=>x.raw); return u.length===1 && u[0]==='Real Stranger'; })());
+    add('The not-recognised message is role-neutral: says you can continue and that TLs and Shift Supervisors have nothing to do', /You can continue/.test(UNRECOGNIZED_NAME_TEXT) && /Team Leads and Shift Supervisors: nothing to do here/.test(UNRECOGNIZED_NAME_TEXT) && !/If you’re an agent, ask your TL/.test(s15Source()));
+    const nmOk = (()=>{ renderNameModal(); const inp = document.getElementById('nameModalInput'), out = document.getElementById('nameModalRecognized');
+      const typed = v=>{ inp.value = v; inp.dispatchEvent(new Event('input')); return out.textContent; };
+      const t1 = typed('Sam Diagsuper'), t2 = typed('Diag Fifteen TL'), t3 = typed('Totally Unknownperson');
+      const ov = document.getElementById('nameModalOverlay'); if(ov) ov.remove();
+      return /Shift Supervisor/.test(t1) && /Team Lead/.test(t2) && t3===UNRECOGNIZED_NAME_TEXT; })();
+    add('Sign-in box: a supervisor is "Recognized · Shift Supervisor", a TL "· Team Lead", an unknown name gets the neutral message', nmOk);
+    state.view = 'sim'; state.scenarioBuilderVisibility = 'team';
+    const pickSup = builderNeedsTeamPick('Sam Diagsuper'), pickTL = builderNeedsTeamPick('Diag Fifteen TL');
+    state.view = 'training'; const pickLD = builderNeedsTeamPick('Sam Diagsuper'); state.view = 'sim';
+    add('Create Scenario: a supervisor picks which team "My team only" means; TLs and L&D keep the old behaviour', pickSup && !pickTL && !pickLD);
+    add('TL area lists Shift Supervisors with Add / Remove, and the password box mentions shift supervisors', /Add Shift Supervisor/.test(renderSupervisorsBlock()) && /data-remove-supervisor="Sam Diagsuper"/.test(renderSupervisorsBlock()) && /shift supervisors, seniors, and L&D/.test(s15Source()));
+  }catch(err){ add('Error: '+err.message, false, err.stack||''); }
+  window.fetch = realFetch;
+  keys.forEach(k=>{ state[k] = snap[k]; });
+  lsKeys.forEach(k=>{ try{ if(lsSnap[k]===null || lsSnap[k]===undefined) localStorage.removeItem(k); else localStorage.setItem(k, lsSnap[k]); }catch(err){} });
+  const n = rows.filter(r=>r.pass).length;
+  el.innerHTML = `<div class="diag-result"><div style="margin-bottom:6px;">${n} of ${rows.length} pass.</div>${rows.map(r=>`<div style="border-top:1px solid var(--border);padding:6px 0;"><span class="${r.pass?'diag-pass':'diag-fail'}">${r.pass?'PASS':'FAIL'}</span> ${escapeHtml(r.label)}${r.detail?`<div style="font-size:11px;color:var(--text3);">${escapeHtml(r.detail)}</div>`:''}</div>`).join('')}</div>`;
+}
+function s15Source(){ try{ return [...document.scripts].map(x=>x.textContent).join('\n').replace(/\/\/ -{10} DIAGNOSTIC 15[\s\S]*?function s15Source/, ''); }catch(err){ return ''; } }
+
 // ---------- DIAGNOSTIC 9: TRAINING SEPARATION (v40) ----------
 // Deterministic, no API calls. Runs applyTlReviews on a synthetic log and checks the split, then restores state.
 function runDiagnostic9(){
@@ -14381,6 +14637,7 @@ async function init(){
   await loadTeamProgressLog();
   await loadAssignments();
   await loadAgentDirectory();
+  state.staffRoles = loadStaffRolesLocal(); // v41.7: replaced by the shared list once Team Progress loads
   await loadTLRosters();
   await seedZainabRosterIfMissing();
   await applyAgentStatusMigrations();
